@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+data/*.db
+data/*.txt
+config/*_backup_*.yaml
+data/trades_backup_*.db
+*.log
+*.sqlite
+*.pem
+*.key
+*api_key.json
+.env
+

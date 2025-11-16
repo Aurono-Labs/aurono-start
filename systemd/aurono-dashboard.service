@@ -1,0 +1,13 @@
+[Unit]
+Description=Aurono Dashboard Service
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/aurono-poc
+ExecStart=/home/pi/aurono-poc/venv/bin/python3 /home/pi/aurono-poc/src/dashboard.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

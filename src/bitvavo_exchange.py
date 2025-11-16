@@ -1,0 +1,304 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import time
+import hmac
+import hashlib
+import json
+from decimal import Decimal
+from typing import Any, Dict, Optional, List
+
+import requests
+import sqlite3
+
+from utils import (
+    log_event,
+    current_config,
+    load_api_keys,
+    to_decimal,
+    get_db_path,
+)
+from trade_manager import TradeManager
+from exchange_base import ExchangeBase
+
+BITVAVO_BASE = "https://api.bitvavo.com/v2"
+
+
+class BitvavoExchange(ExchangeBase):
+    """
+    Bitvavo implementation for Aurono.
+
+    - Aurono symbol: 'BTCEUR' → Bitvavo market: 'BTC-EUR'
+    - Uses REST API authentication per official Bitvavo docs
+    """
+    name = "bitvavo"
+
+    def __init__(self) -> None:
+        self.api_key, self.api_secret = load_api_keys()
+        self.tm = TradeManager(get_db_path())
+
+    # ----------------------------------------
+    # Helpers
+    # ----------------------------------------
+
+    def _market(self, symbol: str) -> str:
+        """
+        Convert 'BTCEUR' → 'BTC-EUR', 'SOLEUR' → 'SOL-EUR', etc.
+        """
+        p = symbol.replace("/", "").upper()
+        if p.endswith("EUR"):
+            return f"{p[:-3]}-EUR"
+        return p
+
+    # ----------------------------------------
+    # Public API
+    # ----------------------------------------
+
+    def get_ticker(self, symbol: str) -> Decimal:
+        market = self._market(symbol)
+        try:
+            r = requests.get(
+                f"{BITVAVO_BASE}/ticker/price?market={market}",
+                timeout=10,
+            ).json()
+            return to_decimal(r["price"])
+        except Exception as e:
+            log_event(f"⚠️ Bitvavo ticker error for {market}: {e}")
+            return Decimal("0")
+
+    def get_ohlc(self, symbol: str, timeframe: str) -> List[list]:
+        """
+        Fetch OHLC candles from Bitvavo REST API.
+        Robust version:
+        - correct endpoint
+        - required JSON header
+        - logs raw response on JSON parsing errors
+        """
+        market = self._market(symbol)
+        interval_map = {"1h": "1h", "4h": "4h", "1d": "1d"}
+        interval = interval_map.get(timeframe, "1d")
+
+        url = f"{BITVAVO_BASE}/markets/{market}/candles?interval={interval}"
+
+        try:
+            resp = requests.get(
+                url,
+                timeout=10,
+                headers={"Content-Type": "application/json"}  # REQUIRED
+            )
+
+            # --- Try decoding JSON ---
+            try:
+                data = resp.json()
+            except ValueError:
+                raw = resp.text.strip()
+                if raw == "":
+                    log_event(f"⚠️ Bitvavo OHLC empty response for {market} ({timeframe})")
+                else:
+                    log_event(
+                        f"⚠️ Bitvavo OHLC non-JSON for {market} ({timeframe}): "
+                        f"{raw[:200]}..."
+                    )
+                return []
+
+            # --- Validate expected data shape ---
+            if not isinstance(data, list):
+                log_event(
+                    f"⚠️ Bitvavo OHLC unexpected JSON format for {market} ({timeframe}): {data}"
+                )
+                return []
+
+            if len(data) == 0:
+                log_event(
+                    f"⚠️ Bitvavo OHLC returned empty list for {market} ({timeframe})"
+                )
+                return []
+
+            # Each element should be [timestamp, open, high, low, close, volume]
+            return data[-730:]
+
+        except Exception as e:
+            log_event(f"⚠️ Bitvavo OHLC request failed for {market} ({timeframe}): {e}")
+            return []
+
+
+    # ----------------------------------------
+    # Private / signed request (REST API)
+    # ----------------------------------------
+
+    def _private_request(self, method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Generate Bitvavo REST API signature.
+
+        REST signature = HMAC_SHA256(secret, timestamp + METHOD + "/v2/" + endpoint + body)
+
+        Where:
+        - endpoint = "order", "balance", "market", etc. (NO leading /v2/)
+        - body = canonical JSON or "" for GET
+        - secret = raw bytes from the API secret
+        - query parameters are removed from the signature but included in URL
+        """
+       
+        # Canonical JSON body (no spaces) - empty string for GET
+        if body is None:
+            body_json = ""
+        else:
+            body_json = json.dumps(body, separators=(",", ":"))
+
+        timestamp = str(int(time.time() * 1000))
+
+        # For signature: strip query parameters from path (only for GET requests with params)
+        if method.upper() == "GET" and "?" in path:
+            signature_path = path.split("?", 1)[0]
+        else:
+            signature_path = path
+
+        # Build the signature string: timestamp + METHOD + /v2/path + body
+        # Note: path MUST include /v2/ prefix as per official Bitvavo docs
+        prehash = timestamp + method.upper() + "/v2/" + signature_path + body_json
+
+        # Use raw secret bytes (REST API, not WebSocket)
+        secret_bytes = self.api_secret.encode("utf-8")
+
+        signature = hmac.new(
+            secret_bytes,
+            prehash.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        headers = {
+            "Bitvavo-Access-Key": self.api_key,
+            "Bitvavo-Access-Signature": signature,
+            "Bitvavo-Access-Timestamp": timestamp,
+            "Bitvavo-Access-Window": "60000",
+            "Content-Type": "application/json",
+        }
+
+        url = BITVAVO_BASE + "/" + path
+
+        try:
+            if method.upper() == "POST":
+                resp = requests.post(url, data=body_json, headers=headers, timeout=10)
+            else:
+                resp = requests.get(url, headers=headers, timeout=10)
+
+            result = resp.json()
+            
+            # Log errors for debugging
+            if "errorCode" in result:
+                log_event(
+                    f"⚠️ Bitvavo API error {result.get('errorCode')}: {result.get('error')} "
+                    f"(method={method}, path=/v2/{path})"
+                )
+            
+            return result
+        except Exception as e:
+            log_event(f"❌ Bitvavo private request failed: {e}")
+            return {"error": str(e)}
+
+    def _get_order_details(self, order_id: str, market: str) -> Optional[Dict[str, Any]]:
+        """
+        GET /order?orderId=...&market=BTC-EUR
+        """
+        path = f"order?orderId={order_id}&market={market}"
+        res = self._private_request("GET", path)
+
+        if "errorCode" in res:
+            return None
+
+        try:
+            status = res.get("status")
+            vol_exec = Decimal(res.get("filledAmount", "0"))
+            price = Decimal(res.get("filledPrice", "0"))
+            return {"status": status, "vol_exec": vol_exec, "price": price}
+        except Exception:
+            return None
+
+    # ----------------------------------------
+    # Place limit order
+    # ----------------------------------------
+
+    def place_limit_order(
+        self,
+        symbol: str,
+        side: str,
+        price: Decimal,
+        volume: Decimal,
+        trade_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        cfg = current_config()
+        live = cfg.get("live_trading", False)
+        market = self._market(symbol)
+
+        if not live:
+            log_event(f"🧪 Simulated {side.upper()} {volume} {market} @ €{price} (Bitvavo)")
+            return {"result": "simulated"}
+
+        body = {
+            "market": market,
+            "side": side,
+            "orderType": "limit",
+            "price": str(price),
+            "amount": str(volume),
+        }
+
+        res = self._private_request("POST", "order", body)
+
+        if "orderId" not in res:
+            log_event(f"⚠️ Bitvavo order failed → {res}")
+            return res
+
+        order_id = res["orderId"]
+        log_event(f"📤 Sent {side.upper()} order → Bitvavo orderId: {order_id}")
+
+        # Attach orderId to DB record
+        if trade_id:
+            try:
+                conn = sqlite3.connect(self.tm.db_path)
+                conn.execute(
+                    "UPDATE trades SET txid=? WHERE id=?",
+                    (order_id, trade_id),
+                )
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                log_event(f"⚠️ Could not store Bitvavo orderId in DB: {e}")
+
+        # Wait for execution, then try to update trade with final fill
+        time.sleep(6)
+        detail = self._get_order_details(order_id, market)
+        if not detail:
+            return res
+
+        log_event(f"📊 Bitvavo order status: {detail}")
+
+        if (
+            detail["status"] in ("filled", "partiallyFilled")
+            and detail["price"] > 0
+            and detail["vol_exec"] > 0
+            and trade_id is not None
+        ):
+            try:
+                conn = sqlite3.connect(self.tm.db_path)
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE trades
+                    SET price = ?, amount = ?
+                    WHERE id = ?
+                    """,
+                    (float(detail["price"]), float(detail["vol_exec"]), trade_id),
+                )
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                log_event(f"⚠️ Could not update executed Bitvavo trade in DB: {e}")
+
+            log_event(
+                f"💾 Updated executed Bitvavo trade → "
+                f"€{detail['price']} × {detail['vol_exec']} "
+                f"(was {price} × {volume}, trade_id={trade_id})"
+            )
+
+        return res
