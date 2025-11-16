@@ -1,13 +1,18 @@
-mode: live
-dev_sleep_hours: 4
-exchange: kraken
-pair: BTCEUR
-buy_drop_pct: -2.5
-sell_rise_pct: 2.1
-invest_eur: 50.0
+
+mode: live              # dev or live (controls scheduler)
+dev_sleep_hours: 4      # only used in dev mode
+
+# Exchange selection for API keys (NOT strategy logic)
+exchange: bitvavo
+api_credentials: bitvavo_api_key.json
+
+# Infrastructure paths
 log_path: ../data/aurono_log.txt
 db_path: ../data/trades.db
-api_credentials: kraken_api_key.json
+
+# Dashboard
 dashboard_host: 0.0.0.0
 dashboard_port: 8000
+
+# Global live/sim toggle
 live_trading: false
