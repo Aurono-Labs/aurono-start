@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/heads/main.zip"
+REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v2.3.zip"
 APP_DIR="aurono-poc"
 
 echo ""
