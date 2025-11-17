@@ -4,24 +4,7 @@ Author: Aurono Labs — Eppo Edzes
 ## Quick Install
 ```bash
 
-# Run it (no chmod needed)
-bash aurono_poc_setup_v2_2.sh
-
-# Then run the post-setup
-bash run_after_setup.sh
-```
-
-Or if you prefer making it executable:
-```bash
-# Download and make executable
-curl -O https://your-repo.com/aurono_poc_setup_v2_2.sh
-chmod +x aurono_poc_setup_v2_2.sh
-
-# Run it
-./aurono_poc_setup_v2_2.sh
-
-# Post-setup (already executable from installer)
-./run_after_setup.sh
+bash aurono_install_v2_3.sh
 ```
 
 ## Features
