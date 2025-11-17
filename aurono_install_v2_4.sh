@@ -53,7 +53,62 @@ echo "📦 Unpacking..."
 unzip -o aurono-latest.zip >/dev/null
 rm aurono-latest.zip
 
-mv aurono-start-main "$APP_DIR"
+# Detect the extracted folder (works for main.zip and versioned tags)
+EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "aurono-start-*" | head -n 1)
+
+if [ -z "$EXTRACTED_DIR" ]; then
+  echo "❌ ERROR: Could not find extracted GitHub source folder. Aborting."
+  exit 1
+fi
+
+echo "📁 Detected extracted folder: $EXTRACTED_DIR"
+mv "$EXTRACTED_DIR" "$APP_DIR"
+
+# ------------------------------------------------------------
+# Restore user-specific files from previous installation
+# ------------------------------------------------------------
+
+if ls -d ../aurono-poc_backup_* >/dev/null 2>&1; then
+  LAST_BACKUP=$(ls -d ../aurono-poc_backup_* | tail -n 1)
+  echo "♻️ Restoring user data from backup: $LAST_BACKUP"
+
+  # Restore config.yaml
+  if [ -f "$LAST_BACKUP/config/config.yaml" ]; then
+      cp "$LAST_BACKUP/config/config.yaml" "$APP_DIR/config/config.yaml"
+      echo "✔ Restored config.yaml"
+  fi
+
+  # Restore trades.db
+  if [ -f "$LAST_BACKUP/data/trades.db" ]; then
+      cp "$LAST_BACKUP/data/trades.db" "$APP_DIR/data/trades.db"
+      echo "✔ Restored trades.db"
+  fi
+
+  # Restore log file
+  if [ -f "$LAST_BACKUP/data/aurono_log.txt" ]; then
+      cp "$LAST_BACKUP/data/aurono_log.txt" "$APP_DIR/data/aurono_log.txt"
+      echo "✔ Restored aurono_log.txt"
+  fi
+
+  # Restore Bitvavo API key file
+  if [ -f "$LAST_BACKUP/bitvavo_api_key.json" ]; then
+      cp "$LAST_BACKUP/bitvavo_api_key.json" "$APP_DIR/bitvavo_api_key.json"
+      echo "✔ Restored bitvavo_api_key.json"
+  fi
+
+  # Restore Kraken API key file
+  if [ -f "$LAST_BACKUP/kraken_api_key.json" ]; then
+      cp "$LAST_BACKUP/kraken_api_key.json" "$APP_DIR/kraken_api_key.json"
+      echo "✔ Restored kraken_api_key.json"
+  fi
+
+  # Restore DB backups folder entirely
+  cp -r "$LAST_BACKUP/data/"trades_backup_*.db "$APP_DIR/data/" 2>/dev/null || true
+  echo "✔ Restored DB backups"
+else
+  echo "ℹ️ No previous installation found — clean install"
+fi
+
 
 echo "✅ Code installed into $APP_DIR/"
 echo ""
