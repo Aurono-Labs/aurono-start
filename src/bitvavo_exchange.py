@@ -68,58 +68,39 @@ class BitvavoExchange(ExchangeBase):
             return Decimal("0")
 
     def get_ohlc(self, symbol: str, timeframe: str) -> List[list]:
-        """
-        Fetch OHLC candles from Bitvavo REST API.
-        Robust version:
-        - correct endpoint
-        - required JSON header
-        - logs raw response on JSON parsing errors
-        """
         market = self._market(symbol)
         interval_map = {"1h": "1h", "4h": "4h", "1d": "1d"}
         interval = interval_map.get(timeframe, "1d")
-
-        url = f"{BITVAVO_BASE}/markets/{market}/candles?interval={interval}"
-
+    
+        # 🔥 Correct Bitvavo OHLC endpoint
+        url = f"{BITVAVO_BASE}/{market}/candles?interval={interval}"
+    
         try:
             resp = requests.get(
                 url,
                 timeout=10,
-                headers={"Content-Type": "application/json"}  # REQUIRED
+                headers={"Content-Type": "application/json"},
             )
-
-            # --- Try decoding JSON ---
+    
             try:
                 data = resp.json()
             except ValueError:
                 raw = resp.text.strip()
-                if raw == "":
-                    log_event(f"⚠️ Bitvavo OHLC empty response for {market} ({timeframe})")
-                else:
-                    log_event(
-                        f"⚠️ Bitvavo OHLC non-JSON for {market} ({timeframe}): "
-                        f"{raw[:200]}..."
-                    )
+                log_event(f"⚠️ Bitvavo OHLC non-JSON for {market} ({timeframe}): {raw[:200]}...")
                 return []
-
-            # --- Validate expected data shape ---
+    
             if not isinstance(data, list):
-                log_event(
-                    f"⚠️ Bitvavo OHLC unexpected JSON format for {market} ({timeframe}): {data}"
-                )
+                log_event(f"⚠️ Bitvavo OHLC unexpected JSON format for {market}: {data}")
                 return []
-
+    
             if len(data) == 0:
-                log_event(
-                    f"⚠️ Bitvavo OHLC returned empty list for {market} ({timeframe})"
-                )
+                log_event(f"⚠️ Bitvavo OHLC returned empty list for {market}")
                 return []
-
-            # Each element should be [timestamp, open, high, low, close, volume]
+    
             return data[-730:]
-
+    
         except Exception as e:
-            log_event(f"⚠️ Bitvavo OHLC request failed for {market} ({timeframe}): {e}")
+            log_event(f"⚠️ Bitvavo OHLC request failed for {market}: {e}")
             return []
 
 
