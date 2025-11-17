@@ -73,7 +73,8 @@ class TraderEngine:
             s_timeframe = s["timeframe"]
             drop_trigger = to_decimal(s["drop_trigger"])
             rise_trigger = to_decimal(s["rise_trigger"])
-            invest_eur = to_decimal(s["trade_amount_eur"])
+            buy_eur = to_decimal(s["buy_amount_eur"])
+            sell_eur = to_decimal(s["sell_amount_eur"])
             allocated = to_decimal(s["allocated_eur"] or 0)
             exchange_name = s["exchange"] if "exchange" in s.keys() else "bitvavo"
             exchange = get_exchange(exchange_name)
@@ -114,13 +115,13 @@ class TraderEngine:
 
             # === 1️⃣ BUY logic ===
             if pct_change <= drop_trigger:
-                if allocated < invest_eur:
+                if allocated < buy_eur:
                     log_event(
                         f"❌ No BUY: price dropped {pct_change:.2f}% ≤ {drop_trigger}%, "
-                        f"but insufficient capital (€{allocated:.2f} < €{invest_eur:.2f})"
+                        f"but insufficient capital (€{allocated:.2f} < €{buy_eur:.2f})"
                     )
                 else:
-                    vol = (invest_eur / price_to_use).quantize(Decimal("0.00000001"))
+                    vol = (buy_eur / price_to_use).quantize(Decimal("0.00000001"))
                     trade_id = self.tm.record_trade(symbol, "buy", price_to_use, vol, sid)
 
                     # delegate order placement to exchange
@@ -161,7 +162,7 @@ class TraderEngine:
                     )
                     continue
 
-                vol = min((invest_eur / price_to_use).quantize(Decimal("0.00000001")), balance)
+                vol = min((sell_eur / price_to_use).quantize(Decimal("0.00000001")), balance)
                 trade_id = self.tm.record_trade(symbol, "sell", price_to_use, vol, sid)
 
                 # delegate order placement to exchange

@@ -11,7 +11,11 @@ from datetime import datetime
 class TradeManager:
     def __init__(self, db_path: Path = None):
         self.db_path = str(db_path or get_db_path())
-        self._ensure_schema()
+
+        # Run schema only once per process
+        if not hasattr(TradeManager, "_schema_initialized"):
+            self._ensure_schema()
+            TradeManager._schema_initialized = True
 
     def _ensure_schema(self):
         conn = sqlite3.connect(self.db_path)
@@ -36,7 +40,6 @@ class TradeManager:
             timeframe TEXT NOT NULL,
             drop_trigger REAL NOT NULL,
             rise_trigger REAL NOT NULL,
-            trade_amount_eur REAL NOT NULL,
             allocated_eur REAL NOT NULL DEFAULT 0,
             enabled BOOLEAN DEFAULT 1,
             last_run TIMESTAMP,
@@ -47,6 +50,69 @@ class TradeManager:
         cols = [r[1] for r in cur.fetchall()]
         if "exchange" not in cols:
             cur.execute("ALTER TABLE strategies ADD COLUMN exchange TEXT DEFAULT 'bitvavo'")
+            
+        cur.execute("PRAGMA table_info(strategies)")
+        cols = [r[1] for r in cur.fetchall()]
+
+        # --- Add new columns if missing ---
+        if "buy_amount_eur" not in cols:
+            cur.execute("ALTER TABLE strategies ADD COLUMN buy_amount_eur REAL DEFAULT 0")
+
+        if "sell_amount_eur" not in cols:
+            cur.execute("ALTER TABLE strategies ADD COLUMN sell_amount_eur REAL DEFAULT 0")
+
+        # --- Soft-migrate existing trade_amount_eur values ---
+        if "trade_amount_eur" in cols:
+            cur.execute("""
+                UPDATE strategies
+                SET buy_amount_eur = COALESCE(buy_amount_eur, trade_amount_eur),
+                    sell_amount_eur = COALESCE(sell_amount_eur, trade_amount_eur)
+                WHERE (buy_amount_eur = 0 OR buy_amount_eur IS NULL)
+                  AND (sell_amount_eur = 0 OR sell_amount_eur IS NULL)
+            """)
+            
+            
+        # After retrieving cols:
+        if "trade_amount_eur" in cols:
+            cur.execute("ALTER TABLE strategies RENAME TO strategies_old")
+
+            # Recreate table WITHOUT trade_amount_eur
+            cur.execute("""
+                CREATE TABLE strategies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    drop_trigger REAL NOT NULL,
+                    rise_trigger REAL NOT NULL,
+                    allocated_eur REAL NOT NULL DEFAULT 0,
+                    enabled BOOLEAN DEFAULT 1,
+                    last_run TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    exchange TEXT DEFAULT 'bitvavo',
+                    buy_amount_eur REAL DEFAULT 0,
+                    sell_amount_eur REAL DEFAULT 0
+                )
+            """)
+
+            # Copy data from old → new
+            cur.execute("""
+                INSERT INTO strategies (
+                    id, name, symbol, timeframe, drop_trigger, rise_trigger, 
+                    allocated_eur, enabled, last_run, created_at, exchange,
+                    buy_amount_eur, sell_amount_eur
+                )
+                SELECT 
+                    id, name, symbol, timeframe, drop_trigger, rise_trigger,
+                    allocated_eur, enabled, last_run, created_at, 
+                    COALESCE(exchange,'bitvavo'),
+                    COALESCE(buy_amount_eur, trade_amount_eur, 0),
+                    COALESCE(sell_amount_eur, trade_amount_eur, 0)
+                FROM strategies_old
+            """)
+
+            cur.execute("DROP TABLE strategies_old")
+
 
         conn.commit()
         conn.close()

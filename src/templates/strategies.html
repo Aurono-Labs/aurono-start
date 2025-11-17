@@ -171,8 +171,12 @@ function validateForm(e) {
       </div>
 
       <div>
-        <label for="invest_eur">Buy/Sell Amount (€):</label>
-        <input type="number" id="invest_eur" name="invest_eur" value="50" min="0" step="any" inputmode="decimal" required>
+        <label for="buy_amount_eur">Buy amount (€):</label>
+        <input type="number" id="buy_amount_eur" name="buy_amount_eur" step="any" value="20">
+      </div>
+      <div>
+        <label for="sell_amount_eur">Sell amount (€):</label>
+        <input type="number" id="sell_amount_eur" name="sell_amount_eur" step="any" value="20">
       </div>
       
       <div>
@@ -213,7 +217,8 @@ function validateForm(e) {
         <th>Exchange</th>
         <th class="numeric">Drop %</th>
         <th class="numeric">Rise %</th>
-        <th class="numeric">Buy/Sell (€)</th>
+        <th class="numeric">Buy (€)</th>
+        <th class="numeric">Sell (€)</th>
         <th class="numeric">Allocated (€)</th>
         <th class="numeric">Enabled</th>
         <th class="numeric">Actions</th>
@@ -226,7 +231,8 @@ function validateForm(e) {
         <td>{{ s.exchange or 'kraken' }}</td> <!-- 🆕 -->
         <td class="numeric">{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
         <td class="numeric">{{ "%.2f"|format(s.rise_trigger) }}</td>
-        <td class="numeric">{{ "%.2f"|format(s.trade_amount_eur) }}</td>
+        <td class="numeric">{{ "%.2f"|format(s.buy_amount_eur) }}</td>
+        <td class="numeric">{{ "%.2f"|format(s.sell_amount_eur) }}</td>
         <td class="numeric">{{ "%.2f"|format(s.allocated_eur) }}</td>
         <td class="numeric">{% if s.enabled %}✅{% else %}❌{% endif %}</td>
         <td>
@@ -270,7 +276,8 @@ function validateForm(e) {
           </td>
           <td><input type="number" name="drop_trigger" value="{{ abs(s.drop_trigger) }}" min="0.0" max="100.0"></td>
           <td><input type="number" name="rise_trigger" value="{{ s.rise_trigger }}" min="0.0" max="100.0"></td>
-          <td><input type="number" name="trade_amount_eur" value="{{ s.trade_amount_eur }}" min="0"></td>
+          <td><input type="number" name="buy_amount_eur" value="{{ s.buy_amount_eur }}" min="0"></td>
+          <td><input type="number" name="sell_amount_eur" value="{{ s.sell_amount_eur }}" min="0"></td>
           <td><input type="number" name="allocated_eur" value="{{ s.allocated_eur }}" min="0"></td>
           
           <td>
