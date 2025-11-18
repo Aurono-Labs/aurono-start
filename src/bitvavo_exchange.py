@@ -72,50 +72,69 @@ class BitvavoExchange(ExchangeBase):
             log_event(f"⚠️ Bitvavo ticker error for {market}: {e}")
             return Decimal("0")
 
-    def get_ohlc(self, symbol: str, timeframe: str) -> List[list]:
+    def get_ohlc(self, symbol: str, timeframe: str, limit: int = 730) -> List[list]:
+        """
+        Fetch OHLC candlestick data from Bitvavo.
+        
+        Bitvavo returns: [timestamp, open, high, low, close, volume]
+        Data is returned newest → oldest, so we reverse it to oldest → newest.
+        
+        Args:
+            symbol: Trading pair (e.g., 'BTCEUR')
+            timeframe: Timeframe ('1h', '4h', '1d')
+            limit: Number of candles to return (default: 730, max: 1440)
+        
+        Returns:
+            List of OHLC data in chronological order (oldest → newest)
+        """
         market = self._market(symbol)
         interval_map = {"1h": "1h", "4h": "4h", "1d": "1d"}
         interval = interval_map.get(timeframe, "1d")
-    
-        # 🔥 Correct Bitvavo OHLC endpoint
+        
+        # Get current time to ensure we fetch the most recent candles
+        # Use 'end' parameter to get candles up to now, otherwise Bitvavo
+        # may return very old historical data
+        import time
+        end_timestamp = int(time.time() * 1000)  # Current time in milliseconds
+        
+        # Bitvavo endpoint: GET /v2/{market}/candles
+        # IMPORTANT: Use 'end' parameter to get recent data, not ancient history
         url = (
             f"{BITVAVO_BASE}/{market}/candles"
-            f"?market={market}&interval={interval}"
+            f"?interval={interval}&limit={min(limit, 1440)}&end={end_timestamp}"
         )
-
-        url = f"{BITVAVO_BASE}/{market}/candles?interval={interval}"
-    
+        
         try:
             resp = requests.get(
                 url,
                 timeout=10,
                 headers={"Content-Type": "application/json"},
             )
-    
+            
             try:
                 data = resp.json()
             except ValueError:
                 raw = resp.text.strip()
                 log_event(f"⚠️ Bitvavo OHLC non-JSON for {market} ({timeframe}): {raw[:200]}...")
                 return []
-    
+            
             if not isinstance(data, list):
                 log_event(f"⚠️ Bitvavo OHLC unexpected JSON format for {market}: {data}")
                 return []
-    
+            
             if len(data) == 0:
                 log_event(f"⚠️ Bitvavo OHLC returned empty list for {market}")
                 return []
-                
-            # Bitvavo returns newest → oldest
-            data.reverse()  # Now oldest → newest like Kraken
-    
-            return data[-730:]
-    
+            
+            # Bitvavo returns newest → oldest, reverse to get oldest → newest
+            # This ensures data[0] is the oldest candle and data[-1] is most recent
+            data.reverse()
+            
+            return data
+        
         except Exception as e:
             log_event(f"⚠️ Bitvavo OHLC request failed for {market}: {e}")
             return []
-
 
     # ----------------------------------------
     # Private / signed request (REST API)
