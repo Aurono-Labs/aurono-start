@@ -139,6 +139,7 @@ function validateForm(e) {
           <option value="LINKEUR">LINK/EUR</option>
           <option value="LTCEUR">LTC/EUR</option>
           <option value="WOOEUR">WOO/EUR</option>
+          <option value="WOOEUR">FET/EUR</option>
         </select>
       </div>
 
@@ -256,9 +257,10 @@ function validateForm(e) {
               <option value="SOLEUR" {% if s.symbol == 'SOLEUR' %}selected{% endif %}>SOL/EUR</option>
               <option value="ETHEUR" {% if s.symbol == 'ETHEUR' %}selected{% endif %}>ETH/EUR</option>
               <option value="XRPEUR" {% if s.symbol == 'XRPEUR' %}selected{% endif %}>XRP/EUR</option>
-              <option value="LINKEUR" {% if s.symbol == 'LINKEUR' %}selected{% endif %}>XRP/EUR</option>
-              <option value="LTCEUR" {% if s.symbol == 'LTCEUR' %}selected{% endif %}>XRP/EUR</option>
-              <option value="WOOEUR" {% if s.symbol == 'WOOEUR' %}selected{% endif %}>XRP/EUR</option>
+              <option value="LINKEUR" {% if s.symbol == 'LINKEUR' %}selected{% endif %}>LINK/EUR</option>
+              <option value="LTCEUR" {% if s.symbol == 'LTCEUR' %}selected{% endif %}>LTC/EUR</option>
+              <option value="WOOEUR" {% if s.symbol == 'WOOEUR' %}selected{% endif %}>WOO/EUR</option>
+              <option value="FETEUR" {% if s.symbol == 'FETEUR' %}selected{% endif %}>FET/EUR</option>
             </select>
           </td>
           <td>
