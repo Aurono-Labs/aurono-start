@@ -27,19 +27,25 @@ from exchange_base import ExchangeBase
 KRAKEN_API_PUBLIC = "https://api.kraken.com/0/public"
 KRAKEN_API_PRIVATE = "https://api.kraken.com/0/private"
 
-
 class KrakenExchange(ExchangeBase):
     """
     Kraken implementation for Aurono.
 
     - Symbols are Aurono-style like 'BTCEUR', 'NEAREUR'
-    - Internally we pass these directly as 'pair' to Kraken (same as before)
+    - Internally we pass these directly as 'pair' to Kraken
     """
     name = "kraken"
 
-    def __init__(self) -> None:
-        self.api_key, self.api_secret = load_api_keys()
+    def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
+        # Allow overriding keys (used by Settings "Test" button)
+        if api_key and api_secret:
+            self.api_key = api_key
+            self.api_secret = api_secret
+        else:
+            self.api_key, self.api_secret = load_api_keys()
+
         self.tm = TradeManager(get_db_path())
+
 
     # -------------------- Public API --------------------
 

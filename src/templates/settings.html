@@ -4,51 +4,198 @@
 <meta charset="UTF-8">
 <title>Aurono Settings</title>
 <style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;margin:24px;}
-.card{border:1px solid #ddd;border-radius:12px;padding:16px;max-width:520px;margin-bottom:20px;}
-label{display:block;margin-top:10px;font-weight:500;}
-input[type=text], select{width:100%;padding:6px;margin-top:4px;}
-.btn{padding:8px 14px;border-radius:8px;border:1px solid #444;background:#f7f7f7;cursor:pointer;text-decoration:none;color:#111;}
-.btn:hover{background:#eee;}
-.hint{font-size:12px;color:#666;margin-top:4px;}
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
+  margin: 24px;
+  background: #fafafa;
+}
+.card {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  background: #fff;
+  max-width: 900px;
+}
+.btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #f7f7f7;
+  cursor: pointer;
+  text-decoration: none;
+  color: #111;
+  font-size: 13px;
+}
+.btn:hover {
+  background: #eee;
+}
+.btn-danger {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+.btn-danger:hover {
+  background: #fee2e2;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 10px;
+  font-size: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+th, td {
+  padding: 10px 16px;
+}
+th {
+  background-color: #2c2c2c;
+  color: #f7f7f7;
+  text-align: left;
+}
+tr:nth-child(even) { background-color: #fafafa; }
+tr:nth-child(odd) { background-color: #f0f0f0; }
+.actions .btn {
+  margin-right: 4px;
+}
+.msg {
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.msg-success {
+  background: #dcfce7;
+  border: 1px solid #22c55e;
+  color: #166534;
+}
+.msg-error {
+  background: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #7f1d1d;
+}
+.hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
 </style>
+<script>
+function toggleAddForm() {
+  const f = document.getElementById('add-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+function toggleEditForm(id) {
+  const row = document.getElementById('edit-row-' + id);
+  row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+</script>
 </head>
+
 <body>
-  <h1>Account Settings</h1>
-  <p>
-    <a class="btn" href="/">Dashboard</a>
-    <a class="btn" href="/strategies">Strategies</a>
-    <a class="btn" href="/activity">Activity</a>
-    <a class="btn" href="/settings">Settings</a>
+<h1>Settings</h1>
+
+<p>
+  <a class="btn" href="/">Dashboard</a>
+  <a class="btn" href="/strategies">Strategies</a>
+  <a class="btn" href="/activity">Activity</a>
+  <a class="btn" href="/settings">Settings</a>
+</p>
+
+<div class="card">
+  <h3>Exchange API Credentials</h3>
+
+  {% if message %}
+    <div class="msg {% if message_type == 'success' %}msg-success{% else %}msg-error{% endif %}">
+      {{ message }}
+    </div>
+  {% endif %}
+
+  <p class="hint">
+    API keys are stored locally on your Aurono device and encrypted with a device-specific key.
+    You can store credentials for multiple exchanges. Each strategy selects which exchange to use.
   </p>
 
-  <div class="card">
-    <h3>Exchange & API Credentials</h3>
-    <form method="post" action="/settings/save">
-      <label for="exchange">Exchange:</label>
-      <select id="exchange" name="exchange">
-        <option value="kraken" {% if cfg.exchange == 'kraken' %}selected{% endif %}>Kraken</option>
-        <option value="bitvavo" {% if cfg.exchange == 'bitvavo' %}selected{% endif %}>Bitvavo</option>
+  <table>
+    <tr>
+      <th>Exchange</th>
+      <th>API Key</th>
+      <th>API Secret</th>
+      <th>Created</th>
+      <th>Updated</th>
+      <th>Actions</th>
+    </tr>
+
+    {% if credentials %}
+      {% for c in credentials %}
+        <tr id="row-{{ c.id }}">
+          <td>{{ c.exchange | capitalize }}</td>
+          <td>{{ c.api_key_masked }}</td>
+          <td>{{ c.api_secret_masked }}</td>
+          <td>{{ c.created_at }}</td>
+          <td>{{ c.updated_at }}</td>
+          <td class="actions">
+            <form method="post" action="/settings/test/{{ c.id }}" style="display:inline;">
+              <button class="btn" type="submit">Test</button>
+            </form>
+
+            <button class="btn" type="button" onclick="toggleEditForm({{ c.id }})">
+              Edit
+            </button>
+
+            <form method="post" action="/settings/delete/{{ c.id }}" style="display:inline;"
+                  onsubmit="return confirm('Delete credentials for {{ c.exchange }}?');">
+              <button class="btn btn-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+
+        <!-- Inline edit row -->
+        <tr id="edit-row-{{ c.id }}" style="display:none; background:#fff;">
+          <td colspan="6">
+            <form method="post" action="/settings/update/{{ c.id }}">
+              <label>New API Key:</label>
+              <input type="text" name="api_key" placeholder="Leave empty to keep current">
+
+              <label>New API Secret:</label>
+              <input type="text" name="api_secret" placeholder="Leave empty to keep current">
+
+              <div style="margin-top:8px;">
+                <button class="btn" type="submit">Save</button>
+                <button class="btn" type="button" onclick="toggleEditForm({{ c.id }})">Cancel</button>
+              </div>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="6">No credentials stored yet.</td></tr>
+    {% endif %}
+  </table>
+
+  <button class="btn" style="margin-top:16px;" onclick="toggleAddForm()">+ Add Credentials</button>
+
+  <div id="add-form" style="display:none; margin-top:16px;">
+    <form method="post" action="/settings/add">
+      <label>Exchange:</label>
+      <select name="exchange" required>
+        <option value="kraken">Kraken</option>
+        <option value="bitvavo">Bitvavo</option>
       </select>
-      <div class="hint">
-        Choose your exchange. Aurono will send orders to the selected exchange only.
-      </div>
 
-      <label for="api_key">API Key:</label>
-      <input type="text" id="api_key" name="api_key" value="{{ creds.api_key }}" required>
+      <label>API Key:</label>
+      <input type="text" name="api_key" required>
 
-      <label for="api_secret">API Secret:</label>
-      <input type="text" id="api_secret" name="api_secret" value="{{ creds.api_secret }}" required>
+      <label>API Secret:</label>
+      <input type="text" name="api_secret" required>
 
-      <div class="hint">
-        Keys are stored locally on your Aurono device in a JSON file referenced by config.yaml (<code>api_credentials</code>).
-      </div>
-
-      <div style="margin-top:15px;">
+      <div style="margin-top:12px;">
         <button class="btn" type="submit">Save</button>
-        <a class="btn" href="/">Back</a>
+        <button class="btn" type="button" onclick="toggleAddForm()">Cancel</button>
       </div>
     </form>
   </div>
+</div>
 </body>
 </html>
+

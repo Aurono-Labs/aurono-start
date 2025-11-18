@@ -24,7 +24,6 @@ from exchange_base import ExchangeBase
 
 BITVAVO_BASE = "https://api.bitvavo.com/v2"
 
-
 class BitvavoExchange(ExchangeBase):
     """
     Bitvavo implementation for Aurono.
@@ -34,8 +33,14 @@ class BitvavoExchange(ExchangeBase):
     """
     name = "bitvavo"
 
-    def __init__(self) -> None:
-        self.api_key, self.api_secret = load_api_keys()
+    def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
+        # Allow overriding keys (used by Settings "Test" button)
+        if api_key and api_secret:
+            self.api_key = api_key
+            self.api_secret = api_secret
+        else:
+            self.api_key, self.api_secret = load_api_keys()
+
         self.tm = TradeManager(get_db_path())
 
     # ----------------------------------------
