@@ -54,7 +54,7 @@ class BitvavoExchange(ExchangeBase):
     # ----------------------------------------
     # Public API
     # ----------------------------------------
-
+    
     def get_ticker(self, symbol: str) -> Decimal:
         market = self._market(symbol)
         try:
@@ -96,6 +96,9 @@ class BitvavoExchange(ExchangeBase):
             if len(data) == 0:
                 log_event(f"⚠️ Bitvavo OHLC returned empty list for {market}")
                 return []
+                
+            # Bitvavo returns newest → oldest
+            data.reverse()  # Now oldest → newest like Kraken
     
             return data[-730:]
     
