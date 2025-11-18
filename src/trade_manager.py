@@ -144,6 +144,49 @@ class TradeManager:
         conn.close()
         return rows
 
+    def get_trades_for_strategy(self, strategy_id):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT side, price, amount FROM trades WHERE strategy_id=? ORDER BY id ASC",
+            (strategy_id,)
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return rows
+
+    def get_balance_for_strategy(self, strategy_id):
+        trades = self.get_trades_for_strategy(strategy_id)
+        buy = sum(to_decimal(a) for s, _, a in trades if s == 'buy')
+        sell = sum(to_decimal(a) for s, _, a in trades if s == 'sell')
+        return buy - sell
+
+    def get_average_cost_for_strategy(self, strategy_id):
+        trades = self.get_trades_for_strategy(strategy_id)
+        total_cost = Decimal('0')
+        total_qty = Decimal('0')
+
+        for side, price, amount in trades:
+            price = to_decimal(price)
+            amount = to_decimal(amount)
+            if side == 'buy':
+                total_cost += price * amount
+                total_qty += amount
+            elif side == 'sell' and total_qty > 0:
+                proportion = amount / total_qty
+                if proportion > 1:
+                    proportion = 1
+                total_cost -= total_cost * proportion
+                total_qty -= amount
+
+                if total_qty < 0:
+                    total_qty = Decimal('0')
+                    total_cost = Decimal('0')
+
+        if total_qty <= 0:
+            return None
+        return total_cost / total_qty
+
     def get_balance(self, symbol):
         """Return net quantity held for a given symbol."""
         trades = self.get_trades(symbol)

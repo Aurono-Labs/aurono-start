@@ -109,8 +109,8 @@ class TraderEngine:
                 f"on {exchange.name}"
             )
 
-            acb = self.tm.get_average_cost(symbol)
-            balance = self.tm.get_balance(symbol)
+            acb = self.tm.get_average_cost_for_strategy(sid)
+            balance = self.tm.get_balance_for_strategy(sid)
             price_to_use = close_price
 
             # === 1️⃣ BUY logic ===
