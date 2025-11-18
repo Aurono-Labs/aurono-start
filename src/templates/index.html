@@ -105,7 +105,7 @@ td.actions {
     </tr>
     {% for s in snapshot.symbols %}
     <tr>
-      <td class="numeric">{{ s.strategy }}</td>
+      <td class="numeric">{{ s.symbol }} {{ s.timeframe }} ({{ s.exchange }})</td>
       <td class="numeric">{{ "%.2f"|format(s.price) }}</td>
       <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
       <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
