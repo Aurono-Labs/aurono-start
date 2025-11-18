@@ -78,6 +78,11 @@ class BitvavoExchange(ExchangeBase):
         interval = interval_map.get(timeframe, "1d")
     
         # 🔥 Correct Bitvavo OHLC endpoint
+        url = (
+            f"{BITVAVO_BASE}/{market}/candles"
+            f"?market={market}&interval={interval}"
+        )
+
         url = f"{BITVAVO_BASE}/{market}/candles?interval={interval}"
     
         try:
