@@ -12,3 +12,7 @@ data/trades_backup_*.db
 *api_key.json
 .env
 
+# macOS system files
+.DS_Store
+*/.DS_Store
+**/.DS_Store
