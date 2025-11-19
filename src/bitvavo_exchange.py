@@ -254,6 +254,7 @@ class BitvavoExchange(ExchangeBase):
             "orderType": "limit",
             "price": str(price),
             "amount": str(volume),
+            "operatorId": 1    # 🔥 REQUIRED FIX
         }
 
         res = self._private_request("POST", "order", body)
