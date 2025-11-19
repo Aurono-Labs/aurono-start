@@ -20,6 +20,8 @@ from utils import (
     load_api_keys,
     to_decimal,
     get_db_path,
+    get_credentials_for_exchange,
+    
 )
 from trade_manager import TradeManager
 from exchange_base import ExchangeBase
@@ -39,10 +41,12 @@ class KrakenExchange(ExchangeBase):
     def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
         # Allow overriding keys (used by Settings "Test" button)
         if api_key and api_secret:
+            # Used ONLY for Settings → "Test Kraken Credentials"
             self.api_key = api_key
             self.api_secret = api_secret
         else:
-            self.api_key, self.api_secret = load_api_keys()
+            # Trader mode → ALWAYS load encrypted Kraken keys from the credentials DB
+            self.api_key, self.api_secret = get_credentials_for_exchange("kraken")
 
         self.tm = TradeManager(get_db_path())
 

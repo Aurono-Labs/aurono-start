@@ -1,4 +1,32 @@
 from utils import current_config, log_event
+
+# -----------------------------------------------------
+# 🛡 Trader Single-Instance Lock
+# -----------------------------------------------------
+import fcntl
+import os
+from pathlib import Path
+
+LOCK_FILE = Path("/tmp/aurono_trader.lock")
+
+def acquire_lock_or_exit():
+    """Prevent multiple trader instances from running."""
+    global lock_fh
+    
+    lock_fh = open(LOCK_FILE, "w")
+
+    try:
+        # Try to acquire exclusive non-blocking lock
+        fcntl.flock(lock_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        # Lock already held → another trader is running
+        log_event("⚠️ Trader already running — second instance aborted.")
+        print("Trader already running. Exiting.")
+        exit(0)
+
+# acquire lock at startup
+acquire_lock_or_exit()
+
 from trader_engine import TraderEngine
 from kraken_exchange import KrakenExchange
 from bitvavo_exchange import BitvavoExchange
