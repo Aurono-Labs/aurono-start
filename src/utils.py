@@ -67,6 +67,26 @@ def _ensure_credentials_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _encrypt_secret(plain: str) -> str:
+    if not plain:
+        return ""
+    f = _get_fernet()
+    token = f.encrypt(plain.encode("utf-8"))
+    return token.decode("utf-8")
+
+def _decrypt_secret(token: str) -> str:
+    if not token:
+        return ""
+    f = _get_fernet()
+    try:
+        return f.decrypt(token.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return ""
+
+def _get_fernet() -> Fernet:
+    return Fernet(_load_or_create_device_key())
+
+
 def upsert_credentials(exchange: str, api_key: str, api_secret: str) -> None:
     """
     Insert or update encrypted credentials for an exchange.
