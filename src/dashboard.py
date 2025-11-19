@@ -37,6 +37,7 @@ import sqlite3
 app = FastAPI(title="Aurono Dashboard", version="1.3")
 from routes import strategies
 app.include_router(strategies.router)
+from routes import settings
 app.include_router(settings.router)
 
 TEMPLATE_DIR = root_path("src","templates")
