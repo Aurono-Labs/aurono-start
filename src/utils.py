@@ -47,7 +47,59 @@ def get_db_path():
     cfg = current_config()
     return root_path("data", Path(cfg["db_path"]).name)
 
-    
+ 
+ 
+# ============================================================
+# 🔐 Device-specific encryption for API credentials
+# ============================================================
+
+def _device_key_path() -> Path:
+    return root_path("config", "device_key.key")
+
+
+def _load_or_create_device_key() -> bytes:
+    """
+    Returns a device-specific symmetric key for Fernet encryption.
+    Created once per device and stored as config/device_key.key
+    with chmod 600.
+    """
+    key_path = _device_key_path()
+    if key_path.exists():
+        return key_path.read_bytes()
+
+    key = Fernet.generate_key()
+    key_path.write_bytes(key)
+    try:
+        os.chmod(key_path, 0o600)
+    except Exception:
+        # Best-effort only; on some platforms this may fail silently.
+        pass
+    return key
+
+
+def _get_fernet() -> Fernet:
+    return Fernet(_load_or_create_device_key())
+
+
+def _encrypt_secret(plain: str) -> str:
+    if not plain:
+        return ""
+    f = _get_fernet()
+    token = f.encrypt(plain.encode("utf-8"))
+    return token.decode("utf-8")
+
+
+def _decrypt_secret(token: str) -> str:
+    if not token:
+        return ""
+    f = _get_fernet()
+    try:
+        return f.decrypt(token.encode("utf-8")).decode("utf-8")
+    except Exception:
+        # If decryption fails (bad key / corruption), just treat as empty.
+        return ""
+
+
 # ============================================================
 # 🗃 API credentials table helpers (encrypted at rest)
 # ============================================================
@@ -65,26 +117,6 @@ def _ensure_credentials_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
-
-
-def _encrypt_secret(plain: str) -> str:
-    if not plain:
-        return ""
-    f = _get_fernet()
-    token = f.encrypt(plain.encode("utf-8"))
-    return token.decode("utf-8")
-
-def _decrypt_secret(token: str) -> str:
-    if not token:
-        return ""
-    f = _get_fernet()
-    try:
-        return f.decrypt(token.encode("utf-8")).decode("utf-8")
-    except Exception:
-        return ""
-
-def _get_fernet() -> Fernet:
-    return Fernet(_load_or_create_device_key())
 
 
 def upsert_credentials(exchange: str, api_key: str, api_secret: str) -> None:
