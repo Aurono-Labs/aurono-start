@@ -101,7 +101,7 @@ class BitvavoExchange(ExchangeBase):
         # IMPORTANT: Use 'end' parameter to get recent data, not ancient history
         url = (
             f"{BITVAVO_BASE}/{market}/candles"
-            f"?interval={interval}&limit={min(limit, 1440)}&end={end_timestamp}"
+            f"?market={market}&interval={interval}&limit={min(limit, 1440)}&end={end_timestamp}"
         )
         
         try:
@@ -129,6 +129,28 @@ class BitvavoExchange(ExchangeBase):
             # Bitvavo returns newest → oldest, reverse to get oldest → newest
             # This ensures data[0] is the oldest candle and data[-1] is most recent
             data.reverse()
+            
+            # === DEBUG: Print last candles ===
+            try:
+                import datetime
+
+                def fmt(ts):
+                    return datetime.datetime.utcfromtimestamp(ts/1000).strftime("%Y-%m-%d %H:%M:%S")
+
+                last = data[-1]
+                prev = data[-2]
+
+                print("📌 Active candle (ignored):")
+                print(f"  timestamp = {fmt(last[0])}")
+                print(f"  open={last[1]}, close={last[4]}")
+
+                print("📌 Previous closed candle (USED):")
+                print(f"  timestamp = {fmt(prev[0])}")
+                print(f"  open={prev[1]}, close={prev[4]}")
+
+            except Exception as e:
+                print("DEBUG ERROR (cannot print candles):", e)
+
             
             return data
         
