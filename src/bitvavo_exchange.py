@@ -184,11 +184,7 @@ class BitvavoExchange(ExchangeBase):
 
         timestamp = str(int(time.time() * 1000))
 
-        # For signature: strip query parameters from path (only for GET requests with params)
-        if method.upper() == "GET" and "?" in path:
-            signature_path = path.split("?", 1)[0]
-        else:
-            signature_path = path
+        signature_path = path
 
         # Build the signature string: timestamp + METHOD + /v2/path + body
         # Note: path MUST include /v2/ prefix as per official Bitvavo docs
