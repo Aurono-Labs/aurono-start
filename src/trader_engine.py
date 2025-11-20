@@ -111,7 +111,6 @@ class TraderEngine:
 
             acb = self.tm.get_average_cost_for_strategy(sid)
             balance = self.tm.get_balance_for_strategy(sid)
-            price_to_use = close_price
 
             # === 1️⃣ BUY logic ===
             if pct_change <= drop_trigger:
@@ -121,13 +120,14 @@ class TraderEngine:
                         f"but insufficient capital (€{allocated:.2f} < €{buy_eur:.2f})"
                     )
                 else:
-                    vol = (buy_eur / price_to_use).quantize(Decimal("0.00000001"))
-                    trade_id = self.tm.record_trade(symbol, "buy", price_to_use, vol, sid)
+                    limit_price = (open_price * (Decimal("1") - drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
+                    vol = (buy_eur / limit_price).quantize(Decimal("0.00000001"))
+                    trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
 
                     # delegate order placement to exchange
-                    exchange.place_limit_order(symbol, "buy", price_to_use, vol, trade_id)
+                    exchange.place_limit_order(symbol, "buy", limit_price, vol, trade_id)
 
-                    eur_spent = price_to_use * vol
+                    eur_spent = limit_price * vol
                     new_alloc = float(allocated - eur_spent)
                     with sqlite3.connect(self.tm.db_path) as c:
                         c.execute(
@@ -136,7 +136,7 @@ class TraderEngine:
                         )
                         c.commit()
                     log_event(
-                        f"✅ BUY executed: {vol} {symbol} @ €{price_to_use:.2f} on {exchange.name}"
+                        f"✅ BUY executed: {vol} {symbol} @ €{limit_price:.2f} on {exchange.name}"
                         f"(drop {pct_change:.2f}% ≤ {drop_trigger}%), "
                         f"spent €{eur_spent:.2f}, new alloc €{new_alloc:.2f}"
                     )
@@ -150,7 +150,7 @@ class TraderEngine:
                         f"❌ No SELL: rise +{pct_change:.2f}% ≥ {rise_trigger}%, but no ACB found."
                     )
                     continue
-                if price_to_use <= acb:
+                if close_price <= acb:
                     log_event(
                         f"❌ No SELL: rise +{pct_change:.2f}% ≥ {rise_trigger}%, "
                         f"but still below ACB €{acb:.2f}"
@@ -162,13 +162,14 @@ class TraderEngine:
                     )
                     continue
 
-                vol = min((sell_eur / price_to_use).quantize(Decimal("0.00000001")), balance)
-                trade_id = self.tm.record_trade(symbol, "sell", price_to_use, vol, sid)
+                limit_price = (open_price * (Decimal("1") + rise_trigger / Decimal("100"))).quantize(Decimal("0.01"))
+                vol = min((sell_eur / limit_price).quantize(Decimal("0.00000001")), balance)
+                trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
 
                 # delegate order placement to exchange
-                exchange.place_limit_order(symbol, "sell", price_to_use, vol, trade_id)
+                exchange.place_limit_order(symbol, "sell", limit_price, vol, trade_id)
 
-                eur_gained = price_to_use * vol
+                eur_gained = limit_price * vol
                 new_alloc = float(allocated + eur_gained)
                 with sqlite3.connect(self.tm.db_path) as c:
                     c.execute(
@@ -177,7 +178,7 @@ class TraderEngine:
                     )
                     c.commit()
                 log_event(
-                    f"💰 SELL executed: {vol} {symbol} @ €{price_to_use:.2f} on {exchange.name}"
+                    f"💰 SELL executed: {vol} {symbol} @ €{limit_price:.2f} on {exchange.name}"
                     f"(rise +{pct_change:.2f}% ≥ {rise_trigger}%, above ACB €{acb:.2f}) → "
                     f"gained €{eur_gained:.2f}, new alloc €{new_alloc:.2f}"
                 )

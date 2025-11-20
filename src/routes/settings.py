@@ -99,6 +99,20 @@ def delete_credentials(cred_id: int):
 
     return RedirectResponse(url="/settings", status_code=HTTP_303_SEE_OTHER)
 
+# --------------------------------------------------------------
+# Mask credentials
+# --------------------------------------------------------------
+def mask_key(k: str) -> str:
+    """
+    Mask API keys so UI shows: ••••••••••ABCD
+    Always 10 dots + last 4 chars.
+    """
+    if not k:
+        return ""
+    k = k.strip()
+    if len(k) <= 4:
+        return "••••"
+    return "••••••••••" + k[-4:]
 
 # --------------------------------------------------------------
 # Test credentials

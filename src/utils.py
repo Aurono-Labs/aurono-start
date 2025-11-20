@@ -222,21 +222,24 @@ def get_credentials_plain_by_id(cred_id: int) -> Optional[Dict]:
     finally:
         conn.close()
 
-
 def list_credentials_for_ui() -> List[Dict]:
     """
     Returns a list of credentials with MASKED keys/secrets for safe display in UI.
+    Masking format:
+        ••••••••••ABCD   (always 10 dots + last 4 chars)
     """
-    def mask_tail(s: str, visible: int = 4) -> str:
+
+    def mask_fixed(s: str, visible: int = 4) -> str:
         s = s or ""
         if len(s) <= visible:
-            return "•" * len(s)
-        return "•" * (len(s) - visible) + s[-visible:]
+            return "•" * visible   # still show 4 dots
+        return "•" * 10 + s[-visible:]  # ALWAYS 10 dots
 
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     creds: List[Dict] = []
+
     try:
         _ensure_credentials_table(conn)
         cur = conn.cursor()
@@ -245,17 +248,20 @@ def list_credentials_for_ui() -> List[Dict]:
             "FROM api_credentials ORDER BY exchange ASC"
         )
         rows = cur.fetchall()
+
         for r in rows:
             api_key = _decrypt_secret(r["api_key_enc"])
             api_secret = _decrypt_secret(r["api_secret_enc"])
+
             creds.append({
                 "id": r["id"],
                 "exchange": r["exchange"],
-                "api_key_masked": mask_tail(api_key),
-                "api_secret_masked": mask_tail(api_secret),
+                "api_key_masked": mask_fixed(api_key),
+                "api_secret_masked": mask_fixed(api_secret),
                 "created_at": r["created_at"],
                 "updated_at": r["updated_at"],
             })
+
     finally:
         conn.close()
 
