@@ -213,10 +213,36 @@ def get_recent_trades(limit=15, days=7):
     return trades
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(
+    request: Request,
+    symbol: str = "",
+    timeframe: str = "",
+    exchange: str = ""
+):
+
     cfg = current_config()
     running, _ = get_running_processes()
     snapshot = get_portfolio_snapshot()
+    
+    # --- apply filters to portfolio snapshot ---
+    filtered = []
+    for s in snapshot["symbols"]:
+        if symbol and s["symbol"] != symbol:
+            continue
+        if timeframe and s["timeframe"] != timeframe:
+            continue
+        if exchange and s["exchange"] != exchange:
+            continue
+        filtered.append(s)
+
+    # Replace the original list with the filtered one
+    snapshot["symbols"] = filtered
+
+    # Populate dropdown values from all strategies (unfiltered)
+    symbols_list = sorted({x["symbol"] for x in get_portfolio_snapshot()["symbols"]})
+    timeframes_list = sorted({x["timeframe"] for x in get_portfolio_snapshot()["symbols"]})
+    exchanges_list = sorted({x["exchange"] for x in get_portfolio_snapshot()["symbols"]})
+
 
     import re
     from datetime import datetime
@@ -347,7 +373,10 @@ async def dashboard(request: Request):
         "trader_running": running,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "snapshot": snapshot,
-        "recent_trades": get_recent_trades()
+        "recent_trades": get_recent_trades(),
+        "symbols_list": symbols_list,
+        "timeframes_list": timeframes_list,
+        "exchanges_list": exchanges_list
     })
 
 @app.get("/start_trader")

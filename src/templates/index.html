@@ -93,6 +93,35 @@ td.actions {
   <hr style="margin:8px 0;">
   <p><b>Total Portfolio Value:</b> €{{ "%.2f"|format(snapshot.total_value) }}</p>
   
+  <form method="get" style="margin-bottom: 16px; display: flex; gap: 12px;">
+    
+    <select name="symbol">
+      <option value="">All Coins</option>
+      {% for c in symbols_list %}
+        <option value="{{ c }}" {% if request.query_params.symbol == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="timeframe">
+      <option value="">All Timeframes</option>
+      {% for tf in timeframes_list %}
+        <option value="{{ tf }}" {% if request.query_params.timeframe == tf %}selected{% endif %}>{{ tf }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="exchange">
+      <option value="">All Exchanges</option>
+      {% for ex in exchanges_list %}
+        <option value="{{ ex }}" {% if request.query_params.exchange == ex %}selected{% endif %}>{{ ex }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <script>
+  document.querySelectorAll("form select").forEach(el => {
+    el.addEventListener("change", () => el.form.submit());
+  });
+  </script>
+  
   <table>
     <tr>
       <th>Strategy</th>
