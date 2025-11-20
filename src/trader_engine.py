@@ -120,7 +120,7 @@ class TraderEngine:
                         f"but insufficient capital (€{allocated:.2f} < €{buy_eur:.2f})"
                     )
                 else:
-                    limit_price = (open_price * (Decimal("1") - drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
+                    limit_price = (open_price * (Decimal("1") + drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
                     vol = (buy_eur / limit_price).quantize(Decimal("0.00000001"))
                     trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
 
