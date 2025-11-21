@@ -175,7 +175,15 @@ td.actions {
         <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
         <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
         <td class="numeric">{% if s.acb %}{{ "%.2f"|format(s.acb) }}{% else %}-{% endif %}</td>
-        <td class="numeric">{{ "%.2f"|format(s.pnl_pct) }}%</td>
+        <td class="numeric"
+            style="color:
+              {% if s.pnl_pct > 0 %}green
+              {% elif s.pnl_pct < 0 %}red
+              {% else %}#666
+              {% endif %};
+            ">
+          {{ "%.2f"|format(s.pnl_pct) }}%
+        </td>
         <td class="numeric">{{ "%.2f"|format(s.allocated_eur) }}</td>
 
     </tr>
