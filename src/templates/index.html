@@ -93,34 +93,32 @@ td.actions {
   <hr style="margin:8px 0;">
   <p><b>Total Portfolio Value:</b> €{{ "%.2f"|format(snapshot.total_value) }}</p>
   
-  <form method="get" style="margin-bottom: 16px; display: flex; gap: 12px;">
-    
-    <select name="symbol">
+  <form class="filters" style="margin-bottom: 16px; display: flex; gap: 12px;">
+
+    <select id="filter-symbol">
       <option value="">All Coins</option>
-      {% for c in symbols_list %}
-        <option value="{{ c }}" {% if request.query_params.symbol == c %}selected{% endif %}>{{ c }}</option>
+      {% for s in snapshot.symbols %}
+        <option value="{{ s.symbol }}">{{ s.symbol }}</option>
       {% endfor %}
     </select>
 
-    <select name="timeframe">
+    <select id="filter-timeframe">
       <option value="">All Timeframes</option>
-      {% for tf in timeframes_list %}
-        <option value="{{ tf }}" {% if request.query_params.timeframe == tf %}selected{% endif %}>{{ tf }}</option>
+      {% for s in snapshot.symbols %}
+        <option value="{{ s.timeframe }}">{{ s.timeframe }}</option>
       {% endfor %}
     </select>
 
-    <select name="exchange">
+    <select id="filter-exchange">
       <option value="">All Exchanges</option>
-      {% for ex in exchanges_list %}
-        <option value="{{ ex }}" {% if request.query_params.exchange == ex %}selected{% endif %}>{{ ex }}</option>
+      {% for s in snapshot.symbols %}
+        <option value="{{ s.exchange }}">{{ s.exchange }}</option>
       {% endfor %}
     </select>
+
+    <button type="button" onclick="resetFilters()">Reset</button>
+
   </form>
-  <script>
-  document.querySelectorAll("form select").forEach(el => {
-    el.addEventListener("change", () => el.form.submit());
-  });
-  </script>
   
   <table>
     <tr>
@@ -132,25 +130,24 @@ td.actions {
       <th class="numeric">P/L %</th>
       <th class="numeric">Available Cash (€)</th>
     </tr>
+    <tbody id="portfolio-rows">
     {% for s in snapshot.symbols %}
-    <tr>
-      <td class="numeric">{{ s.symbol }} {{ s.timeframe }} ({{ s.exchange }})</td>
-      <td class="numeric">{{ "%.2f"|format(s.price) }}</td>
-      <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
-      <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
-      <td class="numeric">{% if s.acb %}{{ "%.2f"|format(s.acb) }}{% else %}-{% endif %}</td>
-      <td class="numeric">
-        {% if s.pnl_pct > 0 %}
-          <span style="color:green;">+{{ "%.2f"|format(s.pnl_pct) }}%</span>
-        {% elif s.pnl_pct < 0 %}
-          <span style="color:red;">{{ "%.2f"|format(s.pnl_pct) }}%</span>
-        {% else %}
-          -
-        {% endif %}
-      </td>
-      <td class="numeric">{{ "%.2f"|format(s.allocated_eur) }}</td>
+    <tr class="pf-row"
+        data-symbol="{{ s.symbol }}"
+        data-timeframe="{{ s.timeframe }}"
+        data-exchange="{{ s.exchange }}">
+        
+        <td>{{ s.symbol }} {{ s.timeframe }} ({{ s.exchange }})</td>
+        <td class="numeric">{{ "%.2f"|format(s.price) }}</td>
+        <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
+        <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
+        <td class="numeric">{% if s.acb %}{{ "%.2f"|format(s.acb) }}{% else %}-{% endif %}</td>
+        <td class="numeric">{{ "%.2f"|format(s.pnl_pct) }}%</td>
+        <td class="numeric">{{ "%.2f"|format(s.allocated_eur) }}</td>
+
     </tr>
     {% endfor %}
+    </tbody>
   </table>
 </div>
 
@@ -181,6 +178,39 @@ td.actions {
     <p>No trades executed in the last 7 days.</p>
   {% endif %}
 </div>
+
+<script>
+function applyFilters() {
+    const sym = document.getElementById("filter-symbol").value;
+    const tf = document.getElementById("filter-timeframe").value;
+    const ex = document.getElementById("filter-exchange").value;
+
+    document.querySelectorAll("#portfolio-rows .pf-row").forEach(row => {
+        const rSym = row.dataset.symbol;
+        const rTf = row.dataset.timeframe;
+        const rEx = row.dataset.exchange;
+
+        let visible = true;
+        if (sym && rSym !== sym) visible = false;
+        if (tf && rTf !== tf) visible = false;
+        if (ex && rEx !== ex) visible = false;
+
+        row.style.display = visible ? "" : "none";
+    });
+}
+
+function resetFilters() {
+    document.getElementById("filter-symbol").value = "";
+    document.getElementById("filter-timeframe").value = "";
+    document.getElementById("filter-exchange").value = "";
+    applyFilters();
+}
+
+document.querySelectorAll(".filters select").forEach(sel => {
+    sel.addEventListener("change", applyFilters);
+});
+</script>
+
 
 </body>
 </html>
