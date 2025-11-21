@@ -97,24 +97,57 @@ td.actions {
 
     <select id="filter-symbol">
       <option value="">All Coins</option>
+
+      {% set symbol_list = [] %}
       {% for s in snapshot.symbols %}
-        <option value="{{ s.symbol }}">{{ s.symbol }}</option>
+        {% if s.symbol not in symbol_list %}
+          {% set _ = symbol_list.append(s.symbol) %}
+        {% endif %}
+      {% endfor %}
+
+      {% for sym in symbol_list|sort %}
+        <option value="{{ sym }}">{{ sym }}</option>
       {% endfor %}
     </select>
 
     <select id="filter-timeframe">
       <option value="">All Timeframes</option>
+
+      {% set ordered_tfs = [] %}
+      {% set lookup = ["1h", "4h", "1d", "1w"] %}
+
+      {# Collect unique tfs #}
+      {% set tfs = [] %}
       {% for s in snapshot.symbols %}
-        <option value="{{ s.timeframe }}">{{ s.timeframe }}</option>
+        {% if s.timeframe not in tfs %}
+          {% set _ = tfs.append(s.timeframe) %}
+        {% endif %}
+      {% endfor %}
+
+      {# Append in correct order #}
+      {% for tf in lookup %}
+        {% if tf in tfs %}
+          <option value="{{ tf }}">{{ tf }}</option>
+        {% endif %}
       {% endfor %}
     </select>
 
     <select id="filter-exchange">
       <option value="">All Exchanges</option>
+
+      {% set exchange_list = [] %}
       {% for s in snapshot.symbols %}
-        <option value="{{ s.exchange }}">{{ s.exchange }}</option>
+        {% if s.exchange not in exchange_list %}
+          {% set _ = exchange_list.append(s.exchange) %}
+        {% endif %}
+      {% endfor %}
+
+      {% for ex in exchange_list|sort %}
+        <option value="{{ ex }}">{{ ex }}</option>
       {% endfor %}
     </select>
+
+
 
     <button type="button" onclick="resetFilters()">Reset</button>
 
