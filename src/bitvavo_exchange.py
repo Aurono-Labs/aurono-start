@@ -6,7 +6,7 @@ import time
 import hmac
 import hashlib
 import json
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP  # ⬅ add ROUND_HALF_UP
 from typing import Any, Dict, Optional, List
 
 import requests
@@ -48,6 +48,7 @@ class BitvavoExchange(ExchangeBase):
     # Helpers
     # ----------------------------------------
 
+      
     def _market(self, symbol: str) -> str:
         """
         Convert 'BTCEUR' → 'BTC-EUR', 'SOLEUR' → 'SOL-EUR', etc.
@@ -56,6 +57,69 @@ class BitvavoExchange(ExchangeBase):
         if p.endswith("EUR"):
             return f"{p[:-3]}-EUR"
         return p
+        
+    # Cache: stores price & amount ticks per market
+    _market_tick_cache: Dict[str, Dict[str, Decimal]] = {}
+
+    def _load_market_ticks(self, market: str) -> Dict[str, Decimal]:
+        """
+        Load price tick and amount tick from Bitvavo /markets endpoint.
+        Example return: {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
+        """
+        market = market.upper()
+
+        # Already cached
+        if market in self._market_tick_cache:
+            return self._market_tick_cache[market]
+
+        try:
+            r = requests.get(f"{BITVAVO_BASE}/markets", timeout=10).json()
+        except Exception as e:
+            log_event(f"⚠️ Bitvavo tick fetch failed: {e}")
+            # Safe fallback
+            ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
+            self._market_tick_cache[market] = ticks
+            return ticks
+
+        for info in r:
+            if info.get("market", "").upper() == market:
+                price_dec = info.get("priceDecimals", 2)
+                amount_dec = info.get("amountDecimals", 4)
+
+                ticks = {
+                    "price": Decimal("1") / (Decimal("10")**Decimal(price_dec)),
+                    "amount": Decimal("1") / (Decimal("10")**Decimal(amount_dec)),
+                }
+
+                self._market_tick_cache[market] = ticks
+                return ticks
+
+        # Fallback if market not found
+        log_event(f"⚠️ Bitvavo: no tick info found for {market}, using defaults")
+        ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
+        self._market_tick_cache[market] = ticks
+        return ticks
+
+    def _normalize_price(self, market: str, price: Decimal) -> Decimal:
+        ticks = self._load_market_ticks(market)
+        tick = ticks["price"]
+
+        try:
+            return price.quantize(tick, rounding=ROUND_HALF_UP)
+        except Exception:
+            log_event(f"⚠️ Bitvavo price rounding failed for {market} price={price}, tick={tick}")
+            return price
+
+    def _normalize_amount(self, market: str, amount: Decimal) -> Decimal:
+        ticks = self._load_market_ticks(market)
+        tick = ticks["amount"]
+
+        try:
+            return amount.quantize(tick, rounding=ROUND_HALF_UP)
+        except Exception:
+            log_event(f"⚠️ Bitvavo amount rounding failed for {market} amount={amount}, tick={tick}")
+            return amount
+
 
     # ----------------------------------------
     # Public API
@@ -262,6 +326,10 @@ class BitvavoExchange(ExchangeBase):
         cfg = current_config()
         live = cfg.get("live_trading", False)
         market = self._market(symbol)
+        
+        # ✅ Normalize price and amount
+        price  = self._normalize_price(market, price)
+        volume = self._normalize_amount(market, volume)
 
         if not live:
             log_event(f"🧪 Simulated {side.upper()} {volume} {market} @ €{price} (Bitvavo)")

@@ -8,7 +8,7 @@ import base64
 import hashlib
 import hmac
 import urllib.parse
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Optional, List
 
 import requests
@@ -49,6 +49,82 @@ class KrakenExchange(ExchangeBase):
             self.api_key, self.api_secret = get_credentials_for_exchange("kraken")
 
         self.tm = TradeManager(get_db_path())
+        
+    # Cache for Kraken tick sizes: {"BTCEUR": Decimal("0.1"), ... }
+    _tick_cache: Dict[str, Dict[str, Decimal]] = {}
+    
+    def _load_tick_size(self, symbol: str) -> Dict[str, Decimal]:
+        """
+        Load both price tick and amount tick for a Kraken symbol using /AssetPairs.
+        Returns a dict: { "price": Decimal, "amount": Decimal }
+        """
+        symbol = symbol.upper()
+
+        # Return cached entry
+        if symbol in self._tick_cache:
+            return self._tick_cache[symbol]
+
+        # Default fallback (safe minimums)
+        fallback = {
+            "price": Decimal("0.01"),
+            "amount": Decimal("0.0001")
+        }
+
+        try:
+            r = requests.get(f"{KRAKEN_API_PUBLIC}/AssetPairs").json()
+            pairs = r.get("result", {})
+        except Exception as e:
+            log_event(f"⚠️ Kraken tick-size fetch failed: {e}")
+            self._tick_cache[symbol] = fallback
+            return fallback
+
+        for pair_name, info in pairs.items():
+            altname = info.get("altname", "").upper()  # e.g. "BTCEUR"
+            if altname == symbol:
+                # Price precision (pair_decimals)
+                price_dec = info.get("pair_decimals", 2)
+                price_tick = Decimal("1") / (Decimal("10") ** Decimal(price_dec))
+
+                # Amount precision (lot_decimals)
+                lot_dec = info.get("lot_decimals", 4)
+                amount_tick = Decimal("1") / (Decimal("10") ** Decimal(lot_dec))
+
+                result = {
+                    "price": price_tick,
+                    "amount": amount_tick
+                }
+                self._tick_cache[symbol] = result
+                return result
+
+        # No match found — fallback
+        log_event(f"⚠️ Kraken: no tick size found for {symbol}, using defaults")
+        self._tick_cache[symbol] = fallback
+        return fallback
+        
+    def _normalize_price(self, symbol: str, price: Decimal) -> Decimal:
+        ticks = self._load_tick_size(symbol)
+        tick = ticks["price"]
+
+        try:
+            return price.quantize(tick, rounding=ROUND_HALF_UP)
+        except Exception:
+            log_event(f"⚠️ Kraken price rounding failed for {symbol}, tick={tick}, price={price}")
+            return price
+            
+    def _normalize_amount(self, symbol: str, amount: Decimal) -> Decimal:
+        """
+        Normalize the amount (volume) based on Kraken's lot_decimals.
+        """
+        ticks = self._load_tick_size(symbol)
+        tick = ticks["amount"]
+
+        try:
+            return amount.quantize(tick, rounding=ROUND_HALF_UP)
+        except Exception:
+            log_event(f"⚠️ Kraken amount rounding failed for {symbol}, tick={tick}, amount={amount}")
+            return amount
+
+
 
 
     # -------------------- Public API --------------------
@@ -164,6 +240,10 @@ class KrakenExchange(ExchangeBase):
         cfg = current_config()
         live = cfg.get("live_trading", False)
         pair = symbol.upper()
+
+        # Normalize both price and amount using Kraken's precision rules
+        price = self._normalize_price(symbol, price)
+        volume = self._normalize_amount(symbol, volume)
 
         if not live:
             log_event(f"🧪 Simulated {side.upper()} {volume} {pair} @ €{price} (Kraken)")
