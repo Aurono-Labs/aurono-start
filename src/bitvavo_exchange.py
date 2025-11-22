@@ -295,22 +295,37 @@ class BitvavoExchange(ExchangeBase):
             return {"error": str(e)}
 
     def _get_order_details(self, order_id: str, market: str) -> Optional[Dict[str, Any]]:
-        """
-        GET /order?orderId=...&market=BTC-EUR
-        """
         path = f"order?orderId={order_id}&market={market}"
         res = self._private_request("GET", path)
 
-        if "errorCode" in res:
+        if not isinstance(res, dict) or "errorCode" in res:
             return None
 
-        try:
-            status = res.get("status")
-            vol_exec = Decimal(res.get("filledAmount", "0"))
-            price = Decimal(res.get("filledPrice", "0"))
-            return {"status": status, "vol_exec": vol_exec, "price": price}
-        except Exception:
-            return None
+        status = res.get("status", "")
+        vol_exec = Decimal(res.get("filledAmount", "0"))
+
+        # ---- Calculate actual filled price ----
+        price = Decimal("0")
+
+        # 1) If Bitvavo provides filledAmountQuote, use it
+        filled_quote = res.get("filledAmountQuote")
+        if filled_quote and vol_exec > 0:
+            price = Decimal(filled_quote) / vol_exec
+
+        # 2) Else, check if fills are provided
+        fills = res.get("fills")
+        if fills and isinstance(fills, list) and len(fills) > 0:
+            total = Decimal("0")
+            cost = Decimal("0")
+            for f in fills:
+                amt = Decimal(f.get("amount", "0"))
+                p = Decimal(f.get("price", "0"))
+                total += amt
+                cost += amt * p
+            if total > 0:
+                price = cost / total
+
+        return {"status": status, "vol_exec": vol_exec, "price": price}
 
     # ----------------------------------------
     # Place limit order
@@ -324,12 +339,26 @@ class BitvavoExchange(ExchangeBase):
         volume: Decimal,
         trade_id: Optional[int] = None
     ) -> Dict[str, Any]:
+        """
+        Place a Bitvavo limit order.
+
+        Behaviour:
+        - TraderEngine already updates strategies.allocated_eur based on the *limit* price
+          (as a reservation).
+        - Here we:
+            1) send the order to Bitvavo
+            2) store the Bitvavo orderId into trades.txid
+            3) fetch the actual fill (status, vol_exec, price)
+            4) update trades.price / trades.amount to the actuals
+            5) adjust strategies.allocated_eur by the difference between:
+               reserved EUR vs. actual EUR.
+        """
         cfg = current_config()
         live = cfg.get("live_trading", False)
         market = self._market(symbol)
-        
-        # ✅ Normalize price and amount
-        price  = self._normalize_price(market, price)
+
+        # Normalize price and amount
+        price = self._normalize_price(market, price)
         volume = self._normalize_amount(market, volume)
 
         if not live:
@@ -342,7 +371,7 @@ class BitvavoExchange(ExchangeBase):
             "orderType": "limit",
             "price": str(price),
             "amount": str(volume),
-            "operatorId": 1    # 🔥 REQUIRED FIX
+            "operatorId": 1,
         }
 
         res = self._private_request("POST", "order", body)
@@ -368,39 +397,82 @@ class BitvavoExchange(ExchangeBase):
                 log_event(f"⚠️ Could not store Bitvavo orderId in DB: {e}")
 
         # Wait for execution, then try to update trade with final fill
-        time.sleep(6)
+        time.sleep(12)
         detail = self._get_order_details(order_id, market)
         if not detail:
+            log_event(f"⚠️ Bitvavo returned no order details for orderId={order_id}")
             return res
 
         log_event(f"📊 Bitvavo order status: {detail}")
 
+        status = detail.get("status")
+        actual_price = detail.get("price", Decimal("0"))
+        actual_amount = detail.get("vol_exec", Decimal("0"))
+
         if (
-            detail["status"] in ("filled", "partiallyFilled")
-            and detail["price"] > 0
-            and detail["vol_exec"] > 0
+            status in ("filled", "partiallyFilled")
+            and actual_price > 0
+            and actual_amount > 0
             and trade_id is not None
         ):
+            # Reserved EUR that TraderEngine already used
+            reserved_eur = price * volume
+
+            # Actual EUR based on fill
+            actual_eur = actual_price * actual_amount
+
+            if side.lower() == "buy":
+                delta = reserved_eur - actual_eur
+            else:  # "sell"
+                delta = actual_eur - reserved_eur
+
             try:
                 conn = _open_db()
                 cur = conn.cursor()
+
+                # 1) Update the trade with actual fill price/amount
                 cur.execute(
                     """
                     UPDATE trades
                     SET price = ?, amount = ?
                     WHERE id = ?
                     """,
-                    (float(detail["price"]), float(detail["vol_exec"]), trade_id),
+                    (float(actual_price), float(actual_amount), trade_id),
                 )
+
+                # 2) Fetch strategy_id linked to this trade
+                cur.execute(
+                    "SELECT strategy_id FROM trades WHERE id = ?",
+                    (trade_id,),
+                )
+                row = cur.fetchone()
+                strategy_id = row[0] if row and row[0] is not None else None
+
+                # 3) Adjust allocated_eur for that strategy by delta (if we know the strategy)
+                if strategy_id is not None and delta != 0:
+                    cur.execute(
+                        """
+                        UPDATE strategies
+                        SET allocated_eur = allocated_eur + ?
+                        WHERE id = ?
+                        """,
+                        (float(delta), strategy_id),
+                    )
+                    log_event(
+                        f"🔁 Adjusted allocated_eur for strategy {strategy_id} on Bitvavo "
+                        f"by €{delta:.2f} (reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f})"
+                    )
+
                 conn.commit()
                 conn.close()
             except Exception as e:
-                log_event(f"⚠️ Could not update executed Bitvavo trade in DB: {e}")
+                log_event(f"⚠️ Could not update executed Bitvavo trade / allocation in DB: {e}")
 
             log_event(
                 f"💾 Updated executed Bitvavo trade → "
-                f"€{detail['price']} × {detail['vol_exec']} "
+                f"€{actual_price} × {actual_amount} "
                 f"(was {price} × {volume}, trade_id={trade_id})"
             )
 
         return res
+

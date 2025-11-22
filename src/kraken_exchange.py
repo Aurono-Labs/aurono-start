@@ -225,7 +225,7 @@ class KrakenExchange(ExchangeBase):
         return None
 
     # -------------------- Place limit order --------------------
-
+    
     def place_limit_order(
         self,
         symbol: str,
@@ -237,6 +237,17 @@ class KrakenExchange(ExchangeBase):
         """
         Place a live Kraken order or simulate if live_trading=False.
         Symbol: 'BTCEUR', 'NEAREUR', etc.
+
+        Behaviour:
+        - TraderEngine already updates strategies.allocated_eur based on the *limit* price
+          (as a reservation).
+        - Here we:
+            1) send the order to Kraken
+            2) store the Kraken order id (txid) into trades.txid
+            3) fetch the actual fill (price, vol_exec)
+            4) update trades.price / trades.amount to the actuals
+            5) adjust strategies.allocated_eur by the difference between:
+               reserved EUR vs. actual EUR.
         """
         cfg = current_config()
         live = cfg.get("live_trading", False)
@@ -281,40 +292,83 @@ class KrakenExchange(ExchangeBase):
                 log_event(f"⚠️ Could not store Kraken TXID in DB: {e}")
 
         # Wait for execution, then try to update trade with final fill
-        time.sleep(6)
+        time.sleep(12)  # a bit longer to allow Kraken to close the order
         detail = self._get_order_details(txid)
         if not detail:
+            log_event(f"⚠️ Kraken returned no order details for TXID={txid}")
             return res
 
         log_event(f"📊 Order status: {detail['status']} ({detail['descr']})")
 
+        # Only adjust if fully closed and we have a valid fill
         if (
             detail["status"] == "closed"
             and detail["price"] > 0
             and detail["vol_exec"] > 0
             and trade_id is not None
         ):
+            actual_price = detail["price"]          # Decimal
+            actual_amount = detail["vol_exec"]      # Decimal
+
+            # Reserved EUR that TraderEngine already used
+            reserved_eur = price * volume
+
+            # Actual EUR based on fill
+            actual_eur = actual_price * actual_amount
+
+            # For BUY: TraderEngine subtracted reserved_eur; we add back the difference.
+            # For SELL: TraderEngine added reserved_eur; we add the extra actual - reserved.
+            if side.lower() == "buy":
+                delta = reserved_eur - actual_eur
+            else:  # "sell"
+                delta = actual_eur - reserved_eur
+
             try:
                 conn = _open_db()
                 cur = conn.cursor()
+
+                # 1) Update the trade with actual fill price/amount
                 cur.execute(
                     """
                     UPDATE trades
                     SET price = ?, amount = ?
                     WHERE id = ?
                     """,
-                    (float(detail["price"]), float(detail["vol_exec"]), trade_id),
+                    (float(actual_price), float(actual_amount), trade_id),
                 )
+
+                # 2) Fetch strategy_id linked to this trade
+                cur.execute(
+                    "SELECT strategy_id FROM trades WHERE id = ?",
+                    (trade_id,),
+                )
+                row = cur.fetchone()
+                strategy_id = row[0] if row and row[0] is not None else None
+
+                # 3) Adjust allocated_eur for that strategy by delta (if we know the strategy)
+                if strategy_id is not None and delta != 0:
+                    cur.execute(
+                        """
+                        UPDATE strategies
+                        SET allocated_eur = allocated_eur + ?
+                        WHERE id = ?
+                        """,
+                        (float(delta), strategy_id),
+                    )
+                    log_event(
+                        f"🔁 Adjusted allocated_eur for strategy {strategy_id} on Kraken "
+                        f"by €{delta:.2f} (reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f})"
+                    )
+
                 conn.commit()
                 conn.close()
             except Exception as e:
-                log_event(f"⚠️ Could not update executed Kraken trade in DB: {e}")
+                log_event(f"⚠️ Could not update executed Kraken trade / allocation in DB: {e}")
 
             log_event(
                 f"💾 Updated executed Kraken trade → "
-                f"€{detail['price']} × {detail['vol_exec']} "
+                f"€{actual_price} × {actual_amount} "
                 f"(was {price} × {volume}, trade_id={trade_id})"
             )
 
         return res
-
