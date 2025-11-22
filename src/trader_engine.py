@@ -66,7 +66,7 @@ class TraderEngine:
         conn.close()
 
         if not strategies:
-            log_event("⚠️ No active strategies found — skipping cycle.")
+            log_event("💤 No active strategies found — skipping cycle.")
             return
 
         for s in strategies:
