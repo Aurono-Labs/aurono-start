@@ -23,6 +23,7 @@ from utils import (
     get_credentials_for_exchange,
     
 )
+from utils import _open_db
 from trade_manager import TradeManager
 from exchange_base import ExchangeBase
 
@@ -269,7 +270,7 @@ class KrakenExchange(ExchangeBase):
         # Attach TXID to DB record
         if trade_id:
             try:
-                conn = sqlite3.connect(self.tm.db_path)
+                conn = _open_db()
                 conn.execute(
                     "UPDATE trades SET txid=? WHERE id=?",
                     (txid, trade_id),
@@ -294,7 +295,7 @@ class KrakenExchange(ExchangeBase):
             and trade_id is not None
         ):
             try:
-                conn = sqlite3.connect(self.tm.db_path)
+                conn = _open_db()
                 cur = conn.cursor()
                 cur.execute(
                     """

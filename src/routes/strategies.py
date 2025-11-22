@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from utils import get_db_path, log_event, root_path
+from utils import _open_db
 
 # DB & templates
 DB_PATH = root_path("data", "trades.db")
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/strategies", tags=["strategies"])
 
 
 def get_db():
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = _open_db()
     conn.row_factory = sqlite3.Row
     return conn
 

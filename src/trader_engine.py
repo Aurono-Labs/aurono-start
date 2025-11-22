@@ -14,6 +14,8 @@ from utils import (
     to_decimal,
     get_db_path,
 )
+
+from utils import _open_db
 from trade_manager import TradeManager
 from exchange_base import ExchangeBase
 from exchange_factory import get_exchange
@@ -46,8 +48,8 @@ class TraderEngine:
         mode = cfg.get("mode", "dev")
         tf_note = f" [{timeframe}]" if timeframe else ""
         log_event(f"🚀 Strategy cycle started{tf_note} (global engine={self.exchange.name}, mode={mode.upper()})")
-
-        conn = sqlite3.connect(self.tm.db_path)
+        
+        conn = _open_db()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
 
@@ -129,12 +131,10 @@ class TraderEngine:
 
                     eur_spent = limit_price * vol
                     new_alloc = float(allocated - eur_spent)
-                    with sqlite3.connect(self.tm.db_path) as c:
-                        c.execute(
-                            "UPDATE strategies SET allocated_eur=? WHERE id=?",
-                            (new_alloc, sid),
-                        )
+                    with _open_db() as c:
+                        c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
                         c.commit()
+
                     log_event(
                         f"✅ BUY executed: {vol} {symbol} @ €{limit_price:.2f} on {exchange.name}"
                         f"(drop {pct_change:.2f}% ≤ {drop_trigger}%), "
@@ -171,11 +171,8 @@ class TraderEngine:
 
                 eur_gained = limit_price * vol
                 new_alloc = float(allocated + eur_gained)
-                with sqlite3.connect(self.tm.db_path) as c:
-                    c.execute(
-                        "UPDATE strategies SET allocated_eur=? WHERE id=?",
-                        (new_alloc, sid),
-                    )
+                with _open_db() as c:
+                    c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
                     c.commit()
                 log_event(
                     f"💰 SELL executed: {vol} {symbol} @ €{limit_price:.2f} on {exchange.name}"

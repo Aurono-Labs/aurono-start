@@ -15,6 +15,7 @@ import importlib
 settings = importlib.import_module("routes.settings")
 
 from utils import current_config, save_config, log_event, root_path, to_decimal, load_api_keys, get_db_path
+from utils import _open_db
 from trade_manager import TradeManager
 from kraken_exchange import KrakenExchange
 from bitvavo_exchange import BitvavoExchange
@@ -72,7 +73,7 @@ def get_portfolio_snapshot():
     available_cash = 0.0
 
     try:
-        conn = sqlite3.connect(get_db_path())
+        conn = _open_db()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
 
@@ -170,7 +171,7 @@ def get_recent_trades(limit=15, days=7):
     """Return last N trades (default 7 days) including strategy names."""
     trades = []
     try:
-        conn = sqlite3.connect(get_db_path())
+        conn = _open_db()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
 

@@ -42,12 +42,25 @@ def log_event(msg:str):
 def to_decimal(v):
     try: return Decimal(str(v))
     except Exception: return Decimal("0.0")
+    
+from db.schema import ensure_schema
+import sqlite3
 
 def get_db_path():
     cfg = current_config()
     return root_path("data", Path(cfg["db_path"]).name)
 
- 
+def _open_db():
+    """
+    Opens DB and ensures schema exists.
+    Returns a ready-to-use sqlite3 connection.
+    """
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    ensure_schema(conn)
+    return conn
+
+
  
 # ============================================================
 # 🔐 Device-specific encryption for API credentials
