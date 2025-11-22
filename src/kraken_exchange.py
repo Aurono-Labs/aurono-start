@@ -152,7 +152,7 @@ class KrakenExchange(ExchangeBase):
         timeframe: '1h', '4h', '1d'
         """
         pair = symbol.upper()
-        interval_map = {"1h": 60, "4h": 240, "1d": 1440}
+        interval_map = {"1h": 60, "4h": 240, "6h": 360, "1d": 1440, "1w": 10080}
         interval = interval_map.get(timeframe, 1440)
 
         try:

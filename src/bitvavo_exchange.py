@@ -154,7 +154,7 @@ class BitvavoExchange(ExchangeBase):
             List of OHLC data in chronological order (oldest → newest)
         """
         market = self._market(symbol)
-        interval_map = {"1h": "1h", "4h": "4h", "1d": "1d"}
+        interval_map = {"1h": "1h", "4h": "4h", "6h": "6h", "1d": "1d", "1w": "1w"}
         interval = interval_map.get(timeframe, "1d")
         
         # Get current time to ensure we fetch the most recent candles
