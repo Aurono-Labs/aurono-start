@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from utils import log_event, to_decimal, get_db_path, _open_db
-from db.schema import ensure_schema
+from tools.schema import ensure_schema
 
 
 class TradeManager:

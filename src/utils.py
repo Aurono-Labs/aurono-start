@@ -43,7 +43,7 @@ def to_decimal(v):
     try: return Decimal(str(v))
     except Exception: return Decimal("0.0")
     
-from db.schema import ensure_schema
+from tools.schema import ensure_schema
 import sqlite3
 
 def get_db_path():
