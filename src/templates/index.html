@@ -24,23 +24,12 @@
   </div>
 
   <!-- Portfolio Summary -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
 
     <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5">
       <p class="text-sm text-[#A8B2C3] mb-1">Total Value</p>
       <p class="text-2xl font-semibold">
         €{{ "%.2f"|format(snapshot.total_value) }}
-      </p>
-    </div>
-
-    <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5">
-      <p class="text-sm text-[#A8B2C3] mb-1">Total P/L</p>
-      <p class="text-2xl font-semibold
-        {% if snapshot.total_pl_pct > 0 %} text-[#33C27D]
-        {% elif snapshot.total_pl_pct < 0 %} text-[#E06A6A]
-        {% endif %}
-      ">
-        {{ "%.2f"|format(snapshot.total_pl_pct) }}%
       </p>
     </div>
 
