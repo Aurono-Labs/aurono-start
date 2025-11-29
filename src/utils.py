@@ -307,3 +307,67 @@ def load_api_keys() -> tuple[Optional[str], Optional[str]]:
     exchange = cfg.get("exchange", "kraken")
     api_key, api_secret = get_credentials_for_exchange(exchange)
     return api_key, api_secret
+    
+    
+# ============================================================
+# Load EUR marketpairs from exchanges
+# ============================================================
+
+import requests
+import time
+
+_pair_cache = {
+    "kraken": {"pairs": [], "timestamp": 0},
+    "bitvavo": {"pairs": [], "timestamp": 0},
+}
+
+CACHE_TTL = 3600  # 1 hour
+
+
+def get_supported_pairs(exchange: str) -> list[str]:
+    """
+    Returns list of EUR pairs supported by the given exchange.
+    Cached for 1 hour to prevent unnecessary API calls.
+    """
+
+    now = time.time()
+    if exchange not in _pair_cache:
+        return []
+
+    # Serve from cache
+    if now - _pair_cache[exchange]["timestamp"] < CACHE_TTL:
+        return _pair_cache[exchange]["pairs"]
+
+    if exchange == "kraken":
+        url = "https://api.kraken.com/0/public/AssetPairs"
+        resp = requests.get(url, timeout=10)
+        data = resp.json().get("result", {})
+
+        # Kraken pairs are like "XXBTZEUR" -> "BTCEUR"
+        pairs = []
+        for _, v in data.items():
+            pair = v.get("wsname")  # e.g. "XBT/EUR"
+            if pair and pair.endswith("/EUR"):
+                clean = pair.replace("/", "")
+                pairs.append(clean)
+
+        _pair_cache["kraken"] = {"pairs": sorted(pairs), "timestamp": now}
+        return pairs
+
+    if exchange == "bitvavo":
+        url = "https://api.bitvavo.com/v2/markets"
+        resp = requests.get(url, timeout=10)
+        markets = resp.json()
+
+        pairs = []
+        for m in markets:
+            if m.get("quote") == "EUR":
+                base = m.get("base")
+                if base:
+                    pairs.append(f"{base}EUR")
+
+        _pair_cache["bitvavo"] = {"pairs": sorted(pairs), "timestamp": now}
+        return pairs
+
+    return []
+

@@ -408,7 +408,7 @@ class BitvavoExchange(ExchangeBase):
         status = detail.get("status")
         actual_price = detail.get("price", Decimal("0"))
         actual_amount = detail.get("vol_exec", Decimal("0"))
-
+        
         if (
             status in ("filled", "partiallyFilled")
             and actual_price > 0
@@ -416,14 +416,14 @@ class BitvavoExchange(ExchangeBase):
             and trade_id is not None
         ):
             # Reserved EUR that TraderEngine already used
-            reserved_eur = price * volume
+            reserved_eur = (price * volume).quantize(Decimal("0.01"))
+            actual_eur = (actual_price * actual_amount).quantize(Decimal("0.01"))
 
-            # Actual EUR based on fill
-            actual_eur = actual_price * actual_amount
-
+            # For BUY: reserved - actual  (positive delta = refund)
+            # For SELL: actual - reserved (positive delta = extra earnings)
             if side.lower() == "buy":
                 delta = reserved_eur - actual_eur
-            else:  # "sell"
+            else:
                 delta = actual_eur - reserved_eur
 
             try:
@@ -448,7 +448,8 @@ class BitvavoExchange(ExchangeBase):
                 row = cur.fetchone()
                 strategy_id = row[0] if row and row[0] is not None else None
 
-                # 3) Adjust allocated_eur for that strategy by delta (if we know the strategy)
+                # 3) Adjust allocated_eur for that strategy by delta
+                new_alloc = None
                 if strategy_id is not None and delta != 0:
                     cur.execute(
                         """
@@ -458,6 +459,16 @@ class BitvavoExchange(ExchangeBase):
                         """,
                         (float(delta), strategy_id),
                     )
+
+                    # read the new allocation after updating
+                    cur.execute(
+                        "SELECT allocated_eur FROM strategies WHERE id = ?",
+                        (strategy_id,),
+                    )
+                    row2 = cur.fetchone()
+                    if row2:
+                        new_alloc = float(row2[0])
+
                     log_event(
                         f"🔁 Adjusted allocated_eur for strategy {strategy_id} on Bitvavo "
                         f"by €{delta:.2f} (reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f})"
@@ -465,13 +476,25 @@ class BitvavoExchange(ExchangeBase):
 
                 conn.commit()
                 conn.close()
+
             except Exception as e:
                 log_event(f"⚠️ Could not update executed Bitvavo trade / allocation in DB: {e}")
 
+            # 4) Log DB update
             log_event(
                 f"💾 Updated executed Bitvavo trade → "
                 f"€{actual_price} × {actual_amount} "
                 f"(was {price} × {volume}, trade_id={trade_id})"
+            )
+
+            # 5) FINAL CORRECTED LOG OUTPUT (previously wrong)
+            # use executed values, not order values
+            final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
+
+            log_event(
+                f"✅ {side.upper()} executed: {actual_amount} {symbol} @ €{actual_price} "
+                f"on bitvavo (actual spend €{actual_eur:.2f}, reserved €{reserved_eur:.2f}"
+                f"{final_alloc_str})"
             )
 
         return res

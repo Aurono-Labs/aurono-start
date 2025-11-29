@@ -8,6 +8,8 @@ from typing import Optional
 
 from utils import get_db_path, log_event, root_path
 from utils import _open_db
+from utils import get_supported_pairs, current_config
+
 
 # DB & templates
 DB_PATH = root_path("data", "trades.db")
@@ -26,15 +28,49 @@ def get_db():
 # -----------------------------------------------------------
 # LIST STRATEGIES
 # -----------------------------------------------------------
+
 @router.get("/")
 def list_strategies(request: Request):
     db = get_db()
     rows = db.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
     db.close()
+
+    # Load current exchange from config (bitvavo is default)
+    cfg = current_config()
+    current_exchange = cfg.get("exchange", "bitvavo")
+
+    # Dynamic EUR pairs for dropdown
+    symbols = get_supported_pairs(current_exchange)
+
     return templates.TemplateResponse("strategies.html", {
         "request": request,
-        "strategies": rows
+        "strategies": rows,
+        "symbols": symbols,
+        "current_exchange": current_exchange
     })
+
+@router.post("/set-exchange")
+def set_exchange(request: Request, exchange: str = Form(...)):
+    exchange = exchange.lower()
+
+    # When user switches exchange for dropdown, update config.yaml memory
+    cfg = current_config()
+    cfg["exchange"] = exchange  # internal write-back to in-memory config
+
+    # Fetch fresh symbols for the selected exchange
+    symbols = get_supported_pairs(exchange)
+
+    db = get_db()
+    rows = db.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
+    db.close()
+
+    return templates.TemplateResponse("strategies.html", {
+        "request": request,
+        "strategies": rows,
+        "symbols": symbols,
+        "current_exchange": exchange
+    })
+
 
 
 # -----------------------------------------------------------

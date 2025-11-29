@@ -2,17 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // Force all number inputs to accept dot-decimals regardless of system locale
   document.querySelectorAll('input[type="number"]').forEach(el => {
     el.setAttribute('inputmode', 'decimal');
-    el.setAttribute('step', 'any'); // ✅ removes integer-only restriction
+    el.setAttribute('step', 'any');
   });
 });
 </script>
 
 <title>Strategies</title>
+
 <style>
 body {
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
@@ -68,7 +69,6 @@ td, th { border-bottom: 1px solid #ddd; }
 .action-buttons { display: flex; gap: 6px; }
 td.actions { text-align: center; }
 
-/* --- Own coin checkbox styling --- */
 .owncoin-container {
   display: flex;
   align-items: center;
@@ -88,6 +88,7 @@ td.actions { text-align: center; }
   cursor: pointer;
 }
 </style>
+
 <script>
 function toggleEdit(id) {
   const row = document.getElementById("row-" + id);
@@ -102,7 +103,6 @@ function toggleExistingFields() {
   div.style.display = chk.checked ? 'block' : 'none';
 }
 
-// Simple browser-side guard
 function validateForm(e) {
   const fields = ["drop_pct","rise_pct","invest_eur","allocated_eur","existing_amount","existing_acb"];
   for (const id of fields) {
@@ -116,8 +116,10 @@ function validateForm(e) {
 }
 </script>
 </head>
+
 <body>
   <h1>Strategies</h1>
+
   <p>
     <a class="btn" href="/">Dashboard</a>
     <a class="btn" href="/strategies">Strategies</a>
@@ -127,19 +129,29 @@ function validateForm(e) {
 
   <div class="card">
     <h3>Create New Strategy</h3>
+
+    <!-- Form used ONLY for exchange switching -->
+    <form id="exchangeForm" method="post" action="/strategies/set-exchange"></form>
+
+    <!-- Main strategy creation form -->
     <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
+
+      <div>
+        <label for="exchange">Exchange:</label>
+        <select id="exchange" name="exchange"
+                form="exchangeForm"
+                onchange="document.getElementById('exchangeForm').submit()">
+          <option value="bitvavo" {% if current_exchange == 'bitvavo' %}selected{% endif %}>Bitvavo</option>
+          <option value="kraken" {% if current_exchange == 'kraken' %}selected{% endif %}>Kraken</option>
+        </select>
+      </div>
+
       <div>
         <label for="symbol">Symbol:</label>
-        <select id="symbol" name="symbol">
-          <option value="BTCEUR">BTC/EUR</option>
-          <option value="NEAREUR">NEAR/EUR</option>
-          <option value="SOLEUR">SOL/EUR</option>
-          <option value="ETHEUR">ETH/EUR</option>
-          <option value="XRPEUR">XRP/EUR</option>
-          <option value="LINKEUR">LINK/EUR</option>
-          <option value="LTCEUR">LTC/EUR</option>
-          <option value="WOOEUR">WOO/EUR</option>
-          <option value="FETEUR">FET/EUR</option>
+        <select id="symbol" name="symbol" required>
+          {% for sym in symbols %}
+            <option value="{{ sym }}">{{ sym[:-3] }}/EUR</option>
+          {% endfor %}
         </select>
       </div>
 
@@ -153,40 +165,33 @@ function validateForm(e) {
           <option value="1h">1 hour</option>
         </select>
       </div>
-      
-      <div>
-        <label for="exchange">Exchange:</label>
-        <select id="exchange" name="exchange">
-          <option value="bitvavo">Bitvavo</option>
-          <option value="kraken">Kraken</option>
-        </select>
-      </div>
 
       <div>
         <label for="drop_pct">Drop %:</label>
-        <input type="number" id="drop_pct" name="drop_pct" value="2.5" min="0" max="100" step="any" inputmode="decimal" required>
-        <small>Use positive value → stored as -2.5%</small>
+        <input type="number" id="drop_pct" name="drop_pct" value="2.5" min="0" max="100" required>
+        <small>Positive input → stored as -x%</small>
       </div>
 
       <div>
         <label for="rise_pct">Rise %:</label>
-        <input type="number" id="rise_pct" name="rise_pct" value="2.1" min="0.0" max="100.0" step="any" inputmode="decimal" required>
+        <input type="number" id="rise_pct" name="rise_pct" value="2.1" min="0" max="100" required>
       </div>
 
       <div>
         <label for="buy_amount_eur">Buy amount (€):</label>
-        <input type="number" id="buy_amount_eur" name="buy_amount_eur" step="any" value="20">
+        <input type="number" id="buy_amount_eur" name="buy_amount_eur" value="20" step="any">
       </div>
+
       <div>
         <label for="sell_amount_eur">Sell amount (€):</label>
-        <input type="number" id="sell_amount_eur" name="sell_amount_eur" step="any" value="20">
+        <input type="number" id="sell_amount_eur" name="sell_amount_eur" value="20" step="any">
       </div>
-      
+
       <div>
         <label for="allocated_eur">Allocated Capital (€):</label>
-        <input type="number" id="allocated_eur" name="allocated_eur" value="100" min="0" step="any" inputmode="decimal" required>
+        <input type="number" id="allocated_eur" name="allocated_eur" value="100" step="any" min="0" required>
       </div>
-      
+
       <div class="owncoin-container">
         <label for="import_existing">
           <input type="checkbox" id="import_existing" name="import_existing" onchange="toggleExistingFields()">
@@ -206,12 +211,14 @@ function validateForm(e) {
         <button class="btn" type="submit">Add</button>
         <a href="/" class="btn">Back</a>
       </div>
+
     </form>
   </div>
 
   {% if strategies %}
   <div class="card">
     <h3>Existing Strategies</h3>
+
     <table>
       <tr>
         <th>ID</th>
@@ -226,12 +233,13 @@ function validateForm(e) {
         <th class="numeric">Enabled</th>
         <th class="numeric">Actions</th>
       </tr>
+
       {% for s in strategies %}
       <tr id="row-{{ s.id }}">
         <td>{{ s.id }}</td>
         <td>{{ s.symbol }}</td>
         <td>{{ s.timeframe }}</td>
-        <td>{{ s.exchange or 'kraken' }}</td> <!-- 🆕 -->
+        <td>{{ s.exchange or 'kraken' }}</td>
         <td class="numeric">{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
         <td class="numeric">{{ "%.2f"|format(s.rise_trigger) }}</td>
         <td class="numeric">{{ "%.2f"|format(s.buy_amount_eur) }}</td>
@@ -248,48 +256,48 @@ function validateForm(e) {
         </td>
       </tr>
 
-      <!-- Inline edit form -->
+      <!-- Inline edit -->
       <tr id="edit-row-{{ s.id }}" style="display:none; background:#fefefe;">
         <form method="post" action="/strategies/update/{{ s.id }}">
           <td>{{ s.id }}</td>
+
           <td>
-            <select name="symbol">
-              <option value="BTCEUR" {% if s.symbol == 'BTCEUR' %}selected{% endif %}>BTC/EUR</option>
-              <option value="NEAREUR" {% if s.symbol == 'NEAREUR' %}selected{% endif %}>NEAR/EUR</option>
-              <option value="SOLEUR" {% if s.symbol == 'SOLEUR' %}selected{% endif %}>SOL/EUR</option>
-              <option value="ETHEUR" {% if s.symbol == 'ETHEUR' %}selected{% endif %}>ETH/EUR</option>
-              <option value="XRPEUR" {% if s.symbol == 'XRPEUR' %}selected{% endif %}>XRP/EUR</option>
-              <option value="LINKEUR" {% if s.symbol == 'LINKEUR' %}selected{% endif %}>LINK/EUR</option>
-              <option value="LTCEUR" {% if s.symbol == 'LTCEUR' %}selected{% endif %}>LTC/EUR</option>
-              <option value="WOOEUR" {% if s.symbol == 'WOOEUR' %}selected{% endif %}>WOO/EUR</option>
-              <option value="FETEUR" {% if s.symbol == 'FETEUR' %}selected{% endif %}>FET/EUR</option>
+            <select name="symbol" required>
+              {% for sym in symbols %}
+                <option value="{{ sym }}" {% if s.symbol == sym %}selected{% endif %}>
+                  {{ sym[:-3] }}/EUR
+                </option>
+              {% endfor %}
             </select>
           </td>
+
           <td>
             <select name="timeframe">
+              <option value="1w" {% if s.timeframe == '1w' %}selected{% endif %}>1 week</option>
               <option value="1d" {% if s.timeframe == '1d' %}selected{% endif %}>1 day</option>
+              <option value="6h" {% if s.timeframe == '6h' %}selected{% endif %}>6 hours</option>
               <option value="4h" {% if s.timeframe == '4h' %}selected{% endif %}>4 hours</option>
               <option value="1h" {% if s.timeframe == '1h' %}selected{% endif %}>1 hour</option>
             </select>
           </td>
+
           <td>
             <select name="exchange">
               <option value="bitvavo" {% if s.exchange == 'bitvavo' %}selected{% endif %}>Bitvavo</option>
               <option value="kraken" {% if s.exchange == 'kraken' %}selected{% endif %}>Kraken</option>
             </select>
           </td>
-          <td><input type="number" name="drop_trigger" value="{{ abs(s.drop_trigger) }}" min="0.0" max="100.0"></td>
-          <td><input type="number" name="rise_trigger" value="{{ s.rise_trigger }}" min="0.0" max="100.0"></td>
+
+          <td><input type="number" name="drop_trigger" value="{{ abs(s.drop_trigger) }}" min="0"></td>
+          <td><input type="number" name="rise_trigger" value="{{ s.rise_trigger }}" min="0"></td>
           <td><input type="number" name="buy_amount_eur" value="{{ s.buy_amount_eur }}" min="0"></td>
           <td><input type="number" name="sell_amount_eur" value="{{ s.sell_amount_eur }}" min="0"></td>
           <td><input type="number" name="allocated_eur" value="{{ s.allocated_eur }}" min="0"></td>
-          
+
           <td>
-            <label>
-              <input type="checkbox" name="enabled" value="1" {% if s.enabled %}checked{% endif %}>
-              Enabled
-            </label>
+            <label><input type="checkbox" name="enabled" value="1" {% if s.enabled %}checked{% endif %}> Enabled</label>
           </td>
+
           <td>
             <div class="action-buttons">
               <button class="btn" type="submit">Save</button>
@@ -298,9 +306,13 @@ function validateForm(e) {
           </td>
         </form>
       </tr>
+
       {% endfor %}
+
     </table>
   </div>
   {% endif %}
+
 </body>
 </html>
+

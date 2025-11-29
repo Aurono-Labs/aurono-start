@@ -301,6 +301,7 @@ class KrakenExchange(ExchangeBase):
         log_event(f"📊 Order status: {detail['status']} ({detail['descr']})")
 
         # Only adjust if fully closed and we have a valid fill
+        
         if (
             detail["status"] == "closed"
             and detail["price"] > 0
@@ -311,23 +312,21 @@ class KrakenExchange(ExchangeBase):
             actual_amount = detail["vol_exec"]      # Decimal
 
             # Reserved EUR that TraderEngine already used
-            reserved_eur = price * volume
+            reserved_eur = (price * volume).quantize(Decimal("0.01"))
+            actual_eur = (actual_price * actual_amount).quantize(Decimal("0.01"))
 
-            # Actual EUR based on fill
-            actual_eur = actual_price * actual_amount
-
-            # For BUY: TraderEngine subtracted reserved_eur; we add back the difference.
-            # For SELL: TraderEngine added reserved_eur; we add the extra actual - reserved.
+            # BUY → refund reserved - actual
+            # SELL → profit actual - reserved
             if side.lower() == "buy":
                 delta = reserved_eur - actual_eur
-            else:  # "sell"
+            else:
                 delta = actual_eur - reserved_eur
 
             try:
                 conn = _open_db()
                 cur = conn.cursor()
 
-                # 1) Update the trade with actual fill price/amount
+                # 1. Update trade with actual execution details
                 cur.execute(
                     """
                     UPDATE trades
@@ -337,7 +336,7 @@ class KrakenExchange(ExchangeBase):
                     (float(actual_price), float(actual_amount), trade_id),
                 )
 
-                # 2) Fetch strategy_id linked to this trade
+                # 2. Fetch strategy_id
                 cur.execute(
                     "SELECT strategy_id FROM trades WHERE id = ?",
                     (trade_id,),
@@ -345,7 +344,8 @@ class KrakenExchange(ExchangeBase):
                 row = cur.fetchone()
                 strategy_id = row[0] if row and row[0] is not None else None
 
-                # 3) Adjust allocated_eur for that strategy by delta (if we know the strategy)
+                # 3. Adjust allocated_eur and fetch updated value
+                new_alloc = None
                 if strategy_id is not None and delta != 0:
                     cur.execute(
                         """
@@ -355,6 +355,15 @@ class KrakenExchange(ExchangeBase):
                         """,
                         (float(delta), strategy_id),
                     )
+                    # fetch new alloc after update
+                    cur.execute(
+                        "SELECT allocated_eur FROM strategies WHERE id = ?",
+                        (strategy_id,),
+                    )
+                    row2 = cur.fetchone()
+                    if row2:
+                        new_alloc = float(row2[0])
+
                     log_event(
                         f"🔁 Adjusted allocated_eur for strategy {strategy_id} on Kraken "
                         f"by €{delta:.2f} (reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f})"
@@ -362,13 +371,24 @@ class KrakenExchange(ExchangeBase):
 
                 conn.commit()
                 conn.close()
+
             except Exception as e:
                 log_event(f"⚠️ Could not update executed Kraken trade / allocation in DB: {e}")
 
+            # 4. Log DB update
             log_event(
                 f"💾 Updated executed Kraken trade → "
                 f"€{actual_price} × {actual_amount} "
                 f"(was {price} × {volume}, trade_id={trade_id})"
+            )
+
+            # 5. FINAL SUMMARY LOG (new)
+            final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
+
+            log_event(
+                f"✅ {side.upper()} executed: {actual_amount} {symbol} @ €{actual_price} "
+                f"on kraken (actual €{actual_eur:.2f}, reserved €{reserved_eur:.2f}"
+                f"{final_alloc_str})"
             )
 
         return res
