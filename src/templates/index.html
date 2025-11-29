@@ -22,6 +22,14 @@
       + Add Strategy
     </button>
   </div>
+  
+  <div class="flex gap-6 mb-10 text-[#F2F4F8]">
+    <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
+    <a href="/strategies" class="hover:text-[#D4A64E]">Strategies</a>
+    <a href="/settings" class="hover:text-[#D4A64E]">Settings</a>
+    <a href="/activity" class="hover:text-[#D4A64E]">Activity</a>
+  </div>
+
 
   <!-- Portfolio Summary -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
@@ -129,18 +137,29 @@
             <option value="">Select exchange first</option>
           </select>
         </div>
+        
+        <div>
+          <label class="block text-sm mb-1">Timeframe</label>
+          <select name="timeframe"
+                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
+            <option value="1h">1h</option>
+            <option value="4h">4h</option>
+            <option value="1d">1d</option>
+            <option value="1w">1w</option>
+          </select>
+        </div>
 
         <!-- TRIGGERS -->
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm mb-1">% Drop Trigger</label>
-            <input name="drop_trigger" type="number" step="any"
+            <input name="drop_pct" type="number" step="any"
                    class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
           </div>
 
           <div>
             <label class="block text-sm mb-1">% Rise Trigger</label>
-            <input name="rise_trigger" type="number" step="any"
+            <input name="rise_pct" type="number" step="any"
                    class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
           </div>
         </div>
