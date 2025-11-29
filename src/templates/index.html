@@ -68,19 +68,73 @@
       </div>
 
       <div class="space-y-1 text-sm">
-        <p>Price: <span class="font-medium">€{{ "%.2f"|format(s.price) }}</span></p>
-        <p>ACB: <span class="font-medium">€{{ "%.2f"|format(s.acb) }}</span></p>
 
+        <!-- PRICE -->
         <p>
-          P/L:
-          <span class="font-medium 
-            {% if s.pnl_pct > 0 %} text-[#33C27D]
-            {% elif s.pnl_pct < 0 %} text-[#E06A6A]
+          Price:
+          <span class="font-medium">
+            {% if s.price is not none %}
+              €{{ "%.2f"|format(s.price) }}
+            {% else %}
+              -
             {% endif %}
-          ">
-            {{ "%.2f"|format(s.pnl_pct) }}%
           </span>
         </p>
+
+        <!-- BALANCE -->
+        <p>
+          Balance:
+          <span class="font-medium">
+            {% if s.balance is not none %}
+              {{ "%.6f"|format(s.balance) }}
+            {% else %}
+              -
+            {% endif %}
+          </span>
+        </p>
+
+        <!-- VALUE (price * balance) -->
+        <p>
+          Value:
+          <span class="font-medium">
+            {% if s.value is not none %}
+              €{{ "%.2f"|format(s.value) }}
+            {% else %}
+              -
+            {% endif %}
+          </span>
+        </p>
+
+        <!-- ACB -->
+        <p>
+          ACB:
+          <span class="font-medium">
+            {% if s.acb is not none %}
+              €{{ "%.2f"|format(s.acb) }}
+            {% else %}
+              -
+            {% endif %}
+          </span>
+        </p>
+
+        <!-- P/L -->
+        <p>
+          P/L:
+          <span class="font-medium
+            {% if s.pnl_pct is not none %}
+              {% if s.pnl_pct > 0 %} text-[#33C27D]
+              {% elif s.pnl_pct < 0 %} text-[#E06A6A]
+              {% endif %}
+            {% endif %}
+          ">
+            {% if s.pnl_pct is not none %}
+              {{ "%.2f"|format(s.pnl_pct) }}%
+            {% else %}
+              -
+            {% endif %}
+          </span>
+        </p>
+
       </div>
 
       <div class="mt-5 flex gap-2">
