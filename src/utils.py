@@ -337,22 +337,27 @@ def get_supported_pairs(exchange: str) -> list[str]:
     # Serve from cache
     if now - _pair_cache[exchange]["timestamp"] < CACHE_TTL:
         return _pair_cache[exchange]["pairs"]
-
+        
     if exchange == "kraken":
         url = "https://api.kraken.com/0/public/AssetPairs"
         resp = requests.get(url, timeout=10)
         data = resp.json().get("result", {})
 
-        # Kraken pairs are like "XXBTZEUR" -> "BTCEUR"
         pairs = []
         for _, v in data.items():
             pair = v.get("wsname")  # e.g. "XBT/EUR"
             if pair and pair.endswith("/EUR"):
-                clean = pair.replace("/", "")
+                clean = pair.replace("/", "")  # "XBTEUR"
+
+                # Normalize Kraken's naming to Aurono naming
+                if clean.startswith("XBT"):
+                    clean = clean.replace("XBT", "BTC")
+
                 pairs.append(clean)
 
         _pair_cache["kraken"] = {"pairs": sorted(pairs), "timestamp": now}
         return pairs
+
 
     if exchange == "bitvavo":
         url = "https://api.bitvavo.com/v2/markets"
