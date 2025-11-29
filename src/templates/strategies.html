@@ -1,205 +1,546 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Aurono — Strategies</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-
-<body class="min-h-screen bg-[#0A0F1F] text-[#F2F4F8] px-4 sm:px-8 py-6">
-
-  <!-- Header -->
-  <div class="flex justify-between items-center mb-4">
-    <h1 class="text-2xl font-semibold tracking-tight text-[#D4A64E]">
-      Strategies
-    </h1>
-
-    <a href="/"
-       class="bg-[#D4A64E] hover:bg-[#c49745] text-[#0A0F1F] font-semibold 
-              px-4 py-2 rounded-lg transition">
-      ← Back
-    </a>
-  </div>
-
-  <!-- Navigation Bar -->
-  <div class="flex gap-6 mb-10 text-[#F2F4F8]">
-    <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
-    <a href="/strategies" class="text-[#D4A64E] font-semibold">Strategies</a>
-    <a href="/settings" class="hover:text-[#D4A64E]">Settings</a>
-    <a href="/activity" class="hover:text-[#D4A64E]">Activity</a>
-  </div>
-
-  <!-- Add Strategy Button -->
-  <div class="mb-6">
-    <button
-      onclick="openAddModal()"
-      class="bg-[#D4A64E] hover:bg-[#c49745] text-[#0A0F1F] font-semibold
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Aurono — Strategies</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    
+    <body class="min-h-screen bg-[#0A0F1F] text-[#F2F4F8] px-4 sm:px-8 py-6">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-2xl font-semibold tracking-tight text-[#D4A64E]">
+                Strategies
+            </h1>
+            
+            <button
+                onclick="openAddModal()"
+                class="bg-[#D4A64E] hover:bg-[#c49745] text-[#0A0F1F] font-semibold
              px-4 py-2 rounded-lg transition">
-      + Add Strategy
-    </button>
-  </div>
-
-  <!-- Strategy Grid -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-
-    {% for s in strategies %}
-    <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5 shadow-sm">
-
-      <div class="flex justify-between mb-4">
-        <h3 class="text-lg font-semibold">
-          {{ s.symbol }} · {{ s.timeframe }} · {{ s.exchange }}
-        </h3>
-        <span class="text-sm text-[#A8B2C3]">
-          {% if s.enabled %}Enabled{% else %}Disabled{% endif %}
-        </span>
-      </div>
-
-      <div class="space-y-1 text-sm">
-        <p>Drop Trigger: <span class="font-medium">{{ s.drop_pct }}%</span></p>
-        <p>Rise Trigger: <span class="font-medium">{{ s.rise_pct }}%</span></p>
-        <p>Buy €: <span class="font-medium">{{ s.buy_amount_eur }}</span></p>
-        <p>Sell €: <span class="font-medium">{{ s.sell_amount_eur }}</span></p>
-        <p>Allocation €: <span class="font-medium">{{ s.allocated_eur }}</span></p>
-      </div>
-
-      <div class="mt-5 flex flex-wrap gap-2">
-
-        <button onclick="openEditModal({{ s.id }})"
-                class="px-3 py-1 text-sm rounded-md bg-[#D4A64E] 
-                       text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-          Edit
-        </button>
-
-        <a href="/strategies/delete/{{ s.id }}"
-           class="px-3 py-1 text-sm rounded-md bg-[#D4A64E] 
-              text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-          Delete
-        </a>
-
-        {% if s.enabled %}
-        <a href="/strategies/disable/{{ s.id }}"
-           class="px-3 py-1 text-sm rounded-md bg-[#D4A64E] 
-              text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-          Disable
-        </a>
-        {% else %}
-        <a href="/strategies/enable/{{ s.id }}"
-           class="px-3 py-1 text-sm rounded-md bg-[#D4A64E] 
-              text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-          Enable
-        </a>
-        {% endif %}
-
-      </div>
-
-    </div>
-    {% endfor %}
-
-  </div>
-
-
-  <!-- ──────────────────────────────── -->
-  <!-- ADD STRATEGY MODAL -->
-  <!-- ──────────────────────────────── -->
-  <div id="add_modal"
-       class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-
-    <div class="bg-[#111A33] border border-[#1B2238] rounded-xl w-full max-w-lg p-6 shadow-xl">
-
-      <h2 class="text-xl font-semibold text-[#D4A64E] mb-4">
-        Add Strategy
-      </h2>
-
-      <form method="post" action="/strategies/add" class="space-y-4">
-
-        <!-- EXCHANGE -->
-        <div>
-          <label class="block text-sm mb-1">Exchange</label>
-          <select name="exchange" id="add_exchange"
-                  onchange="loadSymbols('add')"
-                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-            <option value="">Select exchange</option>
-            <option value="bitvavo">bitvavo</option>
-            <option value="kraken">kraken</option>
-          </select>
+             + Add Strategy
+            </button>
         </div>
-
-        <!-- SYMBOL -->
-        <div>
-          <label class="block text-sm mb-1">Symbol</label>
-          <select name="symbol" id="add_symbol"
-                  disabled
-                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-            <option>Select exchange first</option>
-          </select>
+        
+        <!-- Navigation -->
+        <div class="flex gap-6 mb-10 text-[#F2F4F8]">
+            <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
+            <a href="/strategies" class="font-semibold text-[#D4A64E]">Strategies</a>
+            <a href="/settings" class="hover:text-[#D4A64E]">Settings</a>
+            <a href="/activity" class="hover:text-[#D4A64E]">Activity</a>
         </div>
-
-        <!-- TIMEFRAME -->
-        <div>
-          <label class="block text-sm mb-1">Timeframe</label>
-          <select name="timeframe"
-                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-            <option value="1h">1h</option>
-            <option value="4h">4h</option>
-            <option value="1d">1d</option>
-            <option value="1w">1w</option>
-          </select>
+        
+        
+        <!-- Strategy Table Container -->
+        <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5 shadow-sm overflow-x-auto">
+            
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-[#1B2238] text-left">
+                        <th class="px-4 py-3">ID</th>
+                        <th class="px-4 py-3">Symbol</th>
+                        <th class="px-4 py-3">Timeframe</th>
+                        <th class="px-4 py-3">Exchange</th>
+                        <th class="px-4 py-3 text-right">Drop %</th>
+                        <th class="px-4 py-3 text-right">Rise %</th>
+                        <th class="px-4 py-3 text-right">Buy €</th>
+                        <th class="px-4 py-3 text-right">Sell €</th>
+                        <th class="px-4 py-3 text-right">Allocated €</th>
+                        <th class="px-4 py-3 text-center">Enabled</th>
+                        <th class="px-4 py-3 text-center">Actions</th>
+                    </tr>
+                </thead>
+                
+                <tbody>
+                    
+                    {% for s in strategies %}
+                    <tr class="border-b border-[#1B2238]">
+                        <td class="px-4 py-3">{{ s.id }}</td>
+                        <td class="px-4 py-3">{{ s.symbol }}</td>
+                        <td class="px-4 py-3">{{ s.timeframe }}</td>
+                        <td class="px-4 py-3">{{ s.exchange }}</td>
+                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
+                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.rise_trigger) }}</td>
+                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.buy_amount_eur) }}</td>
+                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.sell_amount_eur) }}</td>
+                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.allocated_eur) }}</td>
+                        
+                        <td class="px-4 py-3 text-center">
+                            {% if s.enabled %}
+                            <span class="text-[#33C27D]">Enabled</span>
+                            {% else %}
+                            <span class="text-[#E06A6A]">Disabled</span>
+                            {% endif %}
+                        </td>
+                        
+                        <td class="px-4 py-3 text-center flex justify-center gap-2">
+                            
+                            <!-- EDIT -->
+                            <button onclick="openEditModal({{ s.id }})"
+                                class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
+                         font-semibold hover:bg-[#c49745]">
+                         Edit
+                            </button>
+                            
+                            <!-- DELETE -->
+                            <form method="post" action="/strategies/delete/{{ s.id }}">
+                                <button class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
+                           font-semibold hover:bg-[#c49745]"
+                           onclick="return confirm('Delete strategy?')">
+                           Delete
+                                </button>
+                            </form>
+                            
+                            <!-- ENABLE/DISABLE -->
+                            {% if s.enabled %}
+                            <form method="post" action="/strategies/disable/{{ s.id }}">
+                                <button class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
+                           font-semibold hover:bg-[#c49745]">
+                           Disable
+                                </button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="/strategies/enable/{{ s.id }}">
+                                <button class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
+                           font-semibold hover:bg-[#c49745]">
+                           Enable
+                                </button>
+                            </form>
+                            {% endif %}
+                            
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    
+                </tbody>
+            </table>
+            
         </div>
-
-        <!-- TRIGGERS -->
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm mb-1">% Drop Trigger</label>
-            <input name="drop_pct" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
-          </div>
-
-          <div>
-            <label class="block text-sm mb-1">% Rise Trigger</label>
-            <input name="rise_pct" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
-          </div>
+        
+        <!-- ────────────────────────────────────────────── -->
+        <!-- ADD STRATEGY MODAL -->
+        <!-- ────────────────────────────────────────────── -->
+        <div
+            id="add_modal"
+            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            >
+            <div class="bg-[#111A33] border border-[#1B2238] rounded-xl w-full max-w-lg p-6 shadow-xl">
+                
+                <h2 class="text-xl font-semibold text-[#D4A64E] mb-4">
+                    Create New Strategy
+                </h2>
+                
+                <form method="post" action="/strategies/add" class="space-y-4">
+                    
+                    <!-- EXCHANGE FIRST -->
+                    <div>
+                        <label class="block text-sm mb-1">Exchange</label>
+                        <select name="exchange" id="add_exchange"
+                            onchange="onAddExchangeChange(this.value)"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
+                            <option value="">Select exchange</option>
+                            <option value="bitvavo">bitvavo</option>
+                            <option value="kraken">kraken</option>
+                        </select>
+                    </div>
+                    
+                    <!-- SYMBOL (DYNAMIC) -->
+                    <div>
+                        <label class="block text-sm mb-1">Symbol</label>
+                        <select name="symbol" id="add_symbol"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"
+                            disabled>
+                            <option>Select exchange first</option>
+                        </select>
+                    </div>
+                    
+                    <!-- TIMEFRAME -->
+                    <div>
+                        <label class="block text-sm mb-1">Timeframe</label>
+                        <select name="timeframe"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
+                            <option value="1h">1h</option>
+                            <option value="4h">4h</option>
+                            <option value="1d">1d</option>
+                            <option value="1w">1w</option>
+                        </select>
+                    </div>
+                    
+                    <!-- TRIGGERS -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">% Drop Trigger</label>
+                            <input name="drop_pct" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm mb-1">% Rise Trigger</label>
+                            <input name="rise_pct" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
+                        </div>
+                    </div>
+                    
+                    <!-- BUY & SELL -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">Buy €</label>
+                            <input name="buy_amount_eur" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm mb-1">Sell €</label>
+                            <input name="sell_amount_eur" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
+                        </div>
+                    </div>
+                    
+                    <!-- CASH ALLOCATION -->
+                    <div>
+                        <label class="block text-sm mb-1">Cash Allocation (€)</label>
+                        <input name="allocated_eur" type="number" step="any"
+                        class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
+                    </div>
+                    
+                    <!-- CURRENT POSITION CHECKBOX -->
+                    <div class="flex items-center gap-2">
+                        <input
+                            id="add_has_position"
+                            name="has_position"
+                            type="checkbox"
+                            class="w-4 h-4 rounded bg-[#0A0F1F] border-[#1B2238]"
+                            onclick="toggleAddPositionFields()">
+                            <label for="add_has_position" class="text-sm">
+                                I currently have a position
+                            </label>
+                    </div>
+                    
+                    <!-- CURRENT POSITION FIELDS -->
+                    <div id="add_position_fields" class="hidden grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">Current Amount (crypto)</label>
+                            <input name="current_amount" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm mb-1">Average Cost Basis (€)</label>
+                            <input name="acb" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
+                        </div>
+                    </div>
+                    
+                    <!-- BUTTONS -->
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button"
+                            onclick="closeAddModal()"
+                            class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
+                            Cancel
+                        </button>
+                        
+                        <button type="submit"
+                            class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
+                            Save Strategy
+                        </button>
+                    </div>
+                    
+                </form>
+            </div>
         </div>
-
-        <!-- ALLOCATION -->
-        <div>
-          <label class="block text-sm mb-1">Cash Allocation (€)</label>
-          <input name="allocated_eur" type="number" step="any"
-                 class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
+        
+        <!-- ────────────────────────────────────────────── -->
+        <!-- EDIT STRATEGY MODAL -->
+        <!-- ────────────────────────────────────────────── -->
+        <div
+            id="edit_modal"
+            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            >
+            <div class="bg-[#111A33] border border-[#1B2238] rounded-xl w-full max-w-lg p-6 shadow-xl">
+                
+                <h2 class="text-xl font-semibold text-[#D4A64E] mb-4">
+                    Edit Strategy
+                </h2>
+                
+                <form method="post" id="edit_form" class="space-y-4">
+                    
+                    <!-- EXCHANGE -->
+                    <div>
+                        <label class="block text-sm mb-1">Exchange</label>
+                        <select name="exchange" id="edit_exchange"
+                            onchange="onEditExchangeChange(this.value)"
+                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
+                            <option value="bitvavo">bitvavo</option>
+                            <option value="kraken">kraken</option>
+                        </select>
+                    </div>
+                    
+                    <!-- SYMBOL -->
+                    <div>
+                        <label class="block text-sm mb-1">Symbol</label>
+                        <select name="symbol" id="edit_symbol"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2">
+                        </select>
+                    </div>
+                    
+                    <!-- TIMEFRAME -->
+                    <div>
+                        <label class="block text-sm mb-1">Timeframe</label>
+                        <select name="timeframe" id="edit_timeframe"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2">
+                            <option value="1h">1h</option>
+                            <option value="4h">4h</option>
+                            <option value="1d">1d</option>
+                            <option value="1w">1w</option>
+                        </select>
+                    </div>
+                    
+                    <!-- DROP / RISE -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">Drop %</label>
+                            <input id="edit_drop_pct" name="drop_pct" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm mb-1">Rise %</label>
+                            <input id="edit_rise_pct" name="rise_pct" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
+                        </div>
+                    </div>
+                    
+                    <!-- CASH ALLOCATION -->
+                    <div>
+                        <label class="block text-sm mb-1">Allocated Capital (€)</label>
+                        <input id="edit_allocated_eur" name="allocated_eur" type="number" step="any"
+                        class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
+                    </div>
+                    
+                    <!-- CURRENT POSITION CHECKBOX -->
+                    <div class="flex items-center gap-2">
+                        <input id="edit_has_position" type="checkbox"
+                        onclick="toggleEditPositionFields()"
+                        class="w-4 h-4 bg-[#0A0F1F] border-[#1B22338] rounded"/>
+                        <label class="text-sm">I currently have a position</label>
+                    </div>
+                    
+                    <!-- CURRENT POSITION FIELDS -->
+                    <div id="edit_position_fields" class="hidden grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">Current Amount</label>
+                            <input id="edit_current_amount" name="current_amount" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm mb-1">ACB (€)</label>
+                            <input id="edit_acb" name="acb" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
+                        </div>
+                    </div>
+                    
+                    <!-- BUY / SELL -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">Buy €</label>
+                            <input id="edit_buy_amount" name="buy_amount_eur" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm mb-1">Sell €</label>
+                            <input id="edit_sell_amount" name="sell_amount_eur" type="number" step="any"
+                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
+                        </div>
+                    </div>
+                    
+                    <!-- BUTTONS -->
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button"
+                            onclick="closeEditModal()"
+                            class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
+                            Cancel
+                        </button>
+                        
+                        <button type="submit"
+                            class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
+                            Save Changes
+                        </button>
+                    </div>
+                    
+                </form>
+                
+            </div>
         </div>
-
-        <!-- CURRENT POSITION -->
-        <div class="flex items-center gap-2">
-          <input id="add_has_position" type="checkbox"
-                 onclick="toggleAddPosition()"
-                 class="w-4 h-4 bg-[#0A0F1F] border-[#1B2238] rounded"/>
-          <label class="text-sm">I currently have a position</label>
-        </div>
-
-        <div id="add_position_fields" class="hidden grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm mb-1">Current Amount</label>
-            <input name="current_amount" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
-          </div>
-          <div>
-            <label class="block text-sm mb-1">Average Cost Basis (€)</label>
-            <input name="acb" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
-          </div>
-        </div>
-
-        <!-- BUY/SELL -->
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm mb-1">Buy €</label>
-            <input name="buy_amount_eur" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
-          </div>
-
-          <div>
-            <label class="block text-sm mb-1">Sell €</label>
-            <input name="sell_amount_eur" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border bor
-
+        
+        
+        <!-- ────────────────────────────────────────────── -->
+        <!-- JAVASCRIPT -->
+        <!-- ────────────────────────────────────────────── -->
+        
+        <script>
+            
+            /* --------------------------------------
+             ADD STRATEGY MODAL
+             --------------------------------------*/
+            function openAddModal() {
+                document.getElementById("add_modal").classList.remove("hidden");
+            }
+            
+            function closeAddModal() {
+                document.getElementById("add_modal").classList.add("hidden");
+            }
+            
+            function toggleAddPositionFields() {
+                const checked = document.getElementById("add_has_position").checked;
+                document.getElementById("add_position_fields").classList.toggle("hidden", !checked);
+            }
+            
+            
+            /* --------------------------------------
+             EDIT STRATEGY MODAL
+             --------------------------------------*/
+            function openEditModal(id) {
+                
+                fetch(`/strategies/get/${id}`)
+                .then(r => r.json())
+                .then(s => {
+                    
+                    // Set form action
+                    document.getElementById("edit_form").action =
+                    `/strategies/update/${id}`;
+                    
+                    // Exchange
+                    document.getElementById("edit_exchange").value = s.exchange;
+                    
+                    // Load symbols for this exchange, then set selected symbol
+                    onEditExchangeChange(
+                                         s.exchange,
+                                         () => { document.getElementById("edit_symbol").value = s.symbol; }
+                                         );
+                                         
+                                         // Basic fields
+                                         document.getElementById("edit_timeframe").value = s.timeframe;
+                                         document.getElementById("edit_drop_pct").value = s.drop_pct;
+                                         document.getElementById("edit_rise_pct").value = s.rise_pct;
+                                         document.getElementById("edit_allocated_eur").value = s.allocated_eur;
+                                         
+                                         document.getElementById("edit_buy_amount").value = s.buy_amount_eur;
+                                         document.getElementById("edit_sell_amount").value = s.sell_amount_eur;
+                                         
+                                         // Current position
+                                         if (s.current_amount !== null) {
+                                             document.getElementById("edit_has_position").checked = true;
+                                             document.getElementById("edit_position_fields").classList.remove("hidden");
+                                             document.getElementById("edit_current_amount").value = s.current_amount;
+                                             document.getElementById("edit_acb").value = s.acb;
+                                         } else {
+                                             document.getElementById("edit_has_position").checked = false;
+                                             document.getElementById("edit_position_fields").classList.add("hidden");
+                                         }
+                                         
+                                         document.getElementById("edit_modal").classList.remove("hidden");
+                });
+            }
+            
+            function closeEditModal() {
+                document.getElementById("edit_modal").classList.add("hidden");
+            }
+            
+            function toggleEditPositionFields() {
+                const checked = document.getElementById("edit_has_position").checked;
+                document.getElementById("edit_position_fields").classList.toggle("hidden", !checked);
+            }
+            
+            
+            /* --------------------------------------
+             SYMBOL LOADING (shared with index.html)
+             --------------------------------------*/
+            
+            const STATIC_SYMBOLS = {
+                bitvavo: ["BTCEUR", "ETHEUR", "SOLEUR"],
+                kraken:  ["BTCEUR", "ETHEUR", "SOLEUR"],
+            };
+            
+            function populateDynamicSymbols(selectEl, symbols) {
+                selectEl.innerHTML = "";
+                
+                if (!symbols || symbols.length === 0) {
+                    const opt = document.createElement("option");
+                    opt.textContent = "No symbols available";
+                    selectEl.appendChild(opt);
+                    selectEl.disabled = true;
+                    return;
+                }
+                
+                const placeholder = document.createElement("option");
+                placeholder.value = "";
+                placeholder.textContent = "Select symbol";
+                selectEl.appendChild(placeholder);
+                
+                symbols.forEach(sym => {
+                    const opt = document.createElement("option");
+                    opt.value = sym;
+                    opt.textContent = sym;
+                    selectEl.appendChild(opt);
+                });
+                
+                selectEl.disabled = false;
+            }
+            
+            
+            /* -- Add Modal symbol loader -- */
+            function onAddExchangeChange(exchange) {
+                const sel = document.getElementById("add_symbol");
+                
+                if (!exchange) {
+                    sel.innerHTML = "<option>Select exchange first</option>";
+                    sel.disabled = true;
+                    return;
+                }
+                
+                sel.disabled = true;
+                sel.innerHTML = "<option>Loading…</option>";
+                
+                fetch("/api/symbols?exchange=" + encodeURIComponent(exchange))
+                .then(r => r.json())
+                .then(data => {
+                    const symbols = data.symbols || data;
+                    populateDynamicSymbols(sel, symbols);
+                })
+                .catch(() => populateDynamicSymbols(sel, STATIC_SYMBOLS[exchange]));
+            }
+            
+            
+            /* -- Edit Modal symbol loader -- */
+            function onEditExchangeChange(exchange, callback=null) {
+                const sel = document.getElementById("edit_symbol");
+                
+                if (!exchange) {
+                    sel.innerHTML = "<option>Select exchange first</option>";
+                    sel.disabled = true;
+                    return;
+                }
+                
+                sel.disabled = true;
+                sel.innerHTML = "<option>Loading…</option>";
+                
+                fetch("/api/symbols?exchange=" + encodeURIComponent(exchange))
+                .then(r => r.json())
+                .then(data => {
+                    const symbols = data.symbols || data;
+                    populateDynamicSymbols(sel, symbols);
+                    if (callback) callback();
+                })
+                .catch(() => {
+                    populateDynamicSymbols(sel, STATIC_SYMBOLS[exchange]);
+                    if (callback) callback();
+                });
+            }
+            
+        </script>
+        
+    </body>
+</html>

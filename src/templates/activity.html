@@ -1,227 +1,133 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Activity Log</title>
-<style>
-body {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
-  margin: 24px;
-  background: #fafafa;
-}
-.card {
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 20px;
-  background: #fff;
-}
-h1 { margin-top: 0; }
-h2 { margin-top: 0; font-size: 18px; }
-
-.btn {
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid #444;
-  background: #f7f7f7;
-  cursor: pointer;
-  text-decoration: none;
-  color: #111;
-}
-.btn:hover { background: #eee; }
-
-.filters {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-  font-size: 14px;
-}
-.filters select, .filters input {
-  padding: 4px 6px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.event-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-/* Event cards */
-.event {
-  border-radius: 8px;
-  padding: 6px 8px;
-  font-size: 13px;
-  background: #111;
-  color: #0f0;
-  white-space: pre-line; /* ⬅️ removes empty lines from pre-wrap */
-  line-height: 1.3;
-}
-
-/* category colors */
-.event.strategy { border-left: 4px solid #3b82f6; }
-.event.trade    { border-left: 4px solid #22c55e; }
-.event.error    { border-left: 4px solid #f97316; }
-
-/* headers */
-.event-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-  font-size: 12px;
-  color: #c7d2fe;
-}
-.event-header .label {
-  font-weight: 600;
-}
-.event-header .ts {
-  font-family: "SF Mono", Menlo, Consolas, monospace;
-}
-
-.event-text {
-  color: #e5e7eb;
-}
-
-.footer-note {
-  color: #666;
-  font-size: 12px;
-  margin-top: 8px;
-}
-</style>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Aurono — Activity Log</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h1>📋 Activity Overview</h1>
-  <p>
-    <a class="btn" href="/">Dashboard</a>
-    <a class="btn" href="/strategies">Strategies</a>
-    <a class="btn" href="/settings">Settings</a>
-    <a class="btn" href="/activity">Activity</a>
-    <a class="btn" href="/activity/download" style="float:right;background:#dff0d8;">⬇️ Download Full Log</a>
-  </p>
 
-  <div class="card">
-    <div class="section-header">
-      <h2>Filters</h2>
-      <span style="font-size:12px;color:#666;">Last updated {{ timestamp }}</span>
-    </div>
+<body class="min-h-screen bg-[#0A0F1F] text-[#F2F4F8] px-4 sm:px-8 py-6">
 
-    <form class="filters" method="get" action="/activity">
-      <label>
-        Show:
-        <select name="show">
-          <option value="all"      {% if show == 'all' %}selected{% endif %}>All</option>
-          <option value="trade"    {% if show == 'trade' %}selected{% endif %}>Trades only</option>
-          <option value="strategy" {% if show == 'strategy' %}selected{% endif %}>Strategy only</option>
-          <option value="error"    {% if show == 'error' %}selected{% endif %}>Errors only</option>
-        </select>
-      </label>
+  <!-- HEADER -->
+  <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-8">
+    <h1 class="text-2xl font-semibold tracking-tight text-[#D4A64E] mb-4 sm:mb-0">
+      Activity Log
+    </h1>
 
-      <label>
-        Limit per group:
-        <input type="number" name="limit" value="{{ limit }}" min="10" max="200" style="width:70px;">
-      </label>
-
-      <button class="btn" type="submit">Apply</button>
-    </form>
+    <a href="/activity/download"
+       class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745] text-center">
+      ⬇️ Download Full Log
+    </a>
   </div>
 
-  <!-- ========================= -->
-  <!-- STRATEGY SECTION          -->
-  <!-- ========================= -->
+  <!-- NAVIGATION -->
+  <div class="flex flex-wrap gap-4 mb-10 text-[#F2F4F8] text-sm sm:text-base">
+    <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
+    <a href="/strategies" class="hover:text-[#D4A64E]">Strategies</a>
+    <a href="/settings" class="hover:text-[#D4A64E]">Settings</a>
+    <a href="/activity" class="font-semibold text-[#D4A64E]">Activity</a>
+  </div>
 
-  <div class="card">
-    <div class="section-header">
-      <h2>🧩 Strategy Updates</h2>
-      <span style="font-size:12px;color:#666;">Newest first · max {{ limit }}</span>
+
+  <!-- FILTERS -->
+  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto mb-8">
+
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+      <h2 class="text-lg font-semibold text-[#D4A64E] mb-4 sm:mb-0">Filters</h2>
+      <span class="text-xs text-[#A8B2C3]">Last updated {{ timestamp }}</span>
+    </div>
+
+    <form class="grid sm:flex sm:flex-wrap gap-4 mt-4" method="get" action="/activity">
+
+      <!-- SHOW FILTER -->
+      <div class="flex flex-col text-sm">
+        <label class="text-[#A8B2C3] mb-1">Show:</label>
+        <select name="show"
+                class="bg-[#0A0F1F] border border-[#1B2238] rounded p-2">
+          <option value="all" {% if show=='all' %}selected{% endif %}>All</option>
+          <option value="trade" {% if show=='trade' %}selected{% endif %}>Trades only</option>
+          <option value="strategy" {% if show=='strategy' %}selected{% endif %}>Strategy only</option>
+          <option value="error" {% if show=='error' %}selected{% endif %}>Errors only</option>
+        </select>
+      </div>
+
+      <!-- LIMIT -->
+      <div class="flex flex-col text-sm">
+        <label class="text-[#A8B2C3] mb-1">Limit per group</label>
+        <input type="number" name="limit" value="{{ limit }}" min="10" max="200"
+               class="bg-[#0A0F1F] border border-[#1B2238] rounded p-2 w-28"/>
+      </div>
+
+      <!-- APPLY -->
+      <div class="flex items-end sm:items-center">
+        <button
+          class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
+          Apply
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+
+
+  <!-- =============== STRATEGY EVENTS ================= -->
+  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto mb-8">
+
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
+      <h2 class="text-lg font-semibold text-[#D4A64E]">🧩 Strategy Updates</h2>
+      <span class="text-xs text-[#A8B2C3]">Newest first · max {{ limit }}</span>
     </div>
 
     {% if groups.strategy %}
-      <div class="event-list">
+      <div class="space-y-3 max-h-[400px] overflow-y-auto">
         {% for e in groups.strategy %}
-          <div class="event strategy">
-            <div class="event-header">
-              <span class="label">🧩 Strategy</span>
-              <span class="ts">{{ e.timestamp }}</span>
+          <div class="rounded-lg border-l-4 border-[#3B82F6] bg-[#0A0F1F] p-3">
+            <div class="flex justify-between mb-1">
+              <span class="text-sm font-semibold text-[#3B82F6]">Strategy</span>
+              <span class="text-xs font-mono text-[#A8B2C3]">{{ e.timestamp }}</span>
             </div>
-            <div class="event-text">{{ e.text.strip() }}</div>
+            <p class="text-sm whitespace-pre-line">{{ e.text.strip() }}</p>
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <p>No strategy changes logged in the last {{ limit }} entries.</p>
+      <p class="text-sm text-[#A8B2C3]">No recent strategy changes.</p>
     {% endif %}
+
   </div>
 
-  <!-- ========================= -->
-  <!-- TRADES SECTION            -->
-  <!-- ========================= -->
 
-  <div class="card">
-    <div class="section-header">
-      <h2>💰 Trades Triggered</h2>
-      <span style="font-size:12px;color:#666;">Newest first · max {{ limit }}</span>
+  <!-- =============== TRADE EVENTS ================= -->
+  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto mb-8">
+
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
+      <h2 class="text-lg font-semibold text-[#D4A64E]">💰 Trades</h2>
+      <span class="text-xs text-[#A8B2C3]">Newest first · max {{ limit }}</span>
     </div>
 
     {% if groups.trade %}
-      <div class="event-list">
+      <div class="space-y-3 max-h-[400px] overflow-y-auto">
         {% for e in groups.trade %}
-          <div class="event trade">
-            <div class="event-header">
-              <span class="label">💰 Trade</span>
-              <span class="ts">{{ e.timestamp }}</span>
+          <div class="rounded-lg border-l-4 border-[#33C27D] bg-[#0A0F1F] p-3">
+            <div class="flex justify-between mb-1">
+              <span class="text-sm font-semibold text-[#33C27D]">Trade</span>
+              <span class="text-xs font-mono text-[#A8B2C3]">{{ e.timestamp }}</span>
             </div>
-            <div class="event-text">{{ e.text.strip() }}</div>
+            <p class="text-sm whitespace-pre-line">{{ e.text.strip() }}</p>
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <p>No trades logged in the last {{ limit }} entries.</p>
+      <p class="text-sm text-[#A8B2C3]">No trade events recorded.</p>
     {% endif %}
+
   </div>
 
-  <!-- ========================= -->
-  <!-- ERRORS SECTION            -->
-  <!-- ========================= -->
 
-  <div class="card">
-    <div class="section-header">
-      <h2>⚠️ Errors & Exceptions</h2>
-      <span style="font-size:12px;color:#666;">Newest first · max {{ limit }}</span>
-    </div>
+  <!-- =============== ERROR EVENTS ================= -->
+  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto">
 
-    {% if groups.error %}
-      <div class="event-list">
-        {% for e in groups.error %}
-          <div class="event error">
-            <div class="event-header">
-              <span class="label">⚠️ Error</span>
-              <span class="ts">{{ e.timestamp }}</span>
-            </div>
-            <div class="event-text">{{ e.text.strip() }}</div>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p>No errors or warnings found in the last {{ limit }} entries.</p>
-    {% endif %}
-  </div>
-
-  <p class="footer-note">
-    Showing the last {{ limit }} events per category. Download full log for full history.
-  </p>
-
-</body>
-</html>
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
 
