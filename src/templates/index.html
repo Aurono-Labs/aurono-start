@@ -155,8 +155,8 @@
     {% endfor %}
 
   </div>
-
-  <!-- Modal Backdrop (hidden by default) -->
+  
+  <!-- Modal Backdrop -->
   <div
     id="modal"
     class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
@@ -170,11 +170,12 @@
 
       <form method="post" action="/strategies/add" class="space-y-4">
 
-        <!-- EXCHANGE FIRST -->
+        <!-- EXCHANGE -->
         <div>
           <label class="block text-sm mb-1">Exchange</label>
           <select name="exchange" id="exchange"
                   onchange="onExchangeChange(this.value)"
+                  required
                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
             <option value="">Select exchange</option>
             <option value="bitvavo">bitvavo</option>
@@ -182,19 +183,20 @@
           </select>
         </div>
 
-        <!-- SYMBOL (DYNAMIC) -->
+        <!-- SYMBOL -->
         <div>
           <label class="block text-sm mb-1">Symbol</label>
-          <select name="symbol" id="symbol"
+          <select name="symbol" id="symbol" required
                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"
                   disabled>
             <option value="">Select exchange first</option>
           </select>
         </div>
-        
+
+        <!-- TIMEFRAME -->
         <div>
           <label class="block text-sm mb-1">Timeframe</label>
-          <select name="timeframe"
+          <select name="timeframe" required
                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
             <option value="1h">1h</option>
             <option value="4h">4h</option>
@@ -207,54 +209,49 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm mb-1">% Drop Trigger</label>
-            <input name="drop_pct" type="number" step="any"
+            <input name="drop_pct" type="number" step="any" value="2.5" min="0" max="100" required
                    class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
           </div>
 
           <div>
             <label class="block text-sm mb-1">% Rise Trigger</label>
-            <input name="rise_pct" type="number" step="any"
+            <input name="rise_pct" type="number" step="any" value="2.1" min="0" max="100" required
                    class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
           </div>
         </div>
-        
+
         <!-- AMOUNTS -->
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm mb-1">Buy €</label>
-            <input name="buy_amount_eur" type="number" step="any"
+            <input name="buy_amount_eur" type="number" step="any" value="10.0" min="0" required
                    class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
           </div>
 
           <div>
             <label class="block text-sm mb-1">Sell €</label>
-            <input name="sell_amount_eur" type="number" step="any"
+            <input name="sell_amount_eur" type="number" step="any" value="10.0" min="0" required
                    class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
           </div>
         </div>
 
-        
         <!-- CASH ALLOCATION -->
         <div>
           <label class="block text-sm mb-1">Cash Allocation (€)</label>
-          <input name="allocated_eur" type="number" step="any"
+          <input name="allocated_eur" type="number" step="any" value="20.0" min="0" required
                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
         </div>
-        
+
         <!-- CURRENT POSITION CHECKBOX -->
         <div class="flex items-center gap-2">
-          <input
-            id="has_position"
-            name="has_position"
-            type="checkbox"
-            class="w-4 h-4 rounded bg-[#0A0F1F] border-[#1B2238]"
-            onclick="togglePositionFields()">
+          <input id="has_position" name="has_position" type="checkbox"
+                 class="w-4 h-4 rounded bg-[#0A0F1F] border-[#1B2238]"
+                 onclick="togglePositionFields()">
           <label for="has_position" class="text-sm">I currently have a position</label>
         </div>
 
-        <!-- CURRENT POSITION FIELDS (two columns) -->
+        <!-- CURRENT POSITION FIELDS -->
         <div id="position_fields" class="hidden grid grid-cols-2 gap-4">
-
           <div>
             <label class="block text-sm mb-1">Current Amount (crypto)</label>
             <input name="current_amount" type="number" step="any"
@@ -266,21 +263,18 @@
             <input name="acb" type="number" step="any"
                    class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
           </div>
-
         </div>
 
         <!-- BUTTONS -->
         <div class="flex justify-end gap-2 mt-4">
-          <button
-            type="button"
-            onclick="closeModal()"
-            class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
+          <button type="button"
+                  onclick="closeModal()"
+                  class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
             Cancel
           </button>
 
-          <button
-            type="submit"
-            class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
+          <button type="submit"
+                  class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
             Save Strategy
           </button>
         </div>
@@ -289,10 +283,14 @@
     </div>
   </div>
 
-  <!-- JS -->
+  <!-- Modal JS -->
   <script>
     function openModal() {
       document.getElementById("modal").classList.remove("hidden");
+
+      // Critical fix: ensure symbol is enabled so it will be submitted
+      const sel = document.getElementById("symbol");
+      if (sel.disabled) sel.disabled = false;
     }
 
     function closeModal() {
@@ -302,27 +300,24 @@
     function togglePositionFields() {
       const checked = document.getElementById("has_position").checked;
       const fields = document.getElementById("position_fields");
-      if (checked) fields.classList.remove("hidden");
-      else fields.classList.add("hidden");
+      fields.classList.toggle("hidden", !checked);
     }
 
-    // Fallback static symbol lists (in case API is not available or fails)
+    // Static fallback symbols
     const STATIC_SYMBOLS = {
       bitvavo: ["BTCEUR", "ETHEUR", "SOLEUR"],
-      kraken:  ["BTCEUR", "ETHEUR", "SOLEUR"]
+      kraken: ["BTCEUR", "ETHEUR", "SOLEUR"]
     };
 
     function populateSymbols(symbols) {
       const select = document.getElementById("symbol");
       select.innerHTML = "";
       if (!symbols || symbols.length === 0) {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "No symbols available";
-        select.appendChild(opt);
+        select.innerHTML = "<option value=''>No symbols available</option>";
         select.disabled = true;
         return;
       }
+
       const placeholder = document.createElement("option");
       placeholder.value = "";
       placeholder.textContent = "Select symbol";
@@ -334,7 +329,8 @@
         opt.textContent = sym;
         select.appendChild(opt);
       });
-      select.disabled = false;
+
+      select.disabled = false; // ensure enabled
     }
 
     function onExchangeChange(exchange) {
@@ -346,27 +342,24 @@
         return;
       }
 
-      symbolSelect.disabled = true;
+      symbolSelect.disabled = false; // enable for submission
       symbolSelect.innerHTML = "<option value=''>Loading symbols...</option>";
 
-      // Try to fetch from backend API first
       fetch("/api/symbols?exchange=" + encodeURIComponent(exchange))
         .then(resp => {
           if (!resp.ok) throw new Error("HTTP " + resp.status);
           return resp.json();
         })
         .then(data => {
-          // Expect either { symbols: [...] } or a plain list
           const symbols = data.symbols || data;
           populateSymbols(symbols);
         })
         .catch(() => {
-          // Fallback to static symbols if API fails
-          const fallback = STATIC_SYMBOLS[exchange] || [];
-          populateSymbols(fallback);
+          populateSymbols(STATIC_SYMBOLS[exchange] || []);
         });
     }
   </script>
+
 
 </body>
 </html>

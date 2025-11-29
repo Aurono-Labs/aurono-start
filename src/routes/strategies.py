@@ -237,8 +237,8 @@ def update_strategy(
         symbol,
         timeframe,
         exchange,
-        -drop_pct,        # convert positive input into negative DB value
-        abs(rise_pct),    # ensure positive rise trigger
+        -abs(drop_pct),
+        abs(rise_pct),
         buy_amount_eur,
         sell_amount_eur,
         allocated_eur,
@@ -247,10 +247,10 @@ def update_strategy(
     ))
     db.commit()
     db.close()
-
+    
     log_event(
         f"📝 Updated strategy {symbol} {timeframe}: "
-        f"enabled={is_enabled}, drop {drop_trigger}%, rise {rise_trigger}%, "
+        f"enabled={is_enabled}, drop {drop_pct}%, rise {rise_pct}%, "
         f"buy €{buy_amount_eur}, sell €{sell_amount_eur}, allocated €{allocated_eur}"
     )
 
