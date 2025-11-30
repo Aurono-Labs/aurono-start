@@ -1,365 +1,357 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aurono — Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<title>Aurono Dashboard</title>
+
+<style>
+:root {
+  --bg: #020617;
+  --bg-card: #0a0f1f;
+  --border: rgba(148,163,184,0.35);
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --gold: #facc15;
+  --gold-soft: #fbbf24;
+  --row-even: rgba(15,23,42,0.9);
+  --row-odd: rgba(15,23,42,0.8);
+}
+
+body {
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: radial-gradient(circle at top, #0a1227 0%, #020617 60%);
+  color: var(--text);
+  line-height: 1.4;
+}
+
+/* TOP BAR ───────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.brand {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nav-links a {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-size: 14px;
+  color: var(--muted);
+  transition: .15s ease;
+}
+
+.nav-links a:hover {
+  border-color: var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
+
+.nav-links a.active {
+  border-color: rgba(250,204,21,0.8);
+  background: rgba(250,204,21,0.12);
+  color: var(--gold-soft);
+}
+
+/* HEADERS ───────────────────────────────────────────────────── */
+h1 {
+  font-size: 28px;
+  margin: 0 0 6px 0;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+
+/* CARD ─────────────────────────────────────────────────────── */
+.card {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 22px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+/* FILTERS ───────────────────────────────────────────────────── */
+.filters {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filters select,
+.filters button {
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
+
+.filters button:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* TABLE ─────────────────────────────────────────────────────── */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 10px;
+  font-size: 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+th, td {
+  padding: 10px 16px;
+}
+
+th {
+  background-color: rgba(15,23,42,1);
+  color: var(--muted);
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+tr:nth-child(even) { background-color: var(--row-even); }
+tr:nth-child(odd)  { background-color: var(--row-odd); }
+
+td.numeric { text-align: right; }
+th.numeric { text-align: right; }
+
+/* RESPONSIVE ───────────────────────────────────────────────── */
+@media(max-width: 700px) {
+  body { padding: 16px; }
+  table { font-size: 13px; }
+}
+</style>
 </head>
 
-<body class="min-h-screen bg-[#0A0F1F] text-[#F2F4F8] px-4 sm:px-8 py-6">
 
-  <!-- Header -->
-  <div class="flex justify-between items-center mb-8">
-    <h1 class="text-2xl font-semibold tracking-tight text-[#D4A64E]">
-      Aurono Dashboard
-    </h1>
+<body>
 
-    <button
-      onclick="openModal()"
-      class="bg-[#D4A64E] hover:bg-[#c49745] text-[#0A0F1F] font-semibold
-             px-4 py-2 rounded-lg transition">
-      + Add Strategy
-    </button>
-  </div>
-  
-  <div class="flex gap-6 mb-10 text-[#F2F4F8]">
-    <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
-    <a href="/strategies" class="hover:text-[#D4A64E]">Strategies</a>
-    <a href="/settings" class="hover:text-[#D4A64E]">Settings</a>
-    <a href="/activity" class="hover:text-[#D4A64E]">Activity</a>
-  </div>
+<!-- TOP BAR (exact same structure as settings/strategies/activity) -->
+<div class="topbar">
+  <div class="brand">Aurono</div>
+  <nav class="nav-links">
+      <a class="active" href="/">Dashboard</a>
+      <a href="/strategies">Strategies</a>
+      <a href="/activity">Activity</a>
+      <a href="/settings">Settings</a>
+  </nav>
+</div>
 
 
-  <!-- Portfolio Summary -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
+<!-- PAGE TITLE -->
+<h1>Dashboard</h1>
+<div class="subtitle">Portfolio status, positions overview, recent trades.</div>
 
-    <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5">
-      <p class="text-sm text-[#A8B2C3] mb-1">Total Value</p>
-      <p class="text-2xl font-semibold">
-        €{{ "%.2f"|format(snapshot.total_value) }}
-      </p>
-    </div>
 
-    <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5">
-      <p class="text-sm text-[#A8B2C3] mb-1">Available Cash</p>
-      <p class="text-2xl font-semibold">
-        €{{ "%.2f"|format(snapshot.available_cash) }}
-      </p>
-    </div>
+<!-- PORTFOLIO CARD -->
+<div class="card">
+  <h2>Portfolio Overview</h2>
 
-  </div>
+  <p><b>Crypto Value:</b> €{{ "%.2f"|format(snapshot.crypto_value) }}</p>
+  <p><b>Available Cash:</b> €{{ "%.2f"|format(snapshot.available_cash) }}</p>
+  <hr style="border-color:var(--border); margin: 12px 0;">
+  <p><b>Total Portfolio Value:</b> €{{ "%.2f"|format(snapshot.total_value) }}</p>
 
-  <!-- Strategy Cards -->
-  <h2 class="text-xl font-semibold text-[#D4A64E] mb-4">Active Strategies</h2>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+  <!-- FILTERS -->
+  <form class="filters">
+    <select id="filter-symbol">
+      <option value="">All Coins</option>
 
-    {% for s in snapshot.symbols %}
-    <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5 shadow-sm">
+      {% set symbol_list = [] %}
+      {% for s in snapshot.symbols %}
+        {% if s.symbol not in symbol_list %}
+          {% set _ = symbol_list.append(s.symbol) %}
+        {% endif %}
+      {% endfor %}
+      {% for sym in symbol_list|sort %}
+        <option value="{{ sym }}">{{ sym }}</option>
+      {% endfor %}
+    </select>
 
-      <div class="flex justify-between mb-3">
-        <h3 class="text-lg font-semibold">
-          {{ s.symbol }} · {{ s.timeframe }} · {{ s.exchange }}
-        </h3>
-        <span class="text-sm text-[#A8B2C3]">
-          {% if s.enabled %}Enabled{% else %}Disabled{% endif %}
-        </span>
-      </div>
+    <select id="filter-timeframe">
+      <option value="">All Timeframes</option>
 
-      <div class="space-y-1 text-sm">
+      {% set lookup = ["1h","4h","1d","1w"] %}
+      {% set tfs = [] %}
+      {% for s in snapshot.symbols %}
+        {% if s.timeframe not in tfs %}
+          {% set _ = tfs.append(s.timeframe) %}
+        {% endif %}
+      {% endfor %}
 
-        <!-- PRICE -->
-        <p>
-          Price:
-          <span class="font-medium">
-            {% if s.price is not none %}
-              €{{ "%.2f"|format(s.price) }}
-            {% else %}
-              -
-            {% endif %}
-          </span>
-        </p>
+      {% for tf in lookup %}
+        {% if tf in tfs %}
+          <option value="{{ tf }}">{{ tf }}</option>
+        {% endif %}
+      {% endfor %}
+    </select>
 
-        <!-- BALANCE -->
-        <p>
-          Balance:
-          <span class="font-medium">
-            {% if s.balance is not none %}
-              {{ "%.6f"|format(s.balance) }}
-            {% else %}
-              -
-            {% endif %}
-          </span>
-        </p>
+    <select id="filter-exchange">
+      <option value="">All Exchanges</option>
 
-        <!-- VALUE (price * balance) -->
-        <p>
-          Value:
-          <span class="font-medium">
-            {% if s.value is not none %}
-              €{{ "%.2f"|format(s.value) }}
-            {% else %}
-              -
-            {% endif %}
-          </span>
-        </p>
+      {% set ex_list = [] %}
+      {% for s in snapshot.symbols %}
+        {% if s.exchange not in ex_list %}
+          {% set _ = ex_list.append(s.exchange) %}
+        {% endif %}
+      {% endfor %}
+      {% for ex in ex_list|sort %}
+        <option value="{{ ex }}">{{ ex }}</option>
+      {% endfor %}
+    </select>
 
-        <!-- ACB -->
-        <p>
-          ACB:
-          <span class="font-medium">
-            {% if s.acb is not none %}
-              €{{ "%.2f"|format(s.acb) }}
-            {% else %}
-              -
-            {% endif %}
-          </span>
-        </p>
+    <button type="button" onclick="resetFilters()">Reset</button>
+  </form>
 
-        <!-- P/L -->
-        <p>
-          P/L:
-          <span class="font-medium
-            {% if s.pnl_pct is not none %}
-              {% if s.pnl_pct > 0 %} text-[#33C27D]
-              {% elif s.pnl_pct < 0 %} text-[#E06A6A]
+
+  <!-- PORTFOLIO TABLE -->
+  <table>
+    <tr>
+      <th>Strategy</th>
+      <th class="numeric">Price (€)</th>
+      <th class="numeric">Balance</th>
+      <th class="numeric">Value (€)</th>
+      <th class="numeric">Avg Cost</th>
+      <th class="numeric">P/L %</th>
+      <th class="numeric">Allocated (€)</th>
+    </tr>
+
+    <tbody id="portfolio-rows">
+      {% for s in snapshot.symbols %}
+      <tr class="pf-row"
+          data-symbol="{{ s.symbol }}"
+          data-timeframe="{{ s.timeframe }}"
+          data-exchange="{{ s.exchange }}">
+
+        <td>{{ s.symbol }} {{ s.timeframe }} ({{ s.exchange }})</td>
+        <td class="numeric">{{ "%.2f"|format(s.price) }}</td>
+        <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
+        <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
+        <td class="numeric">{% if s.acb %}{{ "%.2f"|format(s.acb) }}{% else %}-{% endif %}</td>
+
+        <td class="numeric"
+            style="color:
+              {% if s.pnl_pct > 0 %}#22c55e
+              {% elif s.pnl_pct < 0 %}#ef4444
+              {% else %}#888
               {% endif %}
-            {% endif %}
-          ">
-            {% if s.pnl_pct is not none %}
-              {{ "%.2f"|format(s.pnl_pct) }}%
-            {% else %}
-              -
-            {% endif %}
-          </span>
-        </p>
+        ">
+          {{ "%.2f"|format(s.pnl_pct) }}%
+        </td>
 
-      </div>
+        <td class="numeric">{{ "%.2f"|format(s.allocated_eur) }}</td>
 
-      <div class="mt-5 flex gap-2">
-        <a href="/strategies/edit/{{ s.id }}"
-           class="inline-flex items-center justify-center px-3 py-1 text-sm
-                  rounded-md bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-          Edit
-        </a>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-        <a href="/strategies/delete/{{ s.id }}"
-           class="inline-flex items-center justify-center px-3 py-1 text-sm
-                  rounded-md bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-          Delete
-        </a>
-      </div>
+</div>
 
-    </div>
+
+<!-- RECENT TRADES CARD -->
+<div class="card">
+  <h2>💰 Recent Trades (last 7 days)</h2>
+
+  {% if recent_trades %}
+  <table>
+    <tr>
+      <th>Date / Time (UTC)</th>
+      <th>Symbol</th>
+      <th>Side</th>
+      <th class="numeric">Price (€)</th>
+      <th class="numeric">Amount</th>
+      <th>Strategy</th>
+    </tr>
+
+    {% for t in recent_trades %}
+    <tr>
+      <td>{{ t.timestamp[:16] }}</td>
+      <td>{{ t.symbol }}</td>
+      <td>{{ t.side|upper }}</td>
+      <td class="numeric">{{ "%.2f"|format(t.price) }}</td>
+      <td class="numeric">{{ "%.6f"|format(t.amount) }}</td>
+      <td>{{ t.strategy }}</td>
+    </tr>
     {% endfor %}
+  </table>
 
-  </div>
-  
-  <!-- Modal Backdrop -->
-  <div
-    id="modal"
-    class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-  >
-    <!-- Modal Content -->
-    <div class="bg-[#111A33] border border-[#1B2238] rounded-xl w-full max-w-lg p-6 shadow-xl">
+  {% else %}
+    <p>No trades executed in the last 7 days.</p>
+  {% endif %}
+</div>
 
-      <h2 class="text-xl font-semibold text-[#D4A64E] mb-4">
-        Create New Strategy
-      </h2>
 
-      <form method="post" action="/strategies/add" class="space-y-4">
+<script>
+function applyFilters() {
+  const sym = document.getElementById("filter-symbol").value;
+  const tf  = document.getElementById("filter-timeframe").value;
+  const ex  = document.getElementById("filter-exchange").value;
 
-        <!-- EXCHANGE -->
-        <div>
-          <label class="block text-sm mb-1">Exchange</label>
-          <select name="exchange" id="exchange"
-                  onchange="onExchangeChange(this.value)"
-                  required
-                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-            <option value="">Select exchange</option>
-            <option value="bitvavo">bitvavo</option>
-            <option value="kraken">kraken</option>
-          </select>
-        </div>
+  document.querySelectorAll("#portfolio-rows .pf-row").forEach(row => {
+    const a = row.dataset.symbol;
+    const b = row.dataset.timeframe;
+    const c = row.dataset.exchange;
 
-        <!-- SYMBOL -->
-        <div>
-          <label class="block text-sm mb-1">Symbol</label>
-          <select name="symbol" id="symbol" required
-                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"
-                  disabled>
-            <option value="">Select exchange first</option>
-          </select>
-        </div>
+    row.style.display =
+      (!sym || a === sym) &&
+      (!tf || b === tf) &&
+      (!ex || c === ex)
+      ? ""
+      : "none";
+  });
+}
 
-        <!-- TIMEFRAME -->
-        <div>
-          <label class="block text-sm mb-1">Timeframe</label>
-          <select name="timeframe" required
-                  class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-            <option value="1h">1h</option>
-            <option value="4h">4h</option>
-            <option value="1d">1d</option>
-            <option value="1w">1w</option>
-          </select>
-        </div>
+function resetFilters() {
+  document.getElementById("filter-symbol").value = "";
+  document.getElementById("filter-timeframe").value = "";
+  document.getElementById("filter-exchange").value = "";
+  applyFilters();
+}
 
-        <!-- TRIGGERS -->
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm mb-1">% Drop Trigger</label>
-            <input name="drop_pct" type="number" step="any" value="2.5" min="0" max="100" required
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-          </div>
-
-          <div>
-            <label class="block text-sm mb-1">% Rise Trigger</label>
-            <input name="rise_pct" type="number" step="any" value="2.1" min="0" max="100" required
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-          </div>
-        </div>
-
-        <!-- AMOUNTS -->
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm mb-1">Buy €</label>
-            <input name="buy_amount_eur" type="number" step="any" value="10.0" min="0" required
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-          </div>
-
-          <div>
-            <label class="block text-sm mb-1">Sell €</label>
-            <input name="sell_amount_eur" type="number" step="any" value="10.0" min="0" required
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-          </div>
-        </div>
-
-        <!-- CASH ALLOCATION -->
-        <div>
-          <label class="block text-sm mb-1">Cash Allocation (€)</label>
-          <input name="allocated_eur" type="number" step="any" value="20.0" min="0" required
-                 class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-        </div>
-
-        <!-- CURRENT POSITION CHECKBOX -->
-        <div class="flex items-center gap-2">
-          <input id="has_position" name="has_position" type="checkbox"
-                 class="w-4 h-4 rounded bg-[#0A0F1F] border-[#1B2238]"
-                 onclick="togglePositionFields()">
-          <label for="has_position" class="text-sm">I currently have a position</label>
-        </div>
-
-        <!-- CURRENT POSITION FIELDS -->
-        <div id="position_fields" class="hidden grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm mb-1">Current Amount (crypto)</label>
-            <input name="current_amount" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-          </div>
-
-          <div>
-            <label class="block text-sm mb-1">Average Cost Basis (€)</label>
-            <input name="acb" type="number" step="any"
-                   class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-          </div>
-        </div>
-
-        <!-- BUTTONS -->
-        <div class="flex justify-end gap-2 mt-4">
-          <button type="button"
-                  onclick="closeModal()"
-                  class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-            Cancel
-          </button>
-
-          <button type="submit"
-                  class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-            Save Strategy
-          </button>
-        </div>
-
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal JS -->
-  <script>
-    function openModal() {
-      document.getElementById("modal").classList.remove("hidden");
-
-      // Critical fix: ensure symbol is enabled so it will be submitted
-      const sel = document.getElementById("symbol");
-      if (sel.disabled) sel.disabled = false;
-    }
-
-    function closeModal() {
-      document.getElementById("modal").classList.add("hidden");
-    }
-
-    function togglePositionFields() {
-      const checked = document.getElementById("has_position").checked;
-      const fields = document.getElementById("position_fields");
-      fields.classList.toggle("hidden", !checked);
-    }
-
-    // Static fallback symbols
-    const STATIC_SYMBOLS = {
-      bitvavo: ["BTCEUR", "ETHEUR", "SOLEUR"],
-      kraken: ["BTCEUR", "ETHEUR", "SOLEUR"]
-    };
-
-    function populateSymbols(symbols) {
-      const select = document.getElementById("symbol");
-      select.innerHTML = "";
-      if (!symbols || symbols.length === 0) {
-        select.innerHTML = "<option value=''>No symbols available</option>";
-        select.disabled = true;
-        return;
-      }
-
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = "Select symbol";
-      select.appendChild(placeholder);
-
-      symbols.forEach(sym => {
-        const opt = document.createElement("option");
-        opt.value = sym;
-        opt.textContent = sym;
-        select.appendChild(opt);
-      });
-
-      select.disabled = false; // ensure enabled
-    }
-
-    function onExchangeChange(exchange) {
-      const symbolSelect = document.getElementById("symbol");
-
-      if (!exchange) {
-        symbolSelect.innerHTML = "<option value=''>Select exchange first</option>";
-        symbolSelect.disabled = true;
-        return;
-      }
-
-      symbolSelect.disabled = false; // enable for submission
-      symbolSelect.innerHTML = "<option value=''>Loading symbols...</option>";
-
-      fetch("/api/symbols?exchange=" + encodeURIComponent(exchange))
-        .then(resp => {
-          if (!resp.ok) throw new Error("HTTP " + resp.status);
-          return resp.json();
-        })
-        .then(data => {
-          const symbols = data.symbols || data;
-          populateSymbols(symbols);
-        })
-        .catch(() => {
-          populateSymbols(STATIC_SYMBOLS[exchange] || []);
-        });
-    }
-  </script>
-
+document.querySelectorAll(".filters select").forEach(sel => {
+  sel.addEventListener("change", applyFilters);
+});
+</script>
 
 </body>
 </html>

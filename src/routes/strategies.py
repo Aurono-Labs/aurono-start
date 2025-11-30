@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse
-from fastapi.responses import JSONResponse
 from starlette.status import HTTP_303_SEE_OTHER
 from fastapi.templating import Jinja2Templates
 import sqlite3
@@ -50,33 +49,6 @@ def list_strategies(request: Request):
         "current_exchange": current_exchange
     })
 
-# -----------------------------------------------------------
-# GET ONE STRATEGY (for modal editor)
-# -----------------------------------------------------------
-@router.get("/get/{id}")
-def get_single_strategy(id: int):
-    db = get_db()
-    row = db.execute("SELECT * FROM strategies WHERE id=?", (id,)).fetchone()
-    db.close()
-
-    if not row:
-        return {"error": "Strategy not found"}
-
-    return {
-        "id": row["id"],
-        "symbol": row["symbol"],
-        "timeframe": row["timeframe"],
-        "exchange": row["exchange"],
-        "drop_pct": abs(float(row["drop_trigger"])),   # positive for UI
-        "rise_pct": float(row["rise_trigger"]),
-        "buy_amount_eur": float(row["buy_amount_eur"]),
-        "sell_amount_eur": float(row["sell_amount_eur"]),
-        "allocated_eur": float(row["allocated_eur"]),
-        "enabled": bool(row["enabled"]),
-        "current_amount": None,
-        "acb": None
-    }
-
 @router.post("/set-exchange")
 def set_exchange(request: Request, exchange: str = Form(...)):
     exchange = exchange.lower()
@@ -123,10 +95,9 @@ def add_strategy(
     # Normalize numeric values
     # -----------------------------
     exchange = (exchange or "bitvavo").lower()
-    
-    # Store triggers as negative (drop) and positive (rise)
-    drop_trigger = -abs(drop_pct)
-    rise_trigger = abs(rise_pct)
+
+    drop_trigger = -abs(min(max(drop_pct, 0.1), 100.0))
+    rise_trigger = abs(min(max(rise_pct, 0.1), 100.0))
 
     buy_amount_eur = max(5.0, buy_amount_eur)
     sell_amount_eur = max(5.0, sell_amount_eur)
@@ -215,8 +186,8 @@ def update_strategy(
     symbol: str = Form(...),
     timeframe: str = Form(...),
     exchange: str = Form("bitvavo"),
-    drop_pct: float = Form(...),
-    rise_pct: float = Form(...),
+    drop_trigger: float = Form(...),
+    rise_trigger: float = Form(...),
     buy_amount_eur: float = Form(...),
     sell_amount_eur: float = Form(...),
     allocated_eur: float = Form(...),
@@ -237,8 +208,8 @@ def update_strategy(
         symbol,
         timeframe,
         exchange,
-        -abs(drop_pct),
-        abs(rise_pct),
+        -abs(drop_trigger),
+        abs(rise_trigger),
         buy_amount_eur,
         sell_amount_eur,
         allocated_eur,
@@ -247,31 +218,15 @@ def update_strategy(
     ))
     db.commit()
     db.close()
-    
+
     log_event(
         f"📝 Updated strategy {symbol} {timeframe}: "
-        f"enabled={is_enabled}, drop {drop_pct}%, rise {rise_pct}%, "
+        f"enabled={is_enabled}, drop {drop_trigger}%, rise {rise_trigger}%, "
         f"buy €{buy_amount_eur}, sell €{sell_amount_eur}, allocated €{allocated_eur}"
     )
 
     return RedirectResponse(url="/strategies", status_code=HTTP_303_SEE_OTHER)
 
-@router.post("/enable/{id}")
-def enable_strategy(id: int):
-    db = get_db()
-    db.execute("UPDATE strategies SET enabled=1 WHERE id=?", (id,))
-    db.commit()
-    db.close()
-    return RedirectResponse("/strategies", status_code=303)
-
-
-@router.post("/disable/{id}")
-def disable_strategy(id: int):
-    db = get_db()
-    db.execute("UPDATE strategies SET enabled=0 WHERE id=?", (id,))
-    db.commit()
-    db.close()
-    return RedirectResponse("/strategies", status_code=303)
 
 # -----------------------------------------------------------
 # DELETE STRATEGY

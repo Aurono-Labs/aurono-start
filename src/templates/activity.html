@@ -1,133 +1,209 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Aurono — Activity Log</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<title>Activity Log</title>
+
+<style>
+  :root {
+    --bg: #020617;
+    --bg-card: #0a0f1f;
+    --border: rgba(148,163,184,0.35);
+    --text: #e5e7eb;
+    --muted: #94a3b8;
+    --gold: #facc15;
+    --gold-soft: #fbbf24;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --warn: #f59e0b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 20px;
+    background: radial-gradient(circle at top, #0a1227 0, #020617 60%);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial;
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* TOPBAR */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 26px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .brand {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+
+  nav {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  nav a {
+    padding: 6px 12px;
+    font-size: 14px;
+    text-decoration: none;
+    border-radius: 12px;
+    color: var(--muted);
+    border: 1px solid transparent;
+    transition: .15s ease;
+  }
+
+  nav a:hover {
+    color: var(--text);
+    border-color: rgba(148,163,184,0.4);
+    background: rgba(255,255,255,0.03);
+  }
+
+  nav a.active {
+    border-color: rgba(250,204,21,0.8);
+    color: var(--gold);
+    background: rgba(250,204,21,0.12);
+  }
+
+  /* HEADINGS */
+  h1 {
+    margin: 0 0 4px 0;
+    font-size: 26px;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    margin: 0 0 18px 0;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  /* CARD */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 24px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+  }
+
+  .card-title {
+    font-size: 18px;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+
+  /* LOG BOX */
+  .log-box {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    font-family: Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+
+  .log-entry {
+    margin-bottom: 6px;
+  }
+
+  .log-entry.error { color: #fecaca; }
+  .log-entry.warn  { color: #fde68a; }
+
+  /* MOBILE */
+  @media (max-width: 600px) {
+    body { padding: 16px; }
+    .card { padding: 16px; }
+    .log-box { max-height: 300px; }
+  }
+</style>
 </head>
 
-<body class="min-h-screen bg-[#0A0F1F] text-[#F2F4F8] px-4 sm:px-8 py-6">
+<body>
 
-  <!-- HEADER -->
-  <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-8">
-    <h1 class="text-2xl font-semibold tracking-tight text-[#D4A64E] mb-4 sm:mb-0">
-      Activity Log
-    </h1>
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">Aurono</div>
 
-    <a href="/activity/download"
-       class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745] text-center">
-      ⬇️ Download Full Log
-    </a>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/strategies">Strategies</a>
+      <a class="active" href="/activity">Activity</a>
+      <a href="/settings">Settings</a>
+    </nav>
   </div>
 
-  <!-- NAVIGATION -->
-  <div class="flex flex-wrap gap-4 mb-10 text-[#F2F4F8] text-sm sm:text-base">
-    <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
-    <a href="/strategies" class="hover:text-[#D4A64E]">Strategies</a>
-    <a href="/settings" class="hover:text-[#D4A64E]">Settings</a>
-    <a href="/activity" class="font-semibold text-[#D4A64E]">Activity</a>
-  </div>
+  <h1>Activity Log</h1>
+  <p class="subtitle">Showing recent system events (last {{ limit }} entries).</p>
 
 
-  <!-- FILTERS -->
-  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto mb-8">
+  <!-- ALL LOGS -->
+  <div class="card">
+    <div class="card-title">All activity</div>
+    <div class="log-box">
+      {% for line in logs_all %}
+        <div class="log-entry">{{ line }}</div>
+      {% endfor %}
 
-    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center">
-      <h2 class="text-lg font-semibold text-[#D4A64E] mb-4 sm:mb-0">Filters</h2>
-      <span class="text-xs text-[#A8B2C3]">Last updated {{ timestamp }}</span>
+      {% if not logs_all %}
+        <div class="log-entry" style="color:var(--muted);">No log entries available.</div>
+      {% endif %}
     </div>
-
-    <form class="grid sm:flex sm:flex-wrap gap-4 mt-4" method="get" action="/activity">
-
-      <!-- SHOW FILTER -->
-      <div class="flex flex-col text-sm">
-        <label class="text-[#A8B2C3] mb-1">Show:</label>
-        <select name="show"
-                class="bg-[#0A0F1F] border border-[#1B2238] rounded p-2">
-          <option value="all" {% if show=='all' %}selected{% endif %}>All</option>
-          <option value="trade" {% if show=='trade' %}selected{% endif %}>Trades only</option>
-          <option value="strategy" {% if show=='strategy' %}selected{% endif %}>Strategy only</option>
-          <option value="error" {% if show=='error' %}selected{% endif %}>Errors only</option>
-        </select>
-      </div>
-
-      <!-- LIMIT -->
-      <div class="flex flex-col text-sm">
-        <label class="text-[#A8B2C3] mb-1">Limit per group</label>
-        <input type="number" name="limit" value="{{ limit }}" min="10" max="200"
-               class="bg-[#0A0F1F] border border-[#1B2238] rounded p-2 w-28"/>
-      </div>
-
-      <!-- APPLY -->
-      <div class="flex items-end sm:items-center">
-        <button
-          class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-          Apply
-        </button>
-      </div>
-
-    </form>
-
   </div>
 
 
-  <!-- =============== STRATEGY EVENTS ================= -->
-  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto mb-8">
+  <!-- ERRORS -->
+  <div class="card">
+    <div class="card-title">Errors</div>
 
-    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
-      <h2 class="text-lg font-semibold text-[#D4A64E]">🧩 Strategy Updates</h2>
-      <span class="text-xs text-[#A8B2C3]">Newest first · max {{ limit }}</span>
-    </div>
-
-    {% if groups.strategy %}
-      <div class="space-y-3 max-h-[400px] overflow-y-auto">
-        {% for e in groups.strategy %}
-          <div class="rounded-lg border-l-4 border-[#3B82F6] bg-[#0A0F1F] p-3">
-            <div class="flex justify-between mb-1">
-              <span class="text-sm font-semibold text-[#3B82F6]">Strategy</span>
-              <span class="text-xs font-mono text-[#A8B2C3]">{{ e.timestamp }}</span>
-            </div>
-            <p class="text-sm whitespace-pre-line">{{ e.text.strip() }}</p>
-          </div>
+    <div class="log-box">
+      {% if logs_error %}
+        {% for line in logs_error %}
+          <div class="log-entry error">{{ line }}</div>
         {% endfor %}
-      </div>
-    {% else %}
-      <p class="text-sm text-[#A8B2C3]">No recent strategy changes.</p>
-    {% endif %}
-
-  </div>
-
-
-  <!-- =============== TRADE EVENTS ================= -->
-  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto mb-8">
-
-    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
-      <h2 class="text-lg font-semibold text-[#D4A64E]">💰 Trades</h2>
-      <span class="text-xs text-[#A8B2C3]">Newest first · max {{ limit }}</span>
+      {% else %}
+        <div class="log-entry" style="color:var(--muted);">No errors found.</div>
+      {% endif %}
     </div>
-
-    {% if groups.trade %}
-      <div class="space-y-3 max-h-[400px] overflow-y-auto">
-        {% for e in groups.trade %}
-          <div class="rounded-lg border-l-4 border-[#33C27D] bg-[#0A0F1F] p-3">
-            <div class="flex justify-between mb-1">
-              <span class="text-sm font-semibold text-[#33C27D]">Trade</span>
-              <span class="text-xs font-mono text-[#A8B2C3]">{{ e.timestamp }}</span>
-            </div>
-            <p class="text-sm whitespace-pre-line">{{ e.text.strip() }}</p>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="text-sm text-[#A8B2C3]">No trade events recorded.</p>
-    {% endif %}
-
   </div>
 
 
-  <!-- =============== ERROR EVENTS ================= -->
-  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto">
+  <!-- WARNINGS -->
+  <div class="card">
+    <div class="card-title">Warnings</div>
 
-    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
+    <div class="log-box">
+      {% if logs_warning %}
+        {% for line in logs_warning %}
+          <div class="log-entry warn">{{ line }}</div>
+        {% endfor %}
+      {% else %}
+        <div class="log-entry" style="color:var(--muted);">No warnings found.</div>
+      {% endif %}
+    </div>
+  </div>
+
+
+  <p style="color:var(--muted); font-size:13px;">
+    Showing the last {{ limit }} events per category.
+    For full history, download the full log file.
+  </p>
+
+</body>
+</html>
 

@@ -1,546 +1,577 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>Aurono — Strategies</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    
-    <body class="min-h-screen bg-[#0A0F1F] text-[#F2F4F8] px-4 sm:px-8 py-6">
-        
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-8">
-            <h1 class="text-2xl font-semibold tracking-tight text-[#D4A64E]">
-                Strategies
-            </h1>
-            
-            <button
-                onclick="openAddModal()"
-                class="bg-[#D4A64E] hover:bg-[#c49745] text-[#0A0F1F] font-semibold
-             px-4 py-2 rounded-lg transition">
-             + Add Strategy
-            </button>
-        </div>
-        
-        <!-- Navigation -->
-        <div class="flex gap-6 mb-10 text-[#F2F4F8]">
-            <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
-            <a href="/strategies" class="font-semibold text-[#D4A64E]">Strategies</a>
-            <a href="/settings" class="hover:text-[#D4A64E]">Settings</a>
-            <a href="/activity" class="hover:text-[#D4A64E]">Activity</a>
-        </div>
-        
-        
-        <!-- Strategy Table Container -->
-        <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-5 shadow-sm overflow-x-auto">
-            
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="bg-[#1B2238] text-left">
-                        <th class="px-4 py-3">ID</th>
-                        <th class="px-4 py-3">Symbol</th>
-                        <th class="px-4 py-3">Timeframe</th>
-                        <th class="px-4 py-3">Exchange</th>
-                        <th class="px-4 py-3 text-right">Drop %</th>
-                        <th class="px-4 py-3 text-right">Rise %</th>
-                        <th class="px-4 py-3 text-right">Buy €</th>
-                        <th class="px-4 py-3 text-right">Sell €</th>
-                        <th class="px-4 py-3 text-right">Allocated €</th>
-                        <th class="px-4 py-3 text-center">Enabled</th>
-                        <th class="px-4 py-3 text-center">Actions</th>
-                    </tr>
-                </thead>
-                
-                <tbody>
-                    
-                    {% for s in strategies %}
-                    <tr class="border-b border-[#1B2238]">
-                        <td class="px-4 py-3">{{ s.id }}</td>
-                        <td class="px-4 py-3">{{ s.symbol }}</td>
-                        <td class="px-4 py-3">{{ s.timeframe }}</td>
-                        <td class="px-4 py-3">{{ s.exchange }}</td>
-                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
-                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.rise_trigger) }}</td>
-                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.buy_amount_eur) }}</td>
-                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.sell_amount_eur) }}</td>
-                        <td class="px-4 py-3 text-right">{{ "%.2f"|format(s.allocated_eur) }}</td>
-                        
-                        <td class="px-4 py-3 text-center">
-                            {% if s.enabled %}
-                            <span class="text-[#33C27D]">Enabled</span>
-                            {% else %}
-                            <span class="text-[#E06A6A]">Disabled</span>
-                            {% endif %}
-                        </td>
-                        
-                        <td class="px-4 py-3 text-center flex justify-center gap-2">
-                            
-                            <!-- EDIT -->
-                            <button onclick="openEditModal({{ s.id }})"
-                                class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
-                         font-semibold hover:bg-[#c49745]">
-                         Edit
-                            </button>
-                            
-                            <!-- DELETE -->
-                            <form method="post" action="/strategies/delete/{{ s.id }}">
-                                <button class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
-                           font-semibold hover:bg-[#c49745]"
-                           onclick="return confirm('Delete strategy?')">
-                           Delete
-                                </button>
-                            </form>
-                            
-                            <!-- ENABLE/DISABLE -->
-                            {% if s.enabled %}
-                            <form method="post" action="/strategies/disable/{{ s.id }}">
-                                <button class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
-                           font-semibold hover:bg-[#c49745]">
-                           Disable
-                                </button>
-                            </form>
-                            {% else %}
-                            <form method="post" action="/strategies/enable/{{ s.id }}">
-                                <button class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded 
-                           font-semibold hover:bg-[#c49745]">
-                           Enable
-                                </button>
-                            </form>
-                            {% endif %}
-                            
-                        </td>
-                    </tr>
+<head>
+<meta charset="UTF-8">
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('input[type="number"]').forEach(el => {
+    el.setAttribute('inputmode', 'decimal');
+    el.setAttribute('step', 'any');
+  });
+});
+
+function toggleEdit(id) {
+  const row = document.getElementById("row-" + id);
+  const editRow = document.getElementById("edit-row-" + id);
+  if (!row || !editRow) return;
+  editRow.style.display = (editRow.style.display === "none" || editRow.style.display === "") ? "table-row" : "none";
+  row.style.display = (row.style.display === "none" || row.style.display === "") ? "table-row" : "none";
+}
+
+function toggleExistingFields() {
+  const chk = document.getElementById('import_existing');
+  const div = document.getElementById('existing_fields');
+  if (!chk || !div) return;
+  div.style.display = chk.checked ? 'block' : 'none';
+}
+
+function validateForm(e) {
+  const fields = ["drop_pct","rise_pct","invest_eur","allocated_eur","existing_amount","existing_acb"];
+  for (const id of fields) {
+    const el = document.getElementById(id);
+    if (el && el.value !== "" && parseFloat(el.value) < 0) {
+      alert("Values must be positive numbers (use . as decimal separator).");
+      e.preventDefault();
+      return false;
+    }
+  }
+}
+</script>
+
+<title>Strategies</title>
+
+<style>
+:root {
+  --bg: #020617;
+  --bg-card: #0a0f1f;
+  --border: rgba(148,163,184,0.35);
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --gold: #facc15;
+  --gold-soft: #fbbf24;
+  --btn-border: rgba(148,163,184,0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  line-height: 1.4;
+  background: radial-gradient(circle at top, #0a1227 0, #020617 60%);
+  color: var(--text);
+}
+
+/* Top nav */
+.topnav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nav-links a {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-size: 14px;
+  color: var(--muted);
+  background: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-links a:hover {
+  border-color: rgba(148,163,184,0.5);
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+}
+
+.nav-links a.active {
+  border-color: rgba(250,204,21,0.8);
+  background: rgba(250,204,21,0.12);
+  color: var(--gold-soft);
+}
+
+/* Page title */
+h1 {
+  margin: 0 0 6px 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.page-subtitle {
+  margin: 0 0 18px 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Layout */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Card */
+.card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  background: var(--bg-card);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+}
+
+.card h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+/* Labels + inputs */
+label {
+  display: inline-block;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.form-row {
+  margin-bottom: 12px;
+}
+
+.form-row-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.form-row label.inline-label {
+  width: 160px;
+  margin-bottom: 0;
+}
+
+input, select {
+  width: 180px;
+  max-width: 100%;
+  padding: 7px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(15,23,42,0.9);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+
+input:focus, select:focus {
+  border-color: rgba(250,204,21,0.85);
+  box-shadow: 0 0 0 1px rgba(250,204,21,0.25);
+}
+
+/* Buttons */
+.btn {
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--btn-border);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+.btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(148,163,184,0.8);
+  transform: translateY(-0.5px);
+}
+
+.btn-primary {
+  border-color: rgba(250,204,21,0.9);
+  background: rgba(250,204,21,0.15);
+  color: var(--gold-soft);
+}
+
+.btn-danger {
+  border-color: rgba(239,68,68,0.85);
+  background: rgba(127,29,29,0.6);
+  color: #fecaca;
+}
+
+.btn-small {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+/* Table */
+.table-wrap {
+  margin-top: 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: rgba(15,23,42,0.9);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+th, td {
+  padding: 8px 12px;
+}
+
+th {
+  background-color: rgba(15,23,42,1);
+  color: var(--muted);
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+tbody tr:nth-child(even) {
+  background-color: rgba(15,23,42,0.9);
+}
+tbody tr:nth-child(odd) {
+  background-color: rgba(15,23,42,0.8);
+}
+
+td.numeric, th.numeric {
+  text-align: right;
+}
+
+td, th {
+  border-bottom: 1px solid rgba(30,64,175,0.4);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+td.actions {
+  text-align: center;
+}
+
+/* Own coin toggle */
+.owncoin-container {
+  display: flex;
+  align-items: center;
+  margin-top: 15px;
+  margin-bottom: 10px;
+}
+
+.owncoin-container label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.owncoin-container input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+#existing_fields label {
+  margin-top: 4px;
+}
+
+/* Responsive tweaks */
+@media (max-width: 700px) {
+  body {
+    padding: 16px;
+  }
+  .topnav {
+    align-items: flex-start;
+  }
+  .form-row-inline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  label.inline-label {
+    width: auto;
+  }
+  .table-wrap {
+    overflow-x: auto;
+  }
+}
+</style>
+</head>
+
+<body>
+
+  <div class="topnav">
+    <div class="brand">Aurono</div>
+    <div class="nav-links">
+      <a href="/">Dashboard</a>
+      <a href="/strategies" class="active">Strategies</a>
+      <a href="/activity">Activity</a>
+      <a href="/settings">Settings</a>
+    </div>
+  </div>
+
+  <h1>Strategies</h1>
+  <p class="page-subtitle">Configure and manage automated trading strategies.</p>
+
+  <div class="layout">
+
+    <!-- Create strategy -->
+    <div>
+      <div class="card">
+        <h3>Create New Strategy</h3>
+        <p class="card-desc">Choose exchange, symbol, timeframe and thresholds. Optional: import an existing position.</p>
+
+        <!-- Form used ONLY for exchange switching -->
+        <form id="exchangeForm" method="post" action="/strategies/set-exchange"></form>
+
+        <!-- Main strategy creation form -->
+        <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="exchange">Exchange:</label>
+            <select id="exchange" name="exchange"
+                    form="exchangeForm"
+                    onchange="document.getElementById('exchangeForm').submit()">
+              <option value="bitvavo" {% if current_exchange == 'bitvavo' %}selected{% endif %}>Bitvavo</option>
+              <option value="kraken" {% if current_exchange == 'kraken' %}selected{% endif %}>Kraken</option>
+            </select>
+          </div>
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="symbol">Symbol:</label>
+            <select id="symbol" name="symbol" required>
+              {% for sym in symbols %}
+                <option value="{{ sym }}">{{ sym[:-3] }}/EUR</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="timeframe">Timeframe:</label>
+            <select id="timeframe" name="timeframe">
+              <option value="1w">1 week</option>
+              <option value="1d">1 day</option>
+              <option value="6h">6 hours</option>
+              <option value="4h">4 hours</option>
+              <option value="1h">1 hour</option>
+            </select>
+          </div>
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="drop_pct">Drop %:</label>
+            <div>
+              <input type="number" id="drop_pct" name="drop_pct" value="2.5" min="0" max="100" required>
+              <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+                Positive input → stored as -x%
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="rise_pct">Rise %:</label>
+            <input type="number" id="rise_pct" name="rise_pct" value="2.1" min="0" max="100" required>
+          </div>
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="buy_amount_eur">Buy amount (€):</label>
+            <input type="number" id="buy_amount_eur" name="buy_amount_eur" value="20" step="any">
+          </div>
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="sell_amount_eur">Sell amount (€):</label>
+            <input type="number" id="sell_amount_eur" name="sell_amount_eur" value="20" step="any">
+          </div>
+
+          <div class="form-row form-row-inline">
+            <label class="inline-label" for="allocated_eur">Allocated Capital (€):</label>
+            <input type="number" id="allocated_eur" name="allocated_eur" value="100" step="any" min="0" required>
+          </div>
+
+          <div class="owncoin-container">
+            <label for="import_existing">
+              <input type="checkbox" id="import_existing" name="import_existing" onchange="toggleExistingFields()">
+              <span>I already own this coin on the exchange</span>
+            </label>
+          </div>
+
+          <div id="existing_fields" style="display:none; margin-left:4px;">
+            <div class="form-row">
+              <label for="existing_amount">Current amount:</label>
+              <input type="number" id="existing_amount" name="existing_amount" placeholder="e.g. 0.05" min="0">
+            </div>
+
+            <div class="form-row">
+              <label for="existing_acb">Average cost (€):</label>
+              <input type="number" id="existing_acb" name="existing_acb" placeholder="e.g. 35000" min="0">
+            </div>
+          </div>
+
+          <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-primary" type="submit">Add</button>
+            <a href="/" class="btn">Back</a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+    <!-- Existing strategies -->
+    {% if strategies %}
+    <div>
+      <div class="card">
+        <h3>Existing Strategies</h3>
+        <p class="card-desc">Edit thresholds, amounts or exchange per strategy.</p>
+
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>ID</th>
+              <th>Symbol</th>
+              <th>Timeframe</th>
+              <th>Exchange</th>
+              <th class="numeric">Drop %</th>
+              <th class="numeric">Rise %</th>
+              <th class="numeric">Buy (€)</th>
+              <th class="numeric">Sell (€)</th>
+              <th class="numeric">Allocated (€)</th>
+              <th class="numeric">Enabled</th>
+              <th class="numeric">Actions</th>
+            </tr>
+
+            {% for s in strategies %}
+            <tr id="row-{{ s.id }}">
+              <td>{{ s.id }}</td>
+              <td>{{ s.symbol }}</td>
+              <td>{{ s.timeframe }}</td>
+              <td>{{ s.exchange or 'kraken' }}</td>
+              <td class="numeric">{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
+              <td class="numeric">{{ "%.2f"|format(s.rise_trigger) }}</td>
+              <td class="numeric">{{ "%.2f"|format(s.buy_amount_eur) }}</td>
+              <td class="numeric">{{ "%.2f"|format(s.sell_amount_eur) }}</td>
+              <td class="numeric">{{ "%.2f"|format(s.allocated_eur) }}</td>
+              <td class="numeric">{% if s.enabled %}✅{% else %}❌{% endif %}</td>
+              <td class="actions">
+                <div class="action-buttons">
+                  <button class="btn btn-small" type="button" onclick="toggleEdit({{ s.id }})">Edit</button>
+                  <form method="post" action="/strategies/delete/{{ s.id }}" style="display:inline">
+                    <button class="btn btn-danger btn-small" type="submit" onclick="return confirm('Delete this strategy?')">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Inline edit -->
+            <tr id="edit-row-{{ s.id }}" style="display:none;">
+              <form method="post" action="/strategies/update/{{ s.id }}">
+                <td>{{ s.id }}</td>
+
+                <td>
+                  <select name="symbol" required>
+                    {% for sym in symbols %}
+                      <option value="{{ sym }}" {% if s.symbol == sym %}selected{% endif %}>
+                        {{ sym[:-3] }}/EUR
+                      </option>
                     {% endfor %}
-                    
-                </tbody>
-            </table>
-            
+                  </select>
+                </td>
+
+                <td>
+                  <select name="timeframe">
+                    <option value="1w" {% if s.timeframe == '1w' %}selected{% endif %}>1 week</option>
+                    <option value="1d" {% if s.timeframe == '1d' %}selected{% endif %}>1 day</option>
+                    <option value="6h" {% if s.timeframe == '6h' %}selected{% endif %}>6 hours</option>
+                    <option value="4h" {% if s.timeframe == '4h' %}selected{% endif %}>4 hours</option>
+                    <option value="1h" {% if s.timeframe == '1h' %}selected{% endif %}>1 hour</option>
+                  </select>
+                </td>
+
+                <td>
+                  <select name="exchange">
+                    <option value="bitvavo" {% if s.exchange == 'bitvavo' %}selected{% endif %}>Bitvavo</option>
+                    <option value="kraken" {% if s.exchange == 'kraken' %}selected{% endif %}>Kraken</option>
+                  </select>
+                </td>
+
+                <td><input type="number" name="drop_trigger" value="{{ abs(s.drop_trigger) }}" min="0"></td>
+                <td><input type="number" name="rise_trigger" value="{{ s.rise_trigger }}" min="0"></td>
+                <td><input type="number" name="buy_amount_eur" value="{{ s.buy_amount_eur }}" min="0"></td>
+                <td><input type="number" name="sell_amount_eur" value="{{ s.sell_amount_eur }}" min="0"></td>
+                <td><input type="number" name="allocated_eur" value="{{ s.allocated_eur }}" min="0"></td>
+
+                <td>
+                  <label style="color:var(--muted); font-size:12px;">
+                    <input type="checkbox" name="enabled" value="1" {% if s.enabled %}checked{% endif %}>
+                    Enabled
+                  </label>
+                </td>
+
+                <td class="actions">
+                  <div class="action-buttons">
+                    <button class="btn btn-primary btn-small" type="submit">Save</button>
+                    <button class="btn btn-small" type="button" onclick="toggleEdit({{ s.id }})">Cancel</button>
+                  </div>
+                </td>
+              </form>
+            </tr>
+
+            {% endfor %}
+
+          </table>
         </div>
-        
-        <!-- ────────────────────────────────────────────── -->
-        <!-- ADD STRATEGY MODAL -->
-        <!-- ────────────────────────────────────────────── -->
-        <div
-            id="add_modal"
-            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            >
-            <div class="bg-[#111A33] border border-[#1B2238] rounded-xl w-full max-w-lg p-6 shadow-xl">
-                
-                <h2 class="text-xl font-semibold text-[#D4A64E] mb-4">
-                    Create New Strategy
-                </h2>
-                
-                <form method="post" action="/strategies/add" class="space-y-4">
-                    
-                    <!-- EXCHANGE FIRST -->
-                    <div>
-                        <label class="block text-sm mb-1">Exchange</label>
-                        <select name="exchange" id="add_exchange"
-                            onchange="onAddExchangeChange(this.value)"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-                            <option value="">Select exchange</option>
-                            <option value="bitvavo">bitvavo</option>
-                            <option value="kraken">kraken</option>
-                        </select>
-                    </div>
-                    
-                    <!-- SYMBOL (DYNAMIC) -->
-                    <div>
-                        <label class="block text-sm mb-1">Symbol</label>
-                        <select name="symbol" id="add_symbol"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"
-                            disabled>
-                            <option>Select exchange first</option>
-                        </select>
-                    </div>
-                    
-                    <!-- TIMEFRAME -->
-                    <div>
-                        <label class="block text-sm mb-1">Timeframe</label>
-                        <select name="timeframe"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-                            <option value="1h">1h</option>
-                            <option value="4h">4h</option>
-                            <option value="1d">1d</option>
-                            <option value="1w">1w</option>
-                        </select>
-                    </div>
-                    
-                    <!-- TRIGGERS -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm mb-1">% Drop Trigger</label>
-                            <input name="drop_pct" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm mb-1">% Rise Trigger</label>
-                            <input name="rise_pct" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-                        </div>
-                    </div>
-                    
-                    <!-- BUY & SELL -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm mb-1">Buy €</label>
-                            <input name="buy_amount_eur" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm mb-1">Sell €</label>
-                            <input name="sell_amount_eur" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-                        </div>
-                    </div>
-                    
-                    <!-- CASH ALLOCATION -->
-                    <div>
-                        <label class="block text-sm mb-1">Cash Allocation (€)</label>
-                        <input name="allocated_eur" type="number" step="any"
-                        class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-                    </div>
-                    
-                    <!-- CURRENT POSITION CHECKBOX -->
-                    <div class="flex items-center gap-2">
-                        <input
-                            id="add_has_position"
-                            name="has_position"
-                            type="checkbox"
-                            class="w-4 h-4 rounded bg-[#0A0F1F] border-[#1B2238]"
-                            onclick="toggleAddPositionFields()">
-                            <label for="add_has_position" class="text-sm">
-                                I currently have a position
-                            </label>
-                    </div>
-                    
-                    <!-- CURRENT POSITION FIELDS -->
-                    <div id="add_position_fields" class="hidden grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm mb-1">Current Amount (crypto)</label>
-                            <input name="current_amount" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm mb-1">Average Cost Basis (€)</label>
-                            <input name="acb" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2" />
-                        </div>
-                    </div>
-                    
-                    <!-- BUTTONS -->
-                    <div class="flex justify-end gap-2 mt-4">
-                        <button type="button"
-                            onclick="closeAddModal()"
-                            class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-                            Cancel
-                        </button>
-                        
-                        <button type="submit"
-                            class="px-4 py-2 rounded-lg bg-[#D4A64E] text-[#0A0F1F] font-semibold hover:bg-[#c49745]">
-                            Save Strategy
-                        </button>
-                    </div>
-                    
-                </form>
-            </div>
-        </div>
-        
-        <!-- ────────────────────────────────────────────── -->
-        <!-- EDIT STRATEGY MODAL -->
-        <!-- ────────────────────────────────────────────── -->
-        <div
-            id="edit_modal"
-            class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-            >
-            <div class="bg-[#111A33] border border-[#1B2238] rounded-xl w-full max-w-lg p-6 shadow-xl">
-                
-                <h2 class="text-xl font-semibold text-[#D4A64E] mb-4">
-                    Edit Strategy
-                </h2>
-                
-                <form method="post" id="edit_form" class="space-y-4">
-                    
-                    <!-- EXCHANGE -->
-                    <div>
-                        <label class="block text-sm mb-1">Exchange</label>
-                        <select name="exchange" id="edit_exchange"
-                            onchange="onEditExchangeChange(this.value)"
-                            class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2">
-                            <option value="bitvavo">bitvavo</option>
-                            <option value="kraken">kraken</option>
-                        </select>
-                    </div>
-                    
-                    <!-- SYMBOL -->
-                    <div>
-                        <label class="block text-sm mb-1">Symbol</label>
-                        <select name="symbol" id="edit_symbol"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2">
-                        </select>
-                    </div>
-                    
-                    <!-- TIMEFRAME -->
-                    <div>
-                        <label class="block text-sm mb-1">Timeframe</label>
-                        <select name="timeframe" id="edit_timeframe"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2">
-                            <option value="1h">1h</option>
-                            <option value="4h">4h</option>
-                            <option value="1d">1d</option>
-                            <option value="1w">1w</option>
-                        </select>
-                    </div>
-                    
-                    <!-- DROP / RISE -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm mb-1">Drop %</label>
-                            <input id="edit_drop_pct" name="drop_pct" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm mb-1">Rise %</label>
-                            <input id="edit_rise_pct" name="rise_pct" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
-                        </div>
-                    </div>
-                    
-                    <!-- CASH ALLOCATION -->
-                    <div>
-                        <label class="block text-sm mb-1">Allocated Capital (€)</label>
-                        <input id="edit_allocated_eur" name="allocated_eur" type="number" step="any"
-                        class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
-                    </div>
-                    
-                    <!-- CURRENT POSITION CHECKBOX -->
-                    <div class="flex items-center gap-2">
-                        <input id="edit_has_position" type="checkbox"
-                        onclick="toggleEditPositionFields()"
-                        class="w-4 h-4 bg-[#0A0F1F] border-[#1B22338] rounded"/>
-                        <label class="text-sm">I currently have a position</label>
-                    </div>
-                    
-                    <!-- CURRENT POSITION FIELDS -->
-                    <div id="edit_position_fields" class="hidden grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm mb-1">Current Amount</label>
-                            <input id="edit_current_amount" name="current_amount" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm mb-1">ACB (€)</label>
-                            <input id="edit_acb" name="acb" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
-                        </div>
-                    </div>
-                    
-                    <!-- BUY / SELL -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm mb-1">Buy €</label>
-                            <input id="edit_buy_amount" name="buy_amount_eur" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm mb-1">Sell €</label>
-                            <input id="edit_sell_amount" name="sell_amount_eur" type="number" step="any"
-                            class="w-full bg-[#0A0F1F] border border-[#1B22338] rounded-lg p-2"/>
-                        </div>
-                    </div>
-                    
-                    <!-- BUTTONS -->
-                    <div class="flex justify-end gap-2 mt-4">
-                        <button type="button"
-                            onclick="closeEditModal()"
-                            class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-                            Cancel
-                        </button>
-                        
-                        <button type="submit"
-                            class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-                            Save Changes
-                        </button>
-                    </div>
-                    
-                </form>
-                
-            </div>
-        </div>
-        
-        
-        <!-- ────────────────────────────────────────────── -->
-        <!-- JAVASCRIPT -->
-        <!-- ────────────────────────────────────────────── -->
-        
-        <script>
-            
-            /* --------------------------------------
-             ADD STRATEGY MODAL
-             --------------------------------------*/
-            function openAddModal() {
-                document.getElementById("add_modal").classList.remove("hidden");
-            }
-            
-            function closeAddModal() {
-                document.getElementById("add_modal").classList.add("hidden");
-            }
-            
-            function toggleAddPositionFields() {
-                const checked = document.getElementById("add_has_position").checked;
-                document.getElementById("add_position_fields").classList.toggle("hidden", !checked);
-            }
-            
-            
-            /* --------------------------------------
-             EDIT STRATEGY MODAL
-             --------------------------------------*/
-            function openEditModal(id) {
-                
-                fetch(`/strategies/get/${id}`)
-                .then(r => r.json())
-                .then(s => {
-                    
-                    // Set form action
-                    document.getElementById("edit_form").action =
-                    `/strategies/update/${id}`;
-                    
-                    // Exchange
-                    document.getElementById("edit_exchange").value = s.exchange;
-                    
-                    // Load symbols for this exchange, then set selected symbol
-                    onEditExchangeChange(
-                                         s.exchange,
-                                         () => { document.getElementById("edit_symbol").value = s.symbol; }
-                                         );
-                                         
-                                         // Basic fields
-                                         document.getElementById("edit_timeframe").value = s.timeframe;
-                                         document.getElementById("edit_drop_pct").value = s.drop_pct;
-                                         document.getElementById("edit_rise_pct").value = s.rise_pct;
-                                         document.getElementById("edit_allocated_eur").value = s.allocated_eur;
-                                         
-                                         document.getElementById("edit_buy_amount").value = s.buy_amount_eur;
-                                         document.getElementById("edit_sell_amount").value = s.sell_amount_eur;
-                                         
-                                         // Current position
-                                         if (s.current_amount !== null) {
-                                             document.getElementById("edit_has_position").checked = true;
-                                             document.getElementById("edit_position_fields").classList.remove("hidden");
-                                             document.getElementById("edit_current_amount").value = s.current_amount;
-                                             document.getElementById("edit_acb").value = s.acb;
-                                         } else {
-                                             document.getElementById("edit_has_position").checked = false;
-                                             document.getElementById("edit_position_fields").classList.add("hidden");
-                                         }
-                                         
-                                         document.getElementById("edit_modal").classList.remove("hidden");
-                });
-            }
-            
-            function closeEditModal() {
-                document.getElementById("edit_modal").classList.add("hidden");
-            }
-            
-            function toggleEditPositionFields() {
-                const checked = document.getElementById("edit_has_position").checked;
-                document.getElementById("edit_position_fields").classList.toggle("hidden", !checked);
-            }
-            
-            
-            /* --------------------------------------
-             SYMBOL LOADING (shared with index.html)
-             --------------------------------------*/
-            
-            const STATIC_SYMBOLS = {
-                bitvavo: ["BTCEUR", "ETHEUR", "SOLEUR"],
-                kraken:  ["BTCEUR", "ETHEUR", "SOLEUR"],
-            };
-            
-            function populateDynamicSymbols(selectEl, symbols) {
-                selectEl.innerHTML = "";
-                
-                if (!symbols || symbols.length === 0) {
-                    const opt = document.createElement("option");
-                    opt.textContent = "No symbols available";
-                    selectEl.appendChild(opt);
-                    selectEl.disabled = true;
-                    return;
-                }
-                
-                const placeholder = document.createElement("option");
-                placeholder.value = "";
-                placeholder.textContent = "Select symbol";
-                selectEl.appendChild(placeholder);
-                
-                symbols.forEach(sym => {
-                    const opt = document.createElement("option");
-                    opt.value = sym;
-                    opt.textContent = sym;
-                    selectEl.appendChild(opt);
-                });
-                
-                selectEl.disabled = false;
-            }
-            
-            
-            /* -- Add Modal symbol loader -- */
-            function onAddExchangeChange(exchange) {
-                const sel = document.getElementById("add_symbol");
-                
-                if (!exchange) {
-                    sel.innerHTML = "<option>Select exchange first</option>";
-                    sel.disabled = true;
-                    return;
-                }
-                
-                sel.disabled = true;
-                sel.innerHTML = "<option>Loading…</option>";
-                
-                fetch("/api/symbols?exchange=" + encodeURIComponent(exchange))
-                .then(r => r.json())
-                .then(data => {
-                    const symbols = data.symbols || data;
-                    populateDynamicSymbols(sel, symbols);
-                })
-                .catch(() => populateDynamicSymbols(sel, STATIC_SYMBOLS[exchange]));
-            }
-            
-            
-            /* -- Edit Modal symbol loader -- */
-            function onEditExchangeChange(exchange, callback=null) {
-                const sel = document.getElementById("edit_symbol");
-                
-                if (!exchange) {
-                    sel.innerHTML = "<option>Select exchange first</option>";
-                    sel.disabled = true;
-                    return;
-                }
-                
-                sel.disabled = true;
-                sel.innerHTML = "<option>Loading…</option>";
-                
-                fetch("/api/symbols?exchange=" + encodeURIComponent(exchange))
-                .then(r => r.json())
-                .then(data => {
-                    const symbols = data.symbols || data;
-                    populateDynamicSymbols(sel, symbols);
-                    if (callback) callback();
-                })
-                .catch(() => {
-                    populateDynamicSymbols(sel, STATIC_SYMBOLS[exchange]);
-                    if (callback) callback();
-                });
-            }
-            
-        </script>
-        
-    </body>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+</body>
 </html>
+

@@ -1,261 +1,409 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Aurono — Settings</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <title>Aurono Settings</title>
 
-  <script>
-    function toggleEditRow(id) {
-      const row = document.getElementById("edit-row-" + id);
-      row.classList.toggle("hidden");
+  <style>
+    :root {
+      --aurono-bg: #020617;
+      --aurono-bg-card: #0a0f1f;
+      --aurono-border: rgba(148,163,184,0.35);
+      --aurono-gold: #facc15;
+      --aurono-gold-soft: #fbbf24;
+      --aurono-text: #e5e7eb;
+      --aurono-muted: #94a3b8;
+      --success: #22c55e;
+      --danger: #ef4444;
     }
-    function toggleAddForm() {
-      const form = document.getElementById("add-form");
-      form.classList.toggle("hidden");
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top, #0a1227 0, #020617 60%);
+      color: var(--aurono-text);
+      min-height: 100vh;
     }
-  </script>
+
+    /* TOPBAR */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 26px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .brand {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--aurono-gold);
+      text-transform: uppercase;
+    }
+
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    nav a {
+      padding: 6px 12px;
+      font-size: 14px;
+      text-decoration: none;
+      border-radius: 12px;
+      color: var(--aurono-muted);
+      border: 1px solid transparent;
+      transition: .15s ease;
+    }
+
+    nav a:hover {
+      color: var(--aurono-text);
+      border-color: rgba(148,163,184,0.4);
+      background: rgba(255,255,255,0.03);
+    }
+
+    nav a.active {
+      border-color: rgba(250,204,21,0.8);
+      color: var(--aurono-gold);
+      background: rgba(250,204,21,0.12);
+    }
+
+    /* HEADINGS */
+    h1 {
+      margin: 0 0 6px 0;
+      font-size: 26px;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin: 0 0 18px 0;
+      font-size: 14px;
+      color: var(--aurono-muted);
+    }
+
+    /* LAYOUT */
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1.2fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* CARD */
+    .card {
+      background: var(--aurono-bg-card);
+      border: 1px solid var(--aurono-border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+    }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .card-sub {
+      font-size: 13px;
+      color: var(--aurono-muted);
+      margin-bottom: 14px;
+    }
+
+    /* MESSAGES */
+    .msg {
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      border-left: 4px solid transparent;
+    }
+
+    .msg-success {
+      border-color: var(--success);
+      background: rgba(34,197,94,0.10);
+      color: #bbf7d0;
+    }
+
+    .msg-error {
+      border-color: var(--danger);
+      background: rgba(239,68,68,0.10);
+      color: #fecaca;
+    }
+
+    /* TABLE */
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      padding: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 11px;
+      color: var(--aurono-muted);
+      border-bottom: 1px solid var(--aurono-border);
+    }
+
+    td {
+      padding: 8px;
+      border-bottom: 1px solid var(--aurono-border);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .tag {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid var(--aurono-border);
+      color: var(--aurono-muted);
+    }
+
+    .mono {
+      font-family: Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    @media (max-width: 500px) {
+      .actions {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    /* BUTTONS */
+    .btn {
+      padding: 6px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(148,163,184,0.4);
+      color: var(--aurono-text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: .15s ease;
+    }
+
+    .btn:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
+    .btn-primary {
+      border-color: rgba(250,204,21,0.9);
+      color: var(--aurono-gold-soft);
+      background: rgba(250,204,21,0.15);
+    }
+
+    .btn-danger {
+      border-color: rgba(239,68,68,0.8);
+      color: #fecaca;
+      background: rgba(127,29,29,0.4);
+    }
+
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    /* FORMS */
+    .field {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: var(--aurono-muted);
+      margin-bottom: 4px;
+    }
+
+    .field input,
+    .field select {
+      padding: 8px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--aurono-border);
+      color: var(--aurono-text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .edit-row {
+      display: none;
+      background: rgba(255,255,255,0.04);
+    }
+
+  </style>
 </head>
 
-<body class="min-h-screen bg-[#0A0F1F] text-[#F2F4F8] px-4 sm:px-8 py-6">
+<body>
 
-  <!-- Header -->
-  <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-8">
-    <h1 class="text-2xl font-semibold tracking-tight text-[#D4A64E] mb-4 sm:mb-0">
-      Settings
-    </h1>
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">Aurono</div>
+
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/strategies">Strategies</a>
+      <a href="/activity">Activity</a>
+      <a class="active" href="/settings">Settings</a>
+    </nav>
   </div>
 
-  <!-- Navigation -->
-  <div class="flex flex-wrap gap-4 mb-10 text-[#F2F4F8] text-sm sm:text-base">
-    <a href="/" class="hover:text-[#D4A64E]">Dashboard</a>
-    <a href="/strategies" class="hover:text-[#D4A64E]">Strategies</a>
-    <a href="/settings" class="font-semibold text-[#D4A64E]">Settings</a>
-    <a href="/activity" class="hover:text-[#D4A64E]">Activity</a>
-  </div>
+  <!-- PAGE TITLE -->
+  <h1>Settings</h1>
+  <div class="subtitle">Manage encrypted API credentials for your exchanges.</div>
 
-  <!-- CONTENT CARD -->
-  <div class="rounded-xl bg-[#111A33] border border-[#1B2238] p-4 sm:p-6 shadow-sm max-w-4xl mx-auto">
+  <!-- MESSAGES -->
+  {% if message %}
+    <div class="msg {% if message_type=='success' %}msg-success{% else %}msg-error{% endif %}">
+      {{ message }}
+    </div>
+  {% endif %}
 
-    <h2 class="text-lg font-semibold text-[#D4A64E] mb-4">
-      Exchange API Credentials
-    </h2>
+  <!-- MAIN GRID -->
+  <div class="grid">
 
-    {% if message %}
-      <div class="p-3 rounded-lg mb-4 text-sm
-                  {% if message_type == 'success' %}
-                    bg-green-200 text-green-900 border border-green-500
-                  {% else %}
-                    bg-red-200 text-red-900 border border-red-500
-                  {% endif %}">
-        {{ message }}
+    <!-- LEFT CARD -->
+    <div class="card">
+      <div class="card-title">Stored Credentials</div>
+      <div class="card-sub">Encrypted locally on this device.</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Exchange</th>
+              <th>Key</th>
+              <th>Secret</th>
+              <th>Created</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% if credentials %}
+              {% for c in credentials %}
+                <tr>
+                  <td><span class="tag">{{ c.exchange|capitalize }}</span></td>
+                  <td class="mono">{{ c.api_key_masked }}</td>
+                  <td class="mono">{{ c.api_secret_masked }}</td>
+                  <td>{{ c.created_at }}</td>
+                  <td>{{ c.updated_at }}</td>
+
+                  <td>
+                    <div class="actions">
+                      <form action="/settings/test/{{ c.id }}" method="post">
+                        <button class="btn btn-small" type="submit">Test</button>
+                      </form>
+
+                      <button class="btn btn-small" onclick="toggleEdit({{ c.id }})">Edit</button>
+
+                      <form action="/settings/delete/{{ c.id }}" method="post"
+                            onsubmit="return confirm('Delete credentials for {{ c.exchange }}?');">
+                        <button class="btn btn-danger btn-small" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- EDIT ROW -->
+                <tr id="edit-{{ c.id }}" class="edit-row">
+                  <td colspan="6">
+                    <form action="/settings/update/{{ c.id }}" method="post" style="padding: 12px;">
+                      <div class="field">
+                        <label>New API key</label>
+                        <input type="text" name="api_key" placeholder="Leave empty to keep">
+                      </div>
+
+                      <div class="field">
+                        <label>New API secret</label>
+                        <input type="password" name="api_secret" placeholder="Leave empty to keep">
+                      </div>
+
+                      <button class="btn btn-primary btn-small" type="submit">Save</button>
+                      <button class="btn btn-small" type="button" onclick="toggleEdit({{ c.id }})">Cancel</button>
+                    </form>
+                  </td>
+                </tr>
+
+              {% endfor %}
+
+            {% else %}
+              <tr><td colspan="6" style="padding:14px; color:var(--aurono-muted);">No credentials stored.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
       </div>
-    {% endif %}
-
-    <p class="text-sm text-[#A8B2C3] mb-4">
-      API keys are stored locally on your Aurono device and encrypted.
-      You may store credentials for multiple exchanges.
-    </p>
-
-    <!-- TABLE (desktop) -->
-    <div class="hidden md:block overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-        <tr class="bg-[#1B2238] text-left">
-          <th class="px-4 py-3">Exchange</th>
-          <th class="px-4 py-3">API Key</th>
-          <th class="px-4 py-3">API Secret</th>
-          <th class="px-4 py-3">Created</th>
-          <th class="px-4 py-3">Updated</th>
-          <th class="px-4 py-3 text-center">Actions</th>
-        </tr>
-        </thead>
-
-        <tbody>
-        {% for c in credentials %}
-          <tr class="border-b border-[#1B2238]">
-            <td class="px-4 py-3">{{ c.exchange|capitalize }}</td>
-            <td class="px-4 py-3">{{ c.api_key_masked }}</td>
-            <td class="px-4 py-3">{{ c.api_secret_masked }}</td>
-            <td class="px-4 py-3">{{ c.created_at }}</td>
-            <td class="px-4 py-3">{{ c.updated_at }}</td>
-
-            <td class="px-4 py-3">
-              <div class="flex justify-center gap-2">
-
-                <form method="post" action="/settings/test/{{ c.id }}">
-                  <button class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded font-semibold hover:bg-[#c49745]">Test</button>
-                </form>
-
-                <button onclick="toggleEditRow({{ c.id }})"
-                        class="px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded font-semibold hover:bg-[#c49745]">Edit</button>
-
-                <form method="post" action="/settings/delete/{{ c.id }}"
-                      onsubmit="return confirm('Delete credentials for {{ c.exchange }}?');">
-                  <button class="px-3 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-700">Delete</button>
-                </form>
-
-              </div>
-            </td>
-          </tr>
-
-          <!-- Inline Edit -->
-          <tr id="edit-row-{{ c.id }}" class="hidden bg-[#0A0F1F] border-t border-[#1B2238]">
-            <td colspan="6" class="px-4 py-4">
-              <form method="post" action="/settings/update/{{ c.id }}" class="grid sm:grid-cols-2 gap-4">
-
-                <div>
-                  <label class="block text-sm mb-1">New API Key</label>
-                  <input type="text" name="api_key"
-                         placeholder="Leave empty to keep current"
-                         class="w-full bg-[#111A33] border border-[#1B2238] rounded-lg p-2"/>
-                </div>
-
-                <div>
-                  <label class="block text-sm mb-1">New API Secret</label>
-                  <input type="text" name="api_secret"
-                         placeholder="Leave empty to keep current"
-                         class="w-full bg-[#111A33] border border-[#1B2238] rounded-lg p-2"/>
-                </div>
-
-                <div class="flex gap-2 sm:col-span-2">
-                  <button class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-                    Save
-                  </button>
-
-                  <button type="button"
-                          onclick="toggleEditRow({{ c.id }})"
-                          class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-                    Cancel
-                  </button>
-                </div>
-
-              </form>
-            </td>
-          </tr>
-
-        {% endfor %}
-        </tbody>
-      </table>
     </div>
 
-    <!-- MOBILE CARD VERSION -->
-    <div class="md:hidden space-y-4">
-      {% for c in credentials %}
-        <div class="rounded-lg border border-[#1B2238] bg-[#0A0F1F] p-4">
+    <!-- RIGHT CARD (ADD) -->
+    <div class="card">
+      <div class="card-title">Add Credentials</div>
 
-          <div class="flex justify-between mb-2">
-            <h3 class="font-semibold text-[#D4A64E]">{{ c.exchange|capitalize }}</h3>
-            <button onclick="toggleEditRow({{ c.id }})"
-                    class="text-sm bg-[#D4A64E] text-[#0A0F1F] px-2 py-1 rounded hover:bg-[#c49745]">
-              Edit
-            </button>
-          </div>
+      <form action="/settings/add" method="post">
 
-          <p class="text-sm"><span class="text-[#A8B2C3]">API Key:</span> {{ c.api_key_masked }}</p>
-          <p class="text-sm"><span class="text-[#A8B2C3]">Secret:</span> {{ c.api_secret_masked }}</p>
-          <p class="text-sm"><span class="text-[#A8B2C3]">Created:</span> {{ c.created_at }}</p>
-          <p class="text-sm"><span class="text-[#A8B2C3]">Updated:</span> {{ c.updated_at }}</p>
-
-          <div class="flex flex-col gap-2 mt-3">
-            <form method="post" action="/settings/test/{{ c.id }}">
-              <button class="w-full px-3 py-1 bg-[#D4A64E] text-[#0A0F1F] rounded font-semibold hover:bg-[#c49745]">
-                Test
-              </button>
-            </form>
-
-            <form method="post" action="/settings/delete/{{ c.id }}"
-                  onsubmit="return confirm('Delete credentials for {{ c.exchange }}?');">
-              <button class="w-full px-3 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-700">
-                Delete
-              </button>
-            </form>
-          </div>
-
-        </div>
-
-        <!-- Inline Mobile Edit Form -->
-        <div id="edit-row-{{ c.id }}" class="hidden bg-[#111A33] border border-[#1B2238] rounded-lg p-4">
-          <form method="post" action="/settings/update/{{ c.id }}" class="space-y-3">
-
-            <div>
-              <label class="block text-sm mb-1">New API Key</label>
-              <input type="text" name="api_key"
-                     placeholder="Leave empty to keep current"
-                     class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
-            </div>
-
-            <div>
-              <label class="block text-sm mb-1">New API Secret</label>
-              <input type="text" name="api_secret"
-                     placeholder="Leave empty to keep current"
-                     class="w-full bg-[#0A0F1F] border border-[#1B2238] rounded-lg p-2"/>
-            </div>
-
-            <div class="flex flex-col sm:flex-row gap-2">
-              <button class="w-full sm:w-auto px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-                Save
-              </button>
-
-              <button type="button" onclick="toggleEditRow({{ c.id }})"
-                      class="w-full sm:w-auto px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-                Cancel
-              </button>
-            </div>
-
-          </form>
-        </div>
-
-      {% endfor %}
-    </div>
-
-    <!-- ADD CREDENTIALS BUTTON -->
-    <button
-      class="mt-6 px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]"
-      onclick="toggleAddForm()">
-      + Add Credentials
-    </button>
-
-    <!-- ADD FORM -->
-    <div id="add-form" class="hidden mt-6 border-t border-[#1B2238] pt-6">
-      <form method="post" action="/settings/add" class="grid sm:grid-cols-2 gap-4">
-
-        <div class="sm:col-span-2">
-          <label class="block text-sm mb-1">Exchange</label>
-          <select name="exchange" required
-                  class="w-full bg-[#111A33] border border-[#1B2238] rounded-lg p-2">
+        <div class="field">
+          <label>Exchange</label>
+          <select name="exchange" required>
+            <option value="">Choose…</option>
             <option value="kraken">Kraken</option>
             <option value="bitvavo">Bitvavo</option>
           </select>
         </div>
 
-        <div>
-          <label class="block text-sm mb-1">API Key</label>
-          <input type="text" name="api_key" required
-                 class="w-full bg-[#111A33] border border-[#1B2238] rounded-lg p-2"/>
+        <div class="field">
+          <label>API key</label>
+          <input type="text" name="api_key" required>
         </div>
 
-        <div>
-          <label class="block text-sm mb-1">API Secret</label>
-          <input type="text" name="api_secret" required
-                 class="w-full bg-[#111A33] border border-[#1B2238] rounded-lg p-2"/>
+        <div class="field">
+          <label>API secret</label>
+          <input type="password" name="api_secret" required>
         </div>
 
-        <div class="flex gap-2 sm:col-span-2">
-          <button class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-            Save
-          </button>
-          <button type="button" onclick="toggleAddForm()"
-                  class="px-4 py-2 bg-[#D4A64E] text-[#0A0F1F] rounded-lg font-semibold hover:bg-[#c49745]">
-            Cancel
-          </button>
-        </div>
+        <button class="btn btn-primary" type="submit">Save</button>
 
       </form>
     </div>
 
   </div>
+
+  <script>
+    function toggleEdit(id) {
+      const row = document.getElementById("edit-" + id);
+      row.style.display = (row.style.display === "table-row") ? "none" : "table-row";
+    }
+  </script>
+
 </body>
 </html>
 
