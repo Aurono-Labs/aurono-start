@@ -87,15 +87,15 @@
       color: var(--aurono-muted);
     }
 
-    /* GRID */
-    .grid {
+    /* MAIN GRID */
+    .grid-main {
       display: grid;
-      grid-template-columns: 1.4fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 20px;
     }
 
     @media (max-width: 900px) {
-      .grid {
+      .grid-main {
         grid-template-columns: 1fr;
       }
     }
@@ -183,7 +183,7 @@
       font-size: 11px;
     }
 
-    /* FORM FIELDS */
+    /* FORM */
     .field {
       display: flex;
       flex-direction: column;
@@ -207,11 +207,6 @@
       outline: none;
     }
 
-    .actions {
-      display: flex;
-      gap: 6px;
-    }
-
     .edit-row {
       display: none;
       background: rgba(255,255,255,0.04);
@@ -227,7 +222,6 @@
     function toggleExistingFields() {
       const chk = document.getElementById('import_existing');
       const div = document.getElementById('existing_fields');
-      if (!chk || !div) return;
       div.style.display = chk.checked ? 'block' : 'none';
     }
 
@@ -260,84 +254,97 @@
     </nav>
   </div>
 
-  <!-- TITLE -->
+  <!-- PAGE TITLE -->
   <h1>Strategies</h1>
   <div class="subtitle">Configure and manage automated trading strategies.</div>
-  
-  <!-- PAGE CONTENT -->
-  <div class="grid">
 
-    <!-- CREATE STRATEGY (FULL WIDTH) -->
-    <div class="card" style="grid-column: 1 / -1;">
+
+  <!-- MAIN LAYOUT -->
+  <div class="grid-main">
+
+    <!-- CREATE STRATEGY (LEFT COLUMN) -->
+    <div class="card">
       <div class="card-title">Create New Strategy</div>
       <div class="card-sub">Select exchange, symbol, timeframe and thresholds.</div>
 
-      <!-- Exchange selector -->
-      <form id="exchangeForm" method="post" action="/strategies/set-exchange">
+      <!-- FORM -->
+      <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
+
+        <!-- Exchange selector -->
         <div class="field">
           <label>Exchange</label>
-          <select name="exchange" id="exchange"
-                  onchange="document.getElementById('exchangeForm').submit()">
+          <select id="exchangeSelect" name="exchange" required>
             <option value="bitvavo" {% if current_exchange=='bitvavo' %}selected{% endif %}>Bitvavo</option>
             <option value="kraken" {% if current_exchange=='kraken' %}selected{% endif %}>Kraken</option>
           </select>
         </div>
-      </form>
 
-      <!-- Create form -->
-      <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
-        <input type="hidden" name="exchange" value="{{ current_exchange }}">
-
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
-
-          <div class="field">
-            <label>Symbol</label>
-            <select id="symbol" name="symbol" required>
-              {% for sym in symbols %}
-              <option value="{{ sym }}">{{ sym[:-3] }}/EUR</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Timeframe</label>
-            <select id="timeframe" name="timeframe">
-              <option value="1h">1h</option>
-              <option value="4h">4h</option>
-              <option value="6h">6h</option>
-              <option value="1d">1d</option>
-              <option value="1w">1w</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label>Drop %</label>
-            <input type="number" id="drop_pct" name="drop_pct" min="0" value="2.5" required>
-          </div>
-
-          <div class="field">
-            <label>Rise %</label>
-            <input type="number" id="rise_pct" name="rise_pct" min="0" value="2.1" required>
-          </div>
-
-          <div class="field">
-            <label>Buy amount (€)</label>
-            <input type="number" id="buy_amount_eur" name="buy_amount_eur" value="20" step="any">
-          </div>
-
-          <div class="field">
-            <label>Sell amount (€)</label>
-            <input type="number" id="sell_amount_eur" name="sell_amount_eur" value="20" step="any">
-          </div>
-
-          <div class="field">
-            <label>Allocated capital (€)</label>
-            <input type="number" id="allocated_eur" name="allocated_eur" value="100" step="any" required>
-          </div>
-
+        <!-- Symbol dropdown -->
+        <div class="field">
+          <label>Symbol</label>
+          <select id="symbol" name="symbol" required>
+            {% for sym in symbols %}
+            <option value="{{ sym }}">{{ sym[:-3] }}/EUR</option>
+            {% endfor %}
+          </select>
         </div>
 
-        <div class="field" style="margin-top: 8px;">
+        <script>
+        document.getElementById("exchangeSelect").addEventListener("change", function () {
+            const exchange = this.value;
+
+            fetch(`/strategies/symbols/${exchange}`)
+              .then(r => r.json())
+              .then(symbols => {
+                  const sel = document.getElementById("symbol");
+                  sel.innerHTML = "";
+                  symbols.forEach(sym => {
+                      const opt = document.createElement("option");
+                      opt.value = sym;
+                      opt.textContent = sym.slice(0, -3) + "/EUR";
+                      sel.appendChild(opt);
+                  });
+              });
+        });
+        </script>
+
+        <div class="field">
+          <label>Timeframe</label>
+          <select id="timeframe" name="timeframe">
+            <option value="1h">1h</option>
+            <option value="4h">4h</option>
+            <option value="6h">6h</option>
+            <option value="1d">1d</option>
+            <option value="1w">1w</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Drop %</label>
+          <input type="number" id="drop_pct" name="drop_pct" min="0" value="2.5" step="any" required>
+        </div>
+
+        <div class="field">
+          <label>Rise %</label>
+          <input type="number" id="rise_pct" name="rise_pct" min="0" value="2.1" step="any" required>
+        </div>
+
+        <div class="field">
+          <label>Buy amount (€)</label>
+          <input type="number" id="buy_amount_eur" name="buy_amount_eur" value="20" step="any" required>
+        </div>
+
+        <div class="field">
+          <label>Sell amount (€)</label>
+          <input type="number" id="sell_amount_eur" name="sell_amount_eur" value="20" step="any" required>
+        </div>
+
+        <div class="field">
+          <label>Allocated capital (€)</label>
+          <input type="number" id="allocated_eur" name="allocated_eur" value="100" step="any" required>
+        </div>
+
+        <div class="field">
           <label>
             <input type="checkbox" id="import_existing" name="import_existing" onchange="toggleExistingFields()">
             I already own this coin
@@ -345,7 +352,7 @@
         </div>
 
         <div id="existing_fields" style="display:none;">
-          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="grid-main" style="grid-template-columns: 1fr 1fr;">
             <div class="field">
               <label>Current amount</label>
               <input type="number" id="existing_amount" name="existing_amount" step="any">
@@ -363,7 +370,7 @@
     </div>
 
 
-    <!-- EXISTING STRATEGIES (FULL WIDTH) -->
+    <!-- EXISTING STRATEGIES (RIGHT COLUMN, FULL WIDTH BELOW) -->
     <div class="card" style="grid-column: 1 / -1;">
       <div class="card-title">Existing Strategies</div>
       <div class="card-sub">Edit thresholds, amounts or exchange per strategy.</div>
@@ -395,14 +402,7 @@
               <td>{% if s.enabled %}✅{% else %}❌{% endif %}</td>
 
               <td>
-                <div class="actions">
-                  <button class="btn btn-small" onclick="toggleEdit({{ s.id }})">Edit</button>
-
-                  <form action="/strategies/delete/{{ s.id }}" method="post"
-                        onsubmit="return confirm('Delete this strategy?');">
-                    <button class="btn btn-danger btn-small">Delete</button>
-                  </form>
-                </div>
+                <button class="btn btn-small" onclick="toggleEdit({{ s.id }})">Edit</button>
               </td>
             </tr>
 
@@ -411,7 +411,7 @@
               <td colspan="8">
                 <form method="post" action="/strategies/update/{{ s.id }}" style="padding:12px;">
 
-                  <div class="grid" style="grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:16px;">
+                  <div class="grid-main" style="grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:16px;">
 
                     <div class="field">
                       <label>Symbol</label>
@@ -488,8 +488,8 @@
           </tbody>
         </table>
       </div>
-    </div>
 
+    </div>
   </div>
 </body>
 </html>
