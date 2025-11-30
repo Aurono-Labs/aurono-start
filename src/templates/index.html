@@ -158,6 +158,20 @@ th.numeric { text-align: right; }
   body { padding: 16px; }
   table { font-size: 13px; }
 }
+    
+/* MODAL FIELD FIX */
+.modal-backdrop .field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
+}
+
+.modal-backdrop .field label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
 </style>
 </head>
 
@@ -496,24 +510,34 @@ document.querySelectorAll(".filters select").forEach(sel => {
 </div>
 
 <script>
+// Re-attach listener every time modal opens
 function openAddStrategyModal() {
-  document.getElementById("modal-add-strategy").style.display = "flex";
+  const box = document.getElementById("modal-add-strategy");
+  box.style.display = "flex";
+
+  const ex = document.getElementById("modal_exchange");
+  updateModalSymbols(ex.value);
+
+  ex.onchange = () => updateModalSymbols(ex.value);
 }
 
 function closeAddStrategyModal() {
   document.getElementById("modal-add-strategy").style.display = "none";
 }
 
-function validateAddStrategy(e) {
-  const ids = ["modal_drop_pct","modal_rise_pct"];
-  for (const id of ids) {
-    const val = document.getElementById(id).value;
-    if (parseFloat(val) < 0) {
-      alert("Values must be positive numbers.");
-      e.preventDefault();
-      return false;
-    }
-  }
+function updateModalSymbols(exchange) {
+  fetch(`/strategies/symbols/${exchange}`)
+    .then(r => r.json())
+    .then(symbols => {
+      const sel = document.getElementById("modal_symbol");
+      sel.innerHTML = "";
+      symbols.forEach(sym => {
+        const opt = document.createElement("option");
+        opt.value = sym;
+        opt.textContent = sym.slice(0, -3) + "/EUR";
+        sel.appendChild(opt);
+      });
+    });
 }
 </script>
 
