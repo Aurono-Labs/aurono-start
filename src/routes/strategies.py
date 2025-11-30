@@ -66,7 +66,8 @@ def add_strategy(
     allocated_eur: float = Form(...),
     import_existing: Optional[str] = Form(None),
     existing_amount: Optional[str] = Form(""),
-    existing_acb: Optional[str] = Form("")
+    existing_acb: Optional[str] = Form(""),
+    return_to: str = Form("strategies")
 ):
 
     exchange = exchange.lower()
