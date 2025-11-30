@@ -195,4 +195,44 @@ def delete_strategy(id: int):
     log_event(f"🗑 Deleted strategy {id}")
 
     return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
+    
+# -----------------------------------------------------------
+# GET RECENT TRADES OF A STRATEGY
+# -----------------------------------------------------------
+@router.get("/api/strategy/{symbol}/{timeframe}/{exchange}/trades")
+def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
+    """
+    Returns the last 10 trades for a specific strategy.
+    """
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT t.*
+        FROM trades t
+        JOIN strategies s ON t.strategy_id = s.id
+        WHERE s.symbol = ?
+          AND s.timeframe = ?
+          AND s.exchange = ?
+        ORDER BY t.timestamp DESC
+        LIMIT 10
+    """, (symbol, timeframe, exchange))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    return [
+        {
+            "timestamp": r["timestamp"],
+            "symbol": r["symbol"],
+            "side": r["side"],
+            "price": float(r["price"]),
+            "amount": float(r["amount"]),
+            "strategy_id": r["strategy_id"],
+        }
+        for r in rows
+    ]
+
 
