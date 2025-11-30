@@ -175,10 +175,17 @@ th.numeric { text-align: right; }
   </nav>
 </div>
 
-
 <!-- PAGE TITLE -->
 <h1>Dashboard</h1>
+<button class="btn" onclick="openAddStrategyModal()"
+        style="padding:8px 14px; border-radius:10px; background:rgba(255,255,255,0.05);
+               border:1px solid var(--border); color:var(--gold-soft); margin-bottom:16px;">
+  Add Strategy
+</button>
+
+
 <div class="subtitle">Portfolio status, positions overview, recent trades.</div>
+
 
 
 <!-- PORTFOLIO CARD -->
@@ -261,8 +268,12 @@ th.numeric { text-align: right; }
           data-symbol="{{ s.symbol }}"
           data-timeframe="{{ s.timeframe }}"
           data-exchange="{{ s.exchange }}">
-
-        <td>{{ s.symbol }} {{ s.timeframe }} ({{ s.exchange }})</td>
+        <td>
+          <span style="cursor:pointer; color:var(--gold-soft);"
+                onclick="openStrategyDetails('{{ s.symbol }}','{{ s.timeframe }}','{{ s.exchange }}')">
+            {{ s.symbol }} {{ s.timeframe }} ({{ s.exchange }})
+          </span>
+        </td>
         <td class="numeric">{{ "%.2f"|format(s.price) }}</td>
         <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
         <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
@@ -352,6 +363,213 @@ document.querySelectorAll(".filters select").forEach(sel => {
   sel.addEventListener("change", applyFilters);
 });
 </script>
+
+<!-- ADD STRATEGY MODAL -->
+<div id="modal-add-strategy" class="modal-backdrop" style="
+  position:fixed; inset:0; background:rgba(0,0,0,0.65);
+  display:none; align-items:center; justify-content:center; z-index:9999;">
+  
+  <div class="card" style="width:420px; max-width:90%; padding:22px;">
+    <h2 style="margin-top:0; color:var(--gold);">Add Strategy</h2>
+
+    <form method="post" action="/strategies/add" onsubmit="validateAddStrategy(event)">
+
+      <div class="field">
+        <label>Exchange</label>
+        <select id="modal_exchange" name="exchange" required>
+          <option value="bitvavo" {% if current_exchange=='bitvavo' %}selected{% endif %}>Bitvavo</option>
+          <option value="kraken" {% if current_exchange=='kraken' %}selected{% endif %}>Kraken</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Symbol</label>
+        <select id="modal_symbol" name="symbol" required>
+          {% for sym in symbols %}
+          <option value="{{ sym }}">{{ sym[:-3] }}/EUR</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <script>
+      document.getElementById("modal_exchange").addEventListener("change", function () {
+          const exchange = this.value;
+          fetch(`/strategies/symbols/${exchange}`)
+            .then(r => r.json())
+            .then(symbols => {
+                const sel = document.getElementById("modal_symbol");
+                sel.innerHTML = "";
+                symbols.forEach(sym => {
+                    const opt = document.createElement("option");
+                    opt.value = sym;
+                    opt.textContent = sym.slice(0, -3) + "/EUR";
+                    sel.appendChild(opt);
+                });
+            });
+      });
+      </script>
+
+      <div class="field">
+        <label>Timeframe</label>
+        <select name="timeframe">
+          <option value="1h">1h</option>
+          <option value="4h">4h</option>
+          <option value="6h">6h</option>
+          <option value="1d">1d</option>
+          <option value="1w">1w</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Drop %</label>
+        <input type="number" id="modal_drop_pct" name="drop_pct" value="2.5" step="any" required>
+      </div>
+
+      <div class="field">
+        <label>Rise %</label>
+        <input type="number" id="modal_rise_pct" name="rise_pct" value="2.1" step="any" required>
+      </div>
+
+      <div class="field">
+        <label>Buy amount (€)</label>
+        <input type="number" name="buy_amount_eur" value="20" step="any" required>
+      </div>
+
+      <div class="field">
+        <label>Sell amount (€)</label>
+        <input type="number" name="sell_amount_eur" value="20" step="any" required>
+      </div>
+
+      <div class="field">
+        <label>Allocated capital (€)</label>
+        <input type="number" name="allocated_eur" value="100" step="any" required>
+      </div>
+
+      <div class="field">
+        <label>
+          <input type="checkbox" id="modal_import_existing" name="import_existing"
+                 onchange="document.getElementById('modal_existing_fields').style.display =
+                           this.checked ? 'block' : 'none';">
+          I already own this coin
+        </label>
+      </div>
+
+      <div id="modal_existing_fields" style="display:none;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+
+          <div class="field">
+            <label>Current amount</label>
+            <input type="number" name="existing_amount" step="any">
+          </div>
+
+          <div class="field">
+            <label>Average cost (€)</label>
+            <input type="number" name="existing_acb" step="any">
+          </div>
+
+        </div>
+      </div>
+
+      <button class="btn btn-primary" type="submit" style="margin-top:12px;">Add Strategy</button>
+      <button type="button" class="btn" onclick="closeAddStrategyModal()" style="margin-left:8px;">Cancel</button>
+
+    </form>
+  </div>
+
+</div>
+
+<!-- STRATEGY DETAILS MODAL -->
+<div id="modal-strategy-details" class="modal-backdrop" style="
+  position:fixed; inset:0; background:rgba(0,0,0,0.65);
+  display:none; align-items:center; justify-content:center; z-index:9999;">
+
+  <div class="card" style="width:520px; max-width:95%; padding:22px;">
+    <h2 id="details-title" style="margin-top:0; color:var(--gold);">Strategy Trades</h2>
+
+    <div id="details-content" style="max-height:420px; overflow-y:auto;">
+      <p>Loading…</p>
+    </div>
+
+    <button class="btn" onclick="closeStrategyDetails()" style="margin-top:14px;">Close</button>
+  </div>
+
+</div>
+
+<script>
+function openAddStrategyModal() {
+  document.getElementById("modal-add-strategy").style.display = "flex";
+}
+
+function closeAddStrategyModal() {
+  document.getElementById("modal-add-strategy").style.display = "none";
+}
+
+function validateAddStrategy(e) {
+  const ids = ["modal_drop_pct","modal_rise_pct"];
+  for (const id of ids) {
+    const val = document.getElementById(id).value;
+    if (parseFloat(val) < 0) {
+      alert("Values must be positive numbers.");
+      e.preventDefault();
+      return false;
+    }
+  }
+}
+</script>
+
+<script>
+function openStrategyDetails(symbol, timeframe, exchange) {
+
+  const modal = document.getElementById("modal-strategy-details");
+  modal.style.display = "flex";
+
+  document.getElementById("details-title").textContent =
+    `${symbol} ${timeframe} (${exchange}) — Last 10 trades`;
+
+  const box = document.getElementById("details-content");
+  box.innerHTML = "<p>Loading…</p>";
+
+  const key = `${symbol}_${timeframe}_${exchange}`;
+
+  fetch(`/api/strategy/${symbol}/${timeframe}/${exchange}/trades`)
+    .then(r => r.json())
+    .then(trades => {
+      if (!trades.length) {
+        box.innerHTML = "<p>No trades found.</p>";
+        return;
+      }
+
+      let html = `
+        <table style="width:100%; font-size:13px; border-collapse:collapse;">
+          <tr>
+            <th style="text-align:left;">Time</th>
+            <th>Side</th>
+            <th class="numeric">Price</th>
+            <th class="numeric">Amount</th>
+          </tr>
+      `;
+
+      trades.slice(0,10).forEach(t => {
+        html += `
+          <tr>
+            <td>${t.timestamp.slice(0,16)}</td>
+            <td>${t.side.toUpperCase()}</td>
+            <td class="numeric">${parseFloat(t.price).toFixed(2)}</td>
+            <td class="numeric">${parseFloat(t.amount).toFixed(6)}</td>
+          </tr>`;
+      });
+
+      html += "</table>";
+
+      box.innerHTML = html;
+    });
+}
+
+function closeStrategyDetails() {
+  document.getElementById("modal-strategy-details").style.display = "none";
+}
+</script>
+
 
 </body>
 </html>
