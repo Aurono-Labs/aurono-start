@@ -557,7 +557,7 @@ function openStrategyDetails(symbol, timeframe, exchange) {
 
   const key = `${symbol}_${timeframe}_${exchange}`;
 
-  fetch(`/api/strategy/${symbol}/${timeframe}/${exchange}/trades`)
+  fetch(`/strategies/api/strategy/${symbol}/${timeframe}/${exchange}/trades`)
     .then(r => r.json())
     .then(trades => {
       if (!trades.length) {
