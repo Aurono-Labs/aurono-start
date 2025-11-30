@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 import sqlite3
 from typing import Optional
 
-from utils import root_path, _open_db, get_supported_pairs, current_config, log_event
+from utils import root_path, _open_db, get_supported_pairs, log_event
 
 templates = Jinja2Templates(directory=str(root_path("src", "templates")))
 templates.env.globals["abs"] = abs
@@ -20,17 +20,18 @@ def get_db():
 
 
 # -----------------------------------------------------------
-# LIST STRATEGIES
+# LIST STRATEGIES (DEFAULT: BITVAVO)
 # -----------------------------------------------------------
 @router.get("/")
-def list_strategies(request: Request):
+def list_strategies(request: Request, exchange: Optional[str] = None):
     db = get_db()
     rows = db.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
     db.close()
 
-    cfg = current_config()
-    current_exchange = cfg.get("exchange", "bitvavo")
+    # Default exchange = Bitvavo unless ?exchange=kraken is provided
+    current_exchange = (exchange or "bitvavo").lower()
 
+    # Get symbols for the exchange (EUR pairs)
     symbols = get_supported_pairs(current_exchange)
 
     return templates.TemplateResponse("strategies.html", {
@@ -42,7 +43,7 @@ def list_strategies(request: Request):
 
 
 # -----------------------------------------------------------
-# AJAX: GET SYMBOLS FOR SELECTED EXCHANGE
+# AJAX: GET EUR SYMBOLS FOR SELECTED EXCHANGE
 # -----------------------------------------------------------
 @router.get("/symbols/{exchange}")
 def ajax_symbols(exchange: str):
@@ -115,6 +116,9 @@ def add_strategy(
                 amount=Decimal(str(existing_amount_val)),
                 strategy_id=strategy_id
             )
+            log_event(
+                f"📥 Imported existing position {existing_amount_val} {symbol} @ {existing_acb_val}"
+            )
         except Exception as e:
             log_event(f"⚠️ Import existing position failed: {e}")
 
@@ -166,7 +170,7 @@ def update_strategy(
     db.commit()
     db.close()
 
-    log_event(f"📝 Updated strategy {id}")
+    log_event(f"📝 Updated strategy {id}: exchange={exchange}")
 
     return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
 
