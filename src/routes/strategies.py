@@ -123,8 +123,14 @@ def add_strategy(
             log_event(f"⚠️ Import existing position failed: {e}")
 
     log_event(f"🧩 Added strategy {symbol} {timeframe} on {exchange}")
-
-    return RedirectResponse("/strategies", status_code=303)
+    
+    # -------------------------
+    # Decide RETURN LOCATION
+    # -------------------------
+    if return_to == "index":
+        return RedirectResponse("/", status_code=303)
+    else:
+        return RedirectResponse("/strategies", status_code=303)
 
 
 # -----------------------------------------------------------
