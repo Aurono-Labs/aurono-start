@@ -1,284 +1,109 @@
-# src/report_builder.py
-
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any
-
-from trade_manager import TradeManager
-from utils import current_config, get_db_path
+import sqlite3
+from decimal import Decimal
+from datetime import datetime
+from utils import _open_db, current_config, to_decimal
 from exchange_factory import get_exchange
-from strategy_loader import load_strategies  # if you have this helper
-from portfolio import compute_portfolio_snapshot  # if you have this helper
-from log_manager import get_recent_alerts  # optional helper
-from report_validator import validate_weekly_report
-from report_validator import validate_daily_report
-
-from report_storage import (
-    save_daily_report_json,
-    save_weekly_report_json,
-    save_html_report,
-    cleanup_old_reports
-)
 
 
+# ------------------------------------------------------------
+# Load enabled strategies from DB
+# ------------------------------------------------------------
+def load_strategies_from_db():
+    conn = _open_db()
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, symbol, timeframe, exchange, allocated_eur FROM strategies WHERE enabled=1"
+    ).fetchall()
+    conn.close()
+    return rows
 
-def generate_daily_report() -> Dict[str, Any]:
-    """
-    Generates the structured Daily Report according to aurono.daily.report.schema.v1.
-    Returns a Python dict that can be JSON-serialized or rendered in UI/email.
-    """
 
-    now = datetime.now(timezone.utc)
-    tm = TradeManager(get_db_path())
-    cfg = current_config()
-    strategies = load_strategies()
+# ------------------------------------------------------------
+# Compute ACB, balance, and value for a single strategy
+# ------------------------------------------------------------
+def compute_strategy_stats(strategy):
+    sid = strategy["id"]
+    sym = strategy["symbol"]
+    tf = strategy["timeframe"]
+    exch = strategy["exchange"]
 
-    # ------------------------------------------------------------
-    # 1. SYSTEM STATUS
-    # ------------------------------------------------------------
-    exchanges_status = []
-    for ex_name in cfg["exchanges"].keys():
-        ex = get_exchange(ex_name)
+    exchange = get_exchange(exch)
+    price = float(exchange.get_ticker(sym))
 
-        exchanges_status.append({
-            "name": ex_name,
-            "connected": ex.health_ok(),
-            "last_ohlc_update_ok": ex.last_ohlc_ok(),
-            "last_ticker_ok": ex.last_ticker_ok(),
-            "errors": ex.recent_errors()
-        })
+    conn = _open_db()
+    conn.row_factory = sqlite3.Row
+    trades = conn.execute(
+        "SELECT side, price, amount FROM trades WHERE strategy_id=? ORDER BY id ASC",
+        (sid,)
+    ).fetchall()
+    conn.close()
 
-    system_block = {
-        "trader_running": True,            # replace with actual system check
-        "dashboard_running": True,         # replace with actual system check
-        "exchanges": exchanges_status
+    total_cost = Decimal("0")
+    total_qty = Decimal("0")
+
+    for t in trades:
+        p = to_decimal(t["price"])
+        a = to_decimal(t["amount"])
+
+        if t["side"] == "buy":
+            total_cost += p * a
+            total_qty += a
+        elif t["side"] == "sell" and total_qty > 0:
+            proportion = a / total_qty
+            if proportion > 1:
+                proportion = 1
+            total_cost -= total_cost * proportion
+            total_qty -= a
+            if total_qty < 0:
+                total_qty = Decimal("0")
+                total_cost = Decimal("0")
+
+    balance = float(total_qty)
+    acb = float(total_cost / total_qty) if total_qty > 0 else None
+    value = balance * price
+
+    pnl_pct = ((price - acb) / acb * 100) if acb else 0
+
+    return {
+        "symbol": sym,
+        "timeframe": tf,
+        "exchange": exch,
+        "price": price,
+        "balance": balance,
+        "value": value,
+        "acb": acb,
+        "pnl_pct": pnl_pct,
+        "allocated_eur": float(strategy["allocated_eur"] or 0),
     }
 
-    # ------------------------------------------------------------
-    # 2. FILLED ORDERS (24h)
-    # ------------------------------------------------------------
-    since = now - timedelta(hours=24)
-    filled_24h = tm.get_filled_orders_since(since)
 
-    filled_orders_block = []
-    for o in filled_24h:
-        filled_orders_block.append({
-            "symbol": o.symbol,
-            "exchange": o.exchange,
-            "timeframe": o.timeframe,
-            "side": o.side,
-            "amount": float(o.amount),
-            "price": float(o.price),
-            "timestamp": o.timestamp.isoformat(),
-            "strategy_label": o.strategy_label,
-            "pnl": float(o.pnl or 0)
-        })
+# ------------------------------------------------------------
+# Daily report
+# ------------------------------------------------------------
+def generate_daily_report():
+    strategies = load_strategies_from_db()
+    entries = [compute_strategy_stats(s) for s in strategies]
 
-    # ------------------------------------------------------------
-    # 3. CAPITAL (reserved + available)
-    # ------------------------------------------------------------
-    reserved_list = []
-    for s in strategies:
-        reserved_list.append({
-            "strategy_id": s["id"],
-            "symbol": s["symbol"],
-            "exchange": s["exchange"],
-            "amount_eur": float(tm.get_reserved_eur_for_strategy(s["id"]))
-        })
+    total_value = sum(e["value"] + e["allocated_eur"] for e in entries)
+    crypto_value = sum(e["value"] for e in entries)
+    cash_value = sum(e["allocated_eur"] for e in entries)
 
-    available_dict = {}
-    for ex_name in cfg["exchanges"].keys():
-        ex = get_exchange(ex_name)
-        eur_balance = ex.get_balance_eur()
-        available_dict[ex_name] = float(eur_balance)
-
-    capital_block = {
-        "reserved": reserved_list,
-        "available": available_dict
-    }
-
-    # ------------------------------------------------------------
-    # 4. PORTFOLIO SNAPSHOT
-    # ------------------------------------------------------------
-    portfolio = compute_portfolio_snapshot()
-
-    portfolio_block = {
-        "total_value_eur": float(portfolio["total"]),
-        "crypto_value_eur": float(portfolio["crypto"]),
-        "cash_value_eur": float(portfolio["cash"]),
-        "unrealized_pnl_eur": float(portfolio["unrealized_pnl"]),
-        "change_since_yesterday_pct": float(portfolio["change_pct"])
-    }
-
-    # ------------------------------------------------------------
-    # 5. ALERTS
-    # ------------------------------------------------------------
-    alerts_block = get_recent_alerts(hours=24)
-    
-    report = {
-        "date": now.isoformat(),
-        "system": system_block,
-        "filled_orders": filled_orders_block,
-        "capital": capital_block,
-        "portfolio": portfolio_block,
-        "alerts": alerts_block
-    }
-
-    validate_daily_report(report)
-    save_daily_report_json(report)
-    cleanup_old_reports(days=90)
-
-    return report
-
-
-
-
-def generate_weekly_report() -> Dict[str, Any]:
-    """
-    Generates the Weekly Report according to aurono.weekly.report.schema.v1.
-    """
-
-    now = datetime.now(timezone.utc)
-    week_start = now - timedelta(days=7)
-    tm = TradeManager(get_db_path())
-    cfg = current_config()
-    strategies = load_strategies()
-
-    # ------------------------------------------------------------
-    # 1. PERFORMANCE
-    # ------------------------------------------------------------
-    filled_week = tm.get_filled_orders_since(week_start)
-
-    buys = sum(1 for o in filled_week if o.side == "buy")
-    sells = sum(1 for o in filled_week if o.side == "sell")
-    sell_wins = sum(1 for o in filled_week if o.side == "sell" and (o.pnl or 0) > 0)
-    weekly_pnl = sum(float(o.pnl or 0) for o in filled_week)
-
-    performance_block = {
-        "weekly_pnl_eur": weekly_pnl,
-        "buys": buys,
-        "sells": sells,
-        "sell_win_rate": (sell_wins / sells * 100) if sells > 0 else 0
-    }
-
-    # ------------------------------------------------------------
-    # 2. PER-STRATEGY BREAKDOWN
-    # ------------------------------------------------------------
-    strategies_block = []
-
-    for s in strategies:
-        s_fills = [o for o in filled_week if o.strategy_id == s["id"]]
-
-        buys_s = [o for o in s_fills if o.side == "buy"]
-        sells_s = [o for o in s_fills if o.side == "sell"]
-
-        pnl_s = sum(float(o.pnl or 0) for o in s_fills)
-
-        if buys_s:
-            avg_buy = sum(float(o.price) for o in buys_s) / len(buys_s)
-        else:
-            avg_buy = None
-
-        if sells_s:
-            avg_sell = sum(float(o.price) for o in sells_s) / len(sells_s)
-        else:
-            avg_sell = None
-
-        strategies_block.append({
-            "strategy_id": s["id"],
-            "symbol": s["symbol"],
-            "exchange": s["exchange"],
-            "timeframe": s["timeframe"],
-            "label": s["label"],
-            "buys": len(buys_s),
-            "sells": len(sells_s),
-            "weekly_pnl_eur": pnl_s,
-            "avg_buy_price": avg_buy,
-            "avg_sell_price": avg_sell
-        })
-
-    # ------------------------------------------------------------
-    # 3. HIGHLIGHTS
-    # ------------------------------------------------------------
-    if filled_week:
-        best = max(filled_week, key=lambda o: o.pnl or 0)
-        worst = min(filled_week, key=lambda o: o.pnl or 0)
-        best_block = {
-            "symbol": best.symbol,
-            "exchange": best.exchange,
-            "timeframe": best.timeframe,
-            "pnl": float(best.pnl or 0)
+    return {
+        "date": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
+        "entries": entries,
+        "totals": {
+            "total_value": total_value,
+            "crypto_value": crypto_value,
+            "cash_value": cash_value,
         }
-        worst_block = {
-            "symbol": worst.symbol,
-            "exchange": worst.exchange,
-            "timeframe": worst.timeframe,
-            "pnl": float(worst.pnl or 0)
-        }
-    else:
-        best_block = worst_block = None
-
-    highlights_block = {
-        "best_trade": best_block,
-        "worst_trade": worst_block
     }
 
-    # ------------------------------------------------------------
-    # 4. EXPOSURE
-    # ------------------------------------------------------------
-    portfolio = compute_portfolio_snapshot()
 
-    exposure_block = {
-        "cash_pct": float(portfolio["cash_pct"]),
-        "crypto_pct": float(portfolio["crypto_pct"]),
-        "by_coin": portfolio["by_coin"],
-        "by_exchange": portfolio["by_exchange"]
-    }
-
-    # ------------------------------------------------------------
-    # 5. CAPITAL EFFICIENCY
-    # ------------------------------------------------------------
-    cap_eff = {
-        "eur_deployed": float(portfolio["deployed_eur"]),
-        "eur_reserved": float(portfolio["reserved_eur"]),
-        "eur_free": float(portfolio["free_eur"])
-    }
-
-    # ------------------------------------------------------------
-    # 6. SYSTEM RELIABILITY
-    # ------------------------------------------------------------
-    reliability_block = {
-        "api_uptime_pct": 100,      # replace with metrics
-        "ohlc_failures": 0,
-        "order_retries": 0,
-        "credential_issues": 0,
-        "trader_uptime_pct": 100
-    }
-
-    # ------------------------------------------------------------
-    # 7. STRATEGY CHANGES
-    # ------------------------------------------------------------
-    changes_block = {
-        "added": [],      # fill if you log strategy changes
-        "updated": [],
-        "deleted": []
-    }
-    
-    report = {
-        "week_start": week_start.date().isoformat(),
-        "week_end": now.date().isoformat(),
-        "performance": performance_block,
-        "strategies": strategies_block,
-        "highlights": highlights_block,
-        "exposure": exposure_block,
-        "capital_efficiency": cap_eff,
-        "system_reliability": reliability_block,
-        "strategy_changes": changes_block
-    }
-
-    validate_weekly_report(report)
-    save_weekly_report_json(report)
-    cleanup_old_reports(days=90)
+# ------------------------------------------------------------
+# Weekly report (end of week summary)
+# ------------------------------------------------------------
+def generate_weekly_report():
+    report = generate_daily_report()
+    report["week_end"] = datetime.utcnow().strftime("%Y-%m-%d")
     return report
-
-
 
