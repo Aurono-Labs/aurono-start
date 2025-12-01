@@ -153,6 +153,16 @@ tr:nth-child(odd)  { background-color: var(--row-odd); }
 td.numeric { text-align: right; }
 th.numeric { text-align: right; }
 
+/* Row separators for data tables */
+.table-separated tr td {
+  border-bottom: 1px solid var(--aurono-border);
+}
+
+.table-separated tr:last-child td {
+  border-bottom: none;
+}
+
+
 /* RESPONSIVE ───────────────────────────────────────────────── */
 @media(max-width: 700px) {
   body { padding: 16px; }
@@ -265,7 +275,7 @@ th.numeric { text-align: right; }
 
 
   <!-- PORTFOLIO TABLE -->
-  <table>
+  <table class="table-separated">
     <tr>
       <th>Strategy</th>
       <th class="numeric">Price (€)</th>
@@ -318,7 +328,7 @@ th.numeric { text-align: right; }
   <h2>💰 Recent Trades (last 7 days)</h2>
 
   {% if recent_trades %}
-  <table>
+  <table class="table-separated">
     <tr>
       <th>Date / Time (UTC)</th>
       <th>Symbol</th>

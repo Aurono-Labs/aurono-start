@@ -482,6 +482,13 @@
                   <button class="btn btn-primary btn-small" type="submit">Save</button>
                   <button class="btn btn-small" type="button" onclick="toggleEdit({{ s.id }})">Cancel</button>
 
+                  <form method="post" action="/strategies/delete/{{ s.id }}"
+                        style="display:inline-block; margin-left:8px;"
+                        onsubmit="return confirm('Delete strategy {{ s.symbol }} {{ s.timeframe }}?');">
+                    <button class="btn btn-small btn-danger" type="submit">Delete</button>
+                  </form>
+
+
                 </form>
               </td>
             </tr>
