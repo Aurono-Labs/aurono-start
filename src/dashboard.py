@@ -32,7 +32,6 @@ import os, signal, time, psutil
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-app.state.templates = Jinja2Templates(directory="src/templates")
 from datetime import datetime
 import sqlite3
 
