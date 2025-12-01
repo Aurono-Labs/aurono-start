@@ -11,6 +11,7 @@ import sqlite3
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Dict, Optional
+from pathlib import Path
 
 from cryptography.fernet import Fernet
 
@@ -60,6 +61,12 @@ def _open_db():
     ensure_schema(conn)
     return conn
 
+def get_config_path() -> str:
+    """
+    Returns absolute path to config.yaml based on db_path/config_path logic.
+    """
+    base = Path(__file__).resolve().parent.parent  # aurono-poc/
+    return str(base / "config" / "config.yaml")
 
  
 # ============================================================
