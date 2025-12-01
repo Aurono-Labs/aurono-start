@@ -329,15 +329,19 @@ def get_supported_pairs(exchange: str) -> list[str]:
     Returns list of EUR pairs supported by the given exchange.
     Cached for 1 hour to prevent unnecessary API calls.
     """
-
+    exchange = (exchange or "").lower().strip()
     now = time.time()
+
     if exchange not in _pair_cache:
         return []
 
     # Serve from cache
     if now - _pair_cache[exchange]["timestamp"] < CACHE_TTL:
         return _pair_cache[exchange]["pairs"]
-        
+
+    # --------------------------------------------------------
+    # Kraken
+    # --------------------------------------------------------
     if exchange == "kraken":
         url = "https://api.kraken.com/0/public/AssetPairs"
         resp = requests.get(url, timeout=10)
@@ -345,20 +349,20 @@ def get_supported_pairs(exchange: str) -> list[str]:
 
         pairs = []
         for _, v in data.items():
-            pair = v.get("wsname")  # e.g. "XBT/EUR"
+            pair = v.get("wsname")
             if pair and pair.endswith("/EUR"):
-                clean = pair.replace("/", "")  # "XBTEUR"
-
-                # Normalize Kraken's naming to Aurono naming
+                clean = pair.replace("/", "")
                 if clean.startswith("XBT"):
                     clean = clean.replace("XBT", "BTC")
-
                 pairs.append(clean)
 
-        _pair_cache["kraken"] = {"pairs": sorted(pairs), "timestamp": now}
+        pairs = sorted(pairs)
+        _pair_cache["kraken"] = {"pairs": pairs, "timestamp": now}
         return pairs
 
-
+    # --------------------------------------------------------
+    # Bitvavo
+    # --------------------------------------------------------
     if exchange == "bitvavo":
         url = "https://api.bitvavo.com/v2/markets"
         resp = requests.get(url, timeout=10)
@@ -371,8 +375,8 @@ def get_supported_pairs(exchange: str) -> list[str]:
                 if base:
                     pairs.append(f"{base}EUR")
 
-        _pair_cache["bitvavo"] = {"pairs": sorted(pairs), "timestamp": now}
+        pairs = sorted(pairs)
+        _pair_cache["bitvavo"] = {"pairs": pairs, "timestamp": now}
         return pairs
 
     return []
-
