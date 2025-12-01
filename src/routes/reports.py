@@ -3,22 +3,27 @@
 import os
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
-from utils import project_root  # if you have this; otherwise use manual path
+
 from report_storage import (
     DAILY_DIR,
     WEEKLY_DIR,
     HTML_DIR,
 )
 
-router = APIRouter()
+router = APIRouter(prefix="/reports", tags=["reports"])
+
 
 def list_files(directory: str):
+    """Return files newest first."""
     if not os.path.exists(directory):
         return []
     return sorted(os.listdir(directory), reverse=True)
 
 
-@router.get("/reports", response_class=HTMLResponse)
+# ------------------------------------------------------------
+# List all daily + weekly reports
+# ------------------------------------------------------------
+@router.get("/", response_class=HTMLResponse)
 async def reports_index(request: Request):
     daily_files = list_files(DAILY_DIR)
     weekly_files = list_files(WEEKLY_DIR)
@@ -30,7 +35,10 @@ async def reports_index(request: Request):
     )
 
 
-@router.get("/reports/view/{name}", response_class=HTMLResponse)
+# ------------------------------------------------------------
+# View HTML-rendered report
+# ------------------------------------------------------------
+@router.get("/view/{name}", response_class=HTMLResponse)
 async def view_report(request: Request, name: str):
     html_path = os.path.join(HTML_DIR, name)
     if not os.path.exists(html_path):
@@ -45,7 +53,10 @@ async def view_report(request: Request, name: str):
     )
 
 
-@router.get("/reports/download/{kind}/{name}")
+# ------------------------------------------------------------
+# Download original JSON report
+# ------------------------------------------------------------
+@router.get("/download/{kind}/{name}")
 async def download_report(kind: str, name: str):
     if kind == "daily":
         folder = DAILY_DIR
