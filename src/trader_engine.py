@@ -125,21 +125,16 @@ class TraderEngine:
                     limit_price = (open_price * (Decimal("1") + drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
                     vol = (buy_eur / limit_price).quantize(Decimal("0.00000001"))
                     trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
-
-                    # delegate order placement to exchange
-                    exchange.place_limit_order(symbol, "buy", limit_price, vol, trade_id)
-
+                    
                     eur_spent = limit_price * vol
                     new_alloc = float(allocated - eur_spent)
                     with _open_db() as c:
                         c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
                         c.commit()
 
-                    log_event(
-                        f"✅ BUY executed: {vol} {symbol} @ €{limit_price:.2f} on {exchange.name}"
-                        f"(drop {pct_change:.2f}% ≤ {drop_trigger}%), "
-                        f"spent €{eur_spent:.2f}, new alloc €{new_alloc:.2f}"
-                    )
+                    # delegate order placement to exchange
+                    exchange.place_limit_order(symbol, "buy", limit_price, vol, trade_id)
+
                 # After BUY decision, don't evaluate SELL
                 continue
 
@@ -165,20 +160,16 @@ class TraderEngine:
                 limit_price = (open_price * (Decimal("1") + rise_trigger / Decimal("100"))).quantize(Decimal("0.01"))
                 vol = min((sell_eur / limit_price).quantize(Decimal("0.00000001")), balance)
                 trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
-
-                # delegate order placement to exchange
-                exchange.place_limit_order(symbol, "sell", limit_price, vol, trade_id)
-
+                
                 eur_gained = limit_price * vol
                 new_alloc = float(allocated + eur_gained)
                 with _open_db() as c:
                     c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
                     c.commit()
-                log_event(
-                    f"💰 SELL executed: {vol} {symbol} @ €{limit_price:.2f} on {exchange.name}"
-                    f"(rise +{pct_change:.2f}% ≥ {rise_trigger}%, above ACB €{acb:.2f}) → "
-                    f"gained €{eur_gained:.2f}, new alloc €{new_alloc:.2f}"
-                )
+
+                # delegate order placement to exchange
+                exchange.place_limit_order(symbol, "sell", limit_price, vol, trade_id)
+
                 continue
 
             # === 3️⃣ Otherwise: idle ===

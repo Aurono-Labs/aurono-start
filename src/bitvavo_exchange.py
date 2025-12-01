@@ -6,7 +6,7 @@ import time
 import hmac
 import hashlib
 import json
-from decimal import Decimal, ROUND_HALF_UP  # ⬅ add ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, ROUND_UP, ROUND_DOWN
 from typing import Any, Dict, Optional, List
 
 import requests
@@ -100,16 +100,6 @@ class BitvavoExchange(ExchangeBase):
         ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
         self._market_tick_cache[market] = ticks
         return ticks
-
-    def _normalize_price(self, market: str, price: Decimal) -> Decimal:
-        ticks = self._load_market_ticks(market)
-        tick = ticks["price"]
-
-        try:
-            return price.quantize(tick, rounding=ROUND_HALF_UP)
-        except Exception:
-            log_event(f"⚠️ Bitvavo price rounding failed for {market} price={price}, tick={tick}")
-            return price
 
     def _normalize_amount(self, market: str, amount: Decimal) -> Decimal:
         ticks = self._load_market_ticks(market)
@@ -356,9 +346,18 @@ class BitvavoExchange(ExchangeBase):
         cfg = current_config()
         live = cfg.get("live_trading", False)
         market = self._market(symbol)
+        
+        # Side-aware rounding
+        ticks = self._load_market_ticks(market)
+        tick = ticks["price"]
 
-        # Normalize price and amount
-        price = self._normalize_price(market, price)
+        if side.lower() == "buy":
+            # BUY → price must be rounded UP to avoid being too low
+            price = price.quantize(tick, rounding=ROUND_UP)
+        else:
+            # SELL → price must be rounded DOWN to avoid being too high
+            price = price.quantize(tick, rounding=ROUND_DOWN)
+
         volume = self._normalize_amount(market, volume)
 
         if not live:
@@ -415,12 +414,29 @@ class BitvavoExchange(ExchangeBase):
             and actual_amount > 0
             and trade_id is not None
         ):
-            # Reserved EUR that TraderEngine already used
-            reserved_eur = (price * volume).quantize(Decimal("0.01"))
+            
+            # --- FIX: use the original reserved values from DB ---
+            try:
+                conn = _open_db()
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT price, amount FROM trades WHERE id=?",
+                    (trade_id,),
+                )
+                row = cur.fetchone()
+                conn.close()
+
+                orig_price = Decimal(str(row[0]))
+                orig_amount = Decimal(str(row[1]))
+                reserved_eur = (orig_price * orig_amount).quantize(Decimal("0.01"))
+
+            except Exception as e:
+                log_event(f"⚠️ Bitvavo: could not load original reserved values: {e}")
+                # fallback: use normalized
+                reserved_eur = (price * volume).quantize(Decimal("0.01"))
+
             actual_eur = (actual_price * actual_amount).quantize(Decimal("0.01"))
 
-            # For BUY: reserved - actual  (positive delta = refund)
-            # For SELL: actual - reserved (positive delta = extra earnings)
             if side.lower() == "buy":
                 delta = reserved_eur - actual_eur
             else:
@@ -493,7 +509,7 @@ class BitvavoExchange(ExchangeBase):
 
             log_event(
                 f"✅ {side.upper()} executed: {actual_amount} {symbol} @ €{actual_price} "
-                f"on bitvavo (actual spend €{actual_eur:.2f}, reserved €{reserved_eur:.2f}"
+                f"on bitvavo (actual €{actual_eur:.2f}, reserved €{reserved_eur:.2f}"
                 f"{final_alloc_str})"
             )
 

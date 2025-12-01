@@ -8,7 +8,7 @@ import base64
 import hashlib
 import hmac
 import urllib.parse
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, ROUND_UP, ROUND_DOWN
 from typing import Any, Dict, Optional, List
 
 import requests
@@ -102,15 +102,6 @@ class KrakenExchange(ExchangeBase):
         self._tick_cache[symbol] = fallback
         return fallback
         
-    def _normalize_price(self, symbol: str, price: Decimal) -> Decimal:
-        ticks = self._load_tick_size(symbol)
-        tick = ticks["price"]
-
-        try:
-            return price.quantize(tick, rounding=ROUND_HALF_UP)
-        except Exception:
-            log_event(f"⚠️ Kraken price rounding failed for {symbol}, tick={tick}, price={price}")
-            return price
             
     def _normalize_amount(self, symbol: str, amount: Decimal) -> Decimal:
         """
@@ -254,7 +245,15 @@ class KrakenExchange(ExchangeBase):
         pair = symbol.upper()
 
         # Normalize both price and amount using Kraken's precision rules
-        price = self._normalize_price(symbol, price)
+        # Side-aware price rounding
+        ticks = self._load_tick_size(symbol)
+        tick = ticks["price"]
+
+        if side.lower() == "buy":
+            price = price.quantize(tick, rounding=ROUND_UP)
+        else:
+            price = price.quantize(tick, rounding=ROUND_DOWN)
+
         volume = self._normalize_amount(symbol, volume)
 
         if not live:
@@ -312,15 +311,33 @@ class KrakenExchange(ExchangeBase):
             actual_amount = detail["vol_exec"]      # Decimal
 
             # Reserved EUR that TraderEngine already used
-            reserved_eur = (price * volume).quantize(Decimal("0.01"))
+            # --- FIX: use the original reserved values from DB ---
+            try:
+                conn = _open_db()
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT price, amount FROM trades WHERE id=?",
+                    (trade_id,),
+                )
+                row = cur.fetchone()
+                conn.close()
+
+                orig_price = Decimal(str(row[0]))
+                orig_amount = Decimal(str(row[1]))
+                reserved_eur = (orig_price * orig_amount).quantize(Decimal("0.01"))
+
+            except Exception as e:
+                log_event(f"⚠️ Kraken: could not load original reserved values: {e}")
+                # fallback: use normalized
+                reserved_eur = (price * volume).quantize(Decimal("0.01"))
+
             actual_eur = (actual_price * actual_amount).quantize(Decimal("0.01"))
 
-            # BUY → refund reserved - actual
-            # SELL → profit actual - reserved
             if side.lower() == "buy":
                 delta = reserved_eur - actual_eur
             else:
                 delta = actual_eur - reserved_eur
+
 
             try:
                 conn = _open_db()
