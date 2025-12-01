@@ -28,79 +28,39 @@
       min-height: 100vh;
     }
 
-    /* TOPBAR */
     .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 26px;
-      flex-wrap: wrap;
-      gap: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 26px; flex-wrap: wrap; gap: 12px;
     }
 
     .brand {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      color: var(--aurono-gold);
-      text-transform: uppercase;
+      font-size: 22px; font-weight: 700; letter-spacing: 0.05em;
+      color: var(--aurono-gold); text-transform: uppercase;
     }
 
-    nav {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
     nav a {
-      padding: 6px 12px;
-      font-size: 14px;
-      text-decoration: none;
-      border-radius: 12px;
-      color: var(--aurono-muted);
-      border: 1px solid transparent;
-      transition: .15s ease;
+      padding: 6px 12px; font-size: 14px; text-decoration: none;
+      border-radius: 12px; color: var(--aurono-muted);
+      border: 1px solid transparent; transition: .15s ease;
     }
-
     nav a:hover {
       color: var(--aurono-text);
       border-color: rgba(148,163,184,0.4);
       background: rgba(255,255,255,0.03);
     }
-
     nav a.active {
       border-color: rgba(250,204,21,0.8);
       color: var(--aurono-gold);
       background: rgba(250,204,21,0.12);
     }
 
-    /* HEADINGS */
-    h1 {
-      margin: 0 0 6px 0;
-      font-size: 26px;
-      font-weight: 600;
-    }
+    h1 { margin: 0 0 6px 0; font-size: 26px; font-weight: 600; }
+    .subtitle { margin: 0 0 18px 0; font-size: 14px; color: var(--aurono-muted); }
 
-    .subtitle {
-      margin: 0 0 18px 0;
-      font-size: 14px;
-      color: var(--aurono-muted);
-    }
+    .grid-main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .grid-main { grid-template-columns: 1fr; } }
 
-    /* MAIN GRID */
-    .grid-main {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    @media (max-width: 900px) {
-      .grid-main {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* CARD */
     .card {
       background: var(--aurono-bg-card);
       border: 1px solid var(--aurono-border);
@@ -109,36 +69,16 @@
       box-shadow: 0 15px 40px rgba(0,0,0,0.35);
     }
 
-    .card-title {
-      font-size: 17px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
+    .card-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+    .card-sub { font-size: 13px; color: var(--aurono-muted); margin-bottom: 14px; }
 
-    .card-sub {
-      font-size: 13px;
-      color: var(--aurono-muted);
-      margin-bottom: 14px;
-    }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-    /* TABLE */
-    .table-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
     th {
-      text-align: left;
-      padding: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      font-size: 11px;
+      text-align: left; padding: 8px;
+      text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px;
       color: var(--aurono-muted);
       border-bottom: 1px solid var(--aurono-border);
     }
@@ -147,23 +87,16 @@
       padding: 8px;
       border-bottom: 1px solid var(--aurono-border);
     }
+    tr:last-child td { border-bottom: none; }
 
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    /* BUTTONS */
     .btn {
       padding: 6px 12px;
       border-radius: 10px;
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(148,163,184,0.4);
       color: var(--aurono-text);
-      font-size: 12px;
-      cursor: pointer;
-      transition: .15s ease;
+      font-size: 12px; cursor: pointer; transition: .15s ease;
     }
-
     .btn:hover { background: rgba(255,255,255,0.08); }
 
     .btn-primary {
@@ -178,39 +111,20 @@
       background: rgba(127,29,29,0.4);
     }
 
-    .btn-small {
-      padding: 4px 8px;
-      font-size: 11px;
-    }
+    .btn-small { padding: 4px 8px; font-size: 11px; }
 
-    /* FORM */
-    .field {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 12px;
-    }
+    .field { display: flex; flex-direction: column; margin-bottom: 12px; }
+    .field label { font-size: 12px; color: var(--aurono-muted); margin-bottom: 4px; }
 
-    .field label {
-      font-size: 12px;
-      color: var(--aurono-muted);
-      margin-bottom: 4px;
-    }
-
-    .field input,
-    .field select {
-      padding: 8px;
-      border-radius: 10px;
+    .field input, .field select {
+      padding: 8px; border-radius: 10px;
       background: rgba(255,255,255,0.05);
       border: 1px solid var(--aurono-border);
       color: var(--aurono-text);
-      font-size: 14px;
-      outline: none;
+      font-size: 14px; outline: none;
     }
 
-    .edit-row {
-      display: none;
-      background: rgba(255,255,255,0.04);
-    }
+    .edit-row { display: none; background: rgba(255,255,255,0.04); }
   </style>
 
   <script>
@@ -239,13 +153,10 @@
   </script>
 </head>
 
-
 <body>
 
-  <!-- TOPBAR -->
   <div class="topbar">
     <div class="brand">Aurono</div>
-
     <nav>
       <a href="/">Dashboard</a>
       <a class="active" href="/strategies">Strategies</a>
@@ -254,23 +165,18 @@
     </nav>
   </div>
 
-  <!-- PAGE TITLE -->
   <h1>Strategies</h1>
   <div class="subtitle">Configure and manage automated trading strategies.</div>
 
-
-  <!-- MAIN LAYOUT -->
   <div class="grid-main">
 
-    <!-- CREATE STRATEGY (LEFT COLUMN) -->
+    <!-- CREATE STRATEGY -->
     <div class="card">
       <div class="card-title">Create New Strategy</div>
       <div class="card-sub">Select exchange, symbol, timeframe and thresholds.</div>
 
-      <!-- FORM -->
       <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
 
-        <!-- Exchange selector -->
         <div class="field">
           <label>Exchange</label>
           <select id="exchangeSelect" name="exchange" required>
@@ -279,7 +185,6 @@
           </select>
         </div>
 
-        <!-- Symbol dropdown -->
         <div class="field">
           <label>Symbol</label>
           <select id="symbol" name="symbol" required>
@@ -292,7 +197,6 @@
         <script>
         document.getElementById("exchangeSelect").addEventListener("change", function () {
             const exchange = this.value;
-
             fetch(`/strategies/symbols/${exchange}`)
               .then(r => r.json())
               .then(symbols => {
@@ -319,30 +223,26 @@
           </select>
         </div>
 
-        <div class="field">
-          <label>Drop %</label>
+        <div class="field"><label>Drop %</label>
           <input type="number" id="drop_pct" name="drop_pct" min="0" value="2.5" step="any" required>
         </div>
 
-        <div class="field">
-          <label>Rise %</label>
+        <div class="field"><label>Rise %</label>
           <input type="number" id="rise_pct" name="rise_pct" min="0" value="2.1" step="any" required>
         </div>
 
-        <div class="field">
-          <label>Buy amount (€)</label>
+        <div class="field"><label>Buy amount (€)</label>
           <input type="number" id="buy_amount_eur" name="buy_amount_eur" value="20" step="any" required>
         </div>
 
-        <div class="field">
-          <label>Sell amount (€)</label>
+        <div class="field"><label>Sell amount (€)</label>
           <input type="number" id="sell_amount_eur" name="sell_amount_eur" value="20" step="any" required>
         </div>
 
-        <div class="field">
-          <label>Allocated capital (€)</label>
+        <div class="field"><label>Allocated capital (€)</label>
           <input type="number" id="allocated_eur" name="allocated_eur" value="100" step="any" required>
         </div>
+
         <input type="hidden" name="return_to" value="strategies">
 
         <div class="field">
@@ -367,12 +267,10 @@
         </div>
 
         <button class="btn btn-primary" type="submit" style="margin-top:12px;">Add Strategy</button>
-        
       </form>
     </div>
 
-
-    <!-- EXISTING STRATEGIES (RIGHT COLUMN, FULL WIDTH BELOW) -->
+    <!-- EXISTING STRATEGIES -->
     <div class="card" style="grid-column: 1 / -1;">
       <div class="card-title">Existing Strategies</div>
       <div class="card-sub">Edit thresholds, amounts or exchange per strategy.</div>
@@ -408,9 +306,11 @@
               </td>
             </tr>
 
-            <!-- INLINE EDIT ROW -->
+            <!-- EDIT ROW -->
             <tr id="edit-{{ s.id }}" class="edit-row">
               <td colspan="8">
+
+                <!-- UPDATE FORM -->
                 <form method="post" action="/strategies/update/{{ s.id }}" style="padding:12px;">
 
                   <div class="grid-main" style="grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:16px;">
@@ -479,17 +379,21 @@
 
                   </div>
 
-                  <button class="btn btn-primary btn-small" type="submit">Save</button>
-                  <button class="btn btn-small" type="button" onclick="toggleEdit({{ s.id }})">Cancel</button>
+                  <!-- Save + Cancel -->
+                  <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+                    <button class="btn btn-primary btn-small" type="submit">Save</button>
+                    <button class="btn btn-small" type="button" onclick="toggleEdit({{ s.id }})">Cancel</button>
+                  </div>
 
-                  <form method="post" action="/strategies/delete/{{ s.id }}"
-                        style="display:inline-block; margin-left:8px;"
-                        onsubmit="return confirm('Delete strategy {{ s.symbol }} {{ s.timeframe }}?');">
-                    <button class="btn btn-small btn-danger" type="submit">Delete</button>
-                  </form>
+                </form> <!-- END UPDATE FORM -->
 
-
+                <!-- DELETE FORM (OUTSIDE) -->
+                <form method="post" action="/strategies/delete/{{ s.id }}"
+                      style="display:inline-block; margin-top:10px;"
+                      onsubmit="return confirm('Delete strategy {{ s.symbol }} {{ s.timeframe }}?');">
+                  <button class="btn btn-small btn-danger" type="submit">Delete</button>
                 </form>
+
               </td>
             </tr>
 
@@ -497,8 +401,8 @@
           </tbody>
         </table>
       </div>
-
     </div>
+
   </div>
 </body>
 </html>
