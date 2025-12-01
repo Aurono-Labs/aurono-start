@@ -396,6 +396,58 @@
     </div>
 
   </div>
+  
+  <div class="grid">
+    <div class="card" style="margin-top: 20px; padding: 20px;">
+      <h2>Email Reporting</h2>
+
+      <!-- Email settings POST form -->
+      <form action="/settings/email" method="post">
+
+        <label style="display:block; margin-bottom:8px;">
+          <input type="checkbox" name="email_enabled" {% if email_enabled %}checked{% endif %}>
+          Enable Email Reports
+        </label>
+
+        <div class="field" style="margin-top:12px;">
+          <label>Email Address (Gmail recommended)</label>
+          <input type="email" name="email_username" value="{{ email_username }}" required>
+        </div>
+
+        <div class="field" style="margin-top:12px;">
+          <label>Receiver Email</label>
+          <input type="email" name="email_to" value="{{ email_to }}" required>
+        </div>
+
+        <div class="field" style="margin-top:12px;">
+          <label>App Password</label>
+          <input type="password" name="email_password" value="{{ email_password }}" placeholder="********">
+        </div>
+
+        <p style="color:#94a3b8; font-size:14px; margin-top:8px;">
+          To generate a Gmail App Password:
+          <br>1. Enable 2-Step Verification
+          <br>2. Visit <a href="https://myaccount.google.com/apppasswords" target="_blank">https://myaccount.google.com/apppasswords</a>
+          <br>3. Choose “Mail → Other (Aurono)”
+          <br>4. Paste the 16-digit password here
+        </p>
+
+        <button class="btn btn-primary" type="submit">Save Email Settings</button>
+        </form>
+
+        <!-- ACTION BUTTONS -->
+        <form action="/settings/test-report" method="post" style="margin-top:12px;">
+          <button class="btn" type="submit">Generate Test Daily Report</button>
+        </form>
+
+        <form action="/settings/test-email" method="post" style="margin-top:8px;">
+          <button class="btn" type="submit">Send Test Email</button>
+        </form>
+    </div>
+  </div>
+
+
+      
 
   <script>
     function toggleEdit(id) {

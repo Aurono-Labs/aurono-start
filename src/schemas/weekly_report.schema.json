@@ -1,0 +1,138 @@
+{
+  "$id": "aurono.weekly.report.schema.v1",
+  "type": "object",
+  "required": [
+    "week_start",
+    "week_end",
+    "performance",
+    "strategies",
+    "highlights",
+    "exposure",
+    "capital_efficiency",
+    "system_reliability",
+    "strategy_changes"
+  ],
+
+  "properties": {
+    "week_start": { "type": "string", "format": "date" },
+    "week_end": { "type": "string", "format": "date" },
+
+    "performance": {
+      "type": "object",
+      "required": ["weekly_pnl_eur", "buys", "sells", "sell_win_rate"],
+      "properties": {
+        "weekly_pnl_eur": { "type": "number" },
+        "buys": { "type": "integer" },
+        "sells": { "type": "integer" },
+        "sell_win_rate": { "type": "number" }
+      }
+    },
+
+    "strategies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "strategy_id",
+          "symbol",
+          "exchange",
+          "timeframe",
+          "label",
+          "buys",
+          "sells",
+          "weekly_pnl_eur"
+        ],
+        "properties": {
+          "strategy_id": { "type": "integer" },
+          "symbol": { "type": "string" },
+          "exchange": { "type": "string" },
+          "timeframe": { "type": "string" },
+          "label": { "type": "string" },
+          "buys": { "type": "integer" },
+          "sells": { "type": "integer" },
+          "weekly_pnl_eur": { "type": "number" },
+          "avg_buy_price": { "type": "number" },
+          "avg_sell_price": { "type": "number" }
+        }
+      }
+    },
+
+    "highlights": {
+      "type": "object",
+      "required": ["best_trade", "worst_trade"],
+      "properties": {
+        "best_trade": {
+          "type": "object",
+          "properties": {
+            "symbol": { "type": "string" },
+            "exchange": { "type": "string" },
+            "timeframe": { "type": "string" },
+            "pnl": { "type": "number" }
+          }
+        },
+        "worst_trade": {
+          "type": "object",
+          "properties": {
+            "symbol": { "type": "string" },
+            "exchange": { "type": "string" },
+            "timeframe": { "type": "string" },
+            "pnl": { "type": "number" }
+          }
+        }
+      }
+    },
+
+    "exposure": {
+      "type": "object",
+      "required": ["cash_pct", "crypto_pct", "by_coin", "by_exchange"],
+      "properties": {
+        "cash_pct": { "type": "number" },
+        "crypto_pct": { "type": "number" },
+        "by_coin": {
+          "type": "object",
+          "patternProperties": {
+            ".*": { "type": "number" }
+          }
+        },
+        "by_exchange": {
+          "type": "object",
+          "patternProperties": {
+            ".*": { "type": "number" }
+          }
+        }
+      }
+    },
+
+    "capital_efficiency": {
+      "type": "object",
+      "required": ["eur_deployed", "eur_reserved", "eur_free"],
+      "properties": {
+        "eur_deployed": { "type": "number" },
+        "eur_reserved": { "type": "number" },
+        "eur_free": { "type": "number" }
+      }
+    },
+
+    "system_reliability": {
+      "type": "object",
+      "required": ["api_uptime_pct", "ohlc_failures", "order_retries", "credential_issues", "trader_uptime_pct"],
+      "properties": {
+        "api_uptime_pct": { "type": "number" },
+        "ohlc_failures": { "type": "integer" },
+        "order_retries": { "type": "integer" },
+        "credential_issues": { "type": "integer" },
+        "trader_uptime_pct": { "type": "number" }
+      }
+    },
+
+    "strategy_changes": {
+      "type": "object",
+      "properties": {
+        "added": { "type": "array", "items": { "type": "string" } },
+        "updated": { "type": "array", "items": { "type": "string" } },
+        "deleted": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
+

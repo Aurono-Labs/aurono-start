@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Aurono Weekly Report</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    background: #0a0f1f;
+    color: #e5e7eb;
+    padding: 24px;
+    line-height: 1.45;
+  }
+  h1, h2 { color: #facc15; }
+  .card {
+    background: #020617;
+    border: 1px solid rgba(148,163,184,0.35);
+    padding: 16px;
+    border-radius: 10px;
+    margin-bottom: 22px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td {
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(148,163,184,0.25);
+    font-size: 14px;
+  }
+  th { color: #fbbf24; text-align: left; }
+  .green { color: #22c55e; }
+  .red { color: #ef4444; }
+</style>
+</head>
+
+<body>
+
+  <h1>Aurono Weekly Report</h1>
+  <p>{{ report.week_start }} → {{ report.week_end }}</p>
+
+  <!-- PERFORMANCE -->
+  <div class="card">
+    <h2>Performance</h2>
+    <p>Total weekly PnL: €{{ report.performance.weekly_pnl_eur }}</p>
+    <p>Buys: {{ report.performance.buys }}</p>
+    <p>Sells: {{ report.performance.sells }}</p>
+    <p>Sell win rate: {{ report.performance.sell_win_rate }}%</p>
+  </div>
+
+  <!-- STRATEGIES -->
+  <div class="card">
+    <h2>Strategy Breakdown</h2>
+
+    <table>
+      <tr>
+        <th>Strategy</th>
+        <th>Pair</th>
+        <th>Buys</th>
+        <th>Sells</th>
+        <th>PnL</th>
+        <th>Avg Buy</th>
+        <th>Avg Sell</th>
+      </tr>
+      {% for s in report.strategies %}
+      <tr>
+        <td>{{ s.label }} (ID {{ s.strategy_id }})</td>
+        <td>{{ s.symbol }} – {{ s.timeframe }} ({{ s.exchange }})</td>
+        <td>{{ s.buys }}</td>
+        <td>{{ s.sells }}</td>
+        <td class="{% if s.weekly_pnl_eur >= 0 %}green{% else %}red{% endif %}">
+          {{ s.weekly_pnl_eur }}
+        </td>
+        <td>{{ s.avg_buy_price or "-" }}</td>
+        <td>{{ s.avg_sell_price or "-" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <!-- HIGHLIGHTS -->
+  <div class="card">
+    <h2>Highlights</h2>
+
+    <h3>Best Trade</h3>
+    {% if report.highlights.best_trade %}
+      <p>{{ report.highlights.best_trade.symbol }} ({{ report.highlights.best_trade.exchange }}) –
+         {{ report.highlights.best_trade.timeframe }}:
+         <span class="green">€{{ report.highlights.best_trade.pnl }}</span>
+      </p>
+    {% else %}
+      <p>No trades this week.</p>
+    {% endif %}
+
+    <h3>Worst Trade</h3>
+    {% if report.highlights.worst_trade %}
+      <p>{{ report.highlights.worst_trade.symbol }} ({{ report.highlights.worst_trade.exchange }}) –
+         {{ report.highlights.worst_trade.timeframe }}:
+         <span class="red">€{{ report.highlights.worst_trade.pnl }}</span>
+      </p>
+    {% else %}
+      <p>No trades this week.</p>
+    {% endif %}
+  </div>
+
+  <!-- EXPOSURE -->
+  <div class="card">
+    <h2>Exposure</h2>
+    <p>Crypto: {{ report.exposure.crypto_pct }}%</p>
+    <p>Cash: {{ report.exposure.cash_pct }}%</p>
+
+    <h3>By Coin</h3>
+    <ul>
+      {% for coin, pct in report.exposure.by_coin.items() %}
+      <li>{{ coin }}: {{ pct }}%</li>
+      {% endfor %}
+    </ul>
+
+    <h3>By Exchange</h3>
+    <ul>
+      {% for ex, pct in report.exposure.by_exchange.items() %}
+      <li>{{ ex }}: {{ pct }}%</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- CAPITAL EFFICIENCY -->
+  <div class="card">
+    <h2>Capital Efficiency</h2>
+    <p>EUR deployed: €{{ report.capital_efficiency.eur_deployed }}</p>
+    <p>EUR reserved: €{{ report.capital_efficiency.eur_reserved }}</p>
+    <p>EUR free: €{{ report.capital_efficiency.eur_free }}</p>
+  </div>
+
+  <!-- SYSTEM RELIABILITY -->
+  <div class="card">
+    <h2>System Reliability</h2>
+    <p>API uptime: {{ report.system_reliability.api_uptime_pct }}%</p>
+    <p>Trader uptime: {{ report.system_reliability.trader_uptime_pct }}%</p>
+    <p>OHLC failures: {{ report.system_reliability.ohlc_failures }}</p>
+    <p>Order retries: {{ report.system_reliability.order_retries }}</p>
+    <p>Credential issues: {{ report.system_reliability.credential_issues }}</p>
+  </div>
+
+  <!-- STRATEGY CHANGES -->
+  <div class="card">
+    <h2>Strategy Changes</h2>
+
+    <h3>Added</h3>
+    {% if report.strategy_changes.added %}
+      <ul>{% for s in report.strategy_changes.added %}<li>{{ s }}</li>{% endfor %}</ul>
+    {% else %}
+      <p>No new strategies.</p>
+    {% endif %}
+
+    <h3>Updated</h3>
+    {% if report.strategy_changes.updated %}
+      <ul>{% for s in report.strategy_changes.updated %}<li>{{ s }}</li>{% endfor %}</ul>
+    {% else %}
+      <p>No updates this week.</p>
+    {% endif %}
+
+    <h3>Deleted</h3>
+    {% if report.strategy_changes.deleted %}
+      <ul>{% for s in report.strategy_changes.deleted %}<li>{{ s }}</li>{% endfor %}</ul>
+    {% else %}
+      <p>No strategies removed.</p>
+    {% endif %}
+  </div>
+
+</body>
+</html>
+

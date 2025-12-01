@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Aurono Reports</title>
+<style>
+  body { font-family: system-ui; background: #0a0f1f; color: #e5e7eb; padding: 24px; }
+  h1, h2 { color: #facc15; }
+  .section { margin-bottom: 32px; }
+  a { color: #fbbf24; text-decoration: none; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  td, th { padding: 8px; border-bottom: 1px solid rgba(148,163,184,0.25); }
+</style>
+</head>
+
+<body>
+  <h1>Aurono Reports</h1>
+
+  <div class="section">
+    <h2>Daily Reports</h2>
+    <table>
+      <tr><th>File</th><th>View</th><th>JSON</th></tr>
+      {% for f in daily_reports %}
+      <tr>
+        <td>{{ f }}</td>
+        <td><a href="/reports/view/daily_{{ f.split('.')[0].split('_')[1] }}.html">View</a></td>
+        <td><a href="/reports/download/daily/{{ f }}">Download JSON</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Weekly Reports</h2>
+    <table>
+      <tr><th>File</th><th>View</th><th>JSON</th></tr>
+      {% for f in weekly_reports %}
+      <tr>
+        <td>{{ f }}</td>
+        <td><a href="/reports/view/weekly_{{ f.split('.')[0].split('_')[1] }}.html">View</a></td>
+        <td><a href="/reports/download/weekly/{{ f }}">Download JSON</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+</body>
+</html>
+

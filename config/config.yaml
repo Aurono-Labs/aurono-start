@@ -7,3 +7,12 @@ db_path: ../data/trades.db
 dashboard_host: 0.0.0.0
 dashboard_port: 8000
 live_trading: false
+
+email:
+  enabled: false           # controlled from Settings UI
+  username: ""             # user email
+  password: ""             # app password
+  to: ""                   # normally same as username
+  smtp_host: "smtp.gmail.com"  # static, no need to expose
+  smtp_port: 587               # static, no need to expose
+  from: "Aurono"               # static sender name

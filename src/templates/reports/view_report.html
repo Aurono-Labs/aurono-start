@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Report Viewer</title>
+<style>
+  body { margin: 0; padding: 0; background: #0a0f1f; }
+  iframe {
+    width: 100%;
+    height: 100vh;
+    border: none;
+  }
+</style>
+</head>
+
+<body>
+  <!-- Render pre-generated HTML inside an iframe -->
+  <iframe srcdoc="{{ content|safe }}"></iframe>
+</body>
+</html>
+

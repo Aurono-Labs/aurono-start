@@ -1,0 +1,109 @@
+{
+  "$id": "aurono.daily.report.schema.v1",
+  "type": "object",
+  "required": ["date", "system", "filled_orders", "capital", "portfolio", "alerts"],
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "system": {
+      "type": "object",
+      "required": ["trader_running", "dashboard_running", "exchanges"],
+      "properties": {
+        "trader_running": { "type": "boolean" },
+        "dashboard_running": { "type": "boolean" },
+        "exchanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "connected", "last_ohlc_update_ok", "last_ticker_ok"],
+            "properties": {
+              "name": { "type": "string", "enum": ["kraken", "bitvavo", "coinbase"] },
+              "connected": { "type": "boolean" },
+              "last_ohlc_update_ok": { "type": "boolean" },
+              "last_ticker_ok": { "type": "boolean" },
+              "errors": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "filled_orders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "symbol",
+          "exchange",
+          "timeframe",
+          "side",
+          "amount",
+          "price",
+          "timestamp",
+          "strategy_label"
+        ],
+        "properties": {
+          "symbol": { "type": "string" },
+          "exchange": { "type": "string" },
+          "timeframe": { "type": "string", "enum": ["1h", "4h", "1d"] },
+          "side": { "type": "string", "enum": ["buy", "sell"] },
+          "amount": { "type": "number" },
+          "price": { "type": "number" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "strategy_label": { "type": "string" },
+          "pnl": { "type": "number" }
+        }
+      }
+    },
+
+    "capital": {
+      "type": "object",
+      "required": ["reserved", "available"],
+      "properties": {
+        "reserved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["strategy_id", "symbol", "exchange", "amount_eur"],
+            "properties": {
+              "strategy_id": { "type": "integer" },
+              "symbol": { "type": "string" },
+              "exchange": { "type": "string" },
+              "amount_eur": { "type": "number" }
+            }
+          }
+        },
+        "available": {
+          "type": "object",
+          "patternProperties": {
+            ".*": { "type": "number" }
+          }
+        }
+      }
+    },
+
+    "portfolio": {
+      "type": "object",
+      "required": ["total_value_eur", "crypto_value_eur", "cash_value_eur", "unrealized_pnl_eur", "change_since_yesterday_pct"],
+      "properties": {
+        "total_value_eur": { "type": "number" },
+        "crypto_value_eur": { "type": "number" },
+        "cash_value_eur": { "type": "number" },
+        "unrealized_pnl_eur": { "type": "number" },
+        "change_since_yesterday_pct": { "type": "number" }
+      }
+    },
+
+    "alerts": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
+

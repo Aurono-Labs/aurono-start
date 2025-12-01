@@ -32,6 +32,7 @@ import os, signal, time, psutil
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+app.state.templates = Jinja2Templates(directory="src/templates")
 from datetime import datetime
 import sqlite3
 
@@ -40,6 +41,8 @@ from routes import strategies
 app.include_router(strategies.router)
 from routes import settings
 app.include_router(settings.router)
+from routes.reports import router as reports_router
+app.include_router(reports_router)
 
 TEMPLATE_DIR = root_path("src","templates")
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))

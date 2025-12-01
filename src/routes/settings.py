@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse
-from starlette.status import HTTP_303_SEE_OTHER
 from fastapi.templating import Jinja2Templates
-from pathlib import Path
+from starlette.status import HTTP_303_SEE_OTHER
+
+import yaml
 
 from utils import (
     log_event,
@@ -10,6 +13,8 @@ from utils import (
     upsert_credentials,
     get_credentials_plain_by_id,
     delete_credentials_by_id,
+    current_config,
+    get_config_path,
 )
 from kraken_exchange import KrakenExchange
 from bitvavo_exchange import BitvavoExchange
@@ -30,6 +35,7 @@ def show_settings(
     message_type: str | None = None,
 ):
     creds = list_credentials_for_ui()
+    email_cfg = current_config().get("email", {})
 
     return templates.TemplateResponse(
         "settings.html",
@@ -38,6 +44,10 @@ def show_settings(
             "credentials": creds,
             "message": message,
             "message_type": message_type,
+            "email_enabled": email_cfg.get("enabled", False),
+            "email_username": email_cfg.get("username", ""),
+            "email_to": email_cfg.get("to", ""),
+            "email_password": "********" if email_cfg.get("password") else "",
         },
     )
 
@@ -99,6 +109,113 @@ def delete_credentials(cred_id: int):
 
     return RedirectResponse(url="/settings", status_code=HTTP_303_SEE_OTHER)
 
+
+# --------------------------------------------------------------
+# Update Email Reporting Settings
+# --------------------------------------------------------------
+@router.post("/email")
+def update_email_settings(
+    request: Request,
+    email_enabled: str = Form(None),
+    email_username: str = Form(""),
+    email_to: str = Form(""),
+    email_password: str = Form(""),
+):
+    """
+    Update email reporting settings in config.yaml.
+    """
+    config = current_config()
+
+    # Ensure email section exists
+    if "email" not in config:
+        config["email"] = {}
+
+    # Toggle enabled
+    config["email"]["enabled"] = (email_enabled == "on")
+
+    # Username / sender
+    config["email"]["username"] = email_username.strip()
+
+    # Receiver (default = sender)
+    config["email"]["to"] = (email_to.strip() or email_username.strip())
+
+    # Update password ONLY if user typed something new
+    if email_password not in ("", None, "********"):
+        config["email"]["password"] = email_password.strip()
+
+    # Save back to config.yaml
+    with open(get_config_path(), "w", encoding="utf-8") as f:
+        yaml.dump(config, f)
+
+    return RedirectResponse(url="/settings", status_code=HTTP_303_SEE_OTHER)
+
+
+# --------------------------------------------------------------
+# Generate Test Daily Report (manual trigger)
+# --------------------------------------------------------------
+@router.post("/test-report")
+def test_generate_daily_report(request: Request):
+    from report_builder import generate_daily_report
+    from report_storage import (
+        save_daily_report_json,
+        save_html_report,
+        render_daily_report_html,
+    )
+
+    try:
+        report = generate_daily_report()
+        html = render_daily_report_html(report)
+        date_str = report["date"].split("T")[0]
+
+        save_daily_report_json(report)
+        save_html_report(html, f"daily_test_{date_str}")
+
+        return show_settings(
+            request,
+            "Test Daily Report generated successfully.",
+            "success",
+        )
+    except Exception as e:
+        return show_settings(
+            request,
+            f"Test Report failed: {e}",
+            "error",
+        )
+
+
+# --------------------------------------------------------------
+# Send Test Email
+# --------------------------------------------------------------
+@router.post("/test-email")
+def test_email(request: Request):
+    import asyncio
+    from emailer import send_email
+
+    email_cfg = current_config().get("email", {})
+
+    if not email_cfg.get("enabled", False):
+        return show_settings(request, "Email is disabled.", "error")
+
+    try:
+        html = """
+        <h2>Aurono Test Email</h2>
+        <p>This is a test email to confirm your SMTP settings are correct.</p>
+        """
+
+        asyncio.run(
+            send_email(
+                subject="Aurono Test Email",
+                html_body=html,
+                attachments=[],
+            )
+        )
+
+        return show_settings(request, "Test email sent successfully.", "success")
+
+    except Exception as e:
+        return show_settings(request, f"Email failed: {e}", "error")
+
+
 # --------------------------------------------------------------
 # Mask credentials
 # --------------------------------------------------------------
@@ -113,6 +230,7 @@ def mask_key(k: str) -> str:
     if len(k) <= 4:
         return "••••"
     return "••••••••••" + k[-4:]
+
 
 # --------------------------------------------------------------
 # Test credentials
