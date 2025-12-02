@@ -151,7 +151,7 @@ def test_generate_daily_report(request: Request):
         date_str = report["date"].split("T")[0]
 
         save_daily_report_json(report)
-        save_html_report(html, f"daily_test_{date_str}")
+        save_html_report(html, f"daily_{date_str}")
 
         return show_settings(request, "Test Daily Report generated successfully.", "success")
 
@@ -178,7 +178,7 @@ def test_generate_weekly_report(request: Request):
         date_str = report["week_end"]
 
         save_weekly_report_json(report)
-        save_html_report(html, f"weekly_test_{date_str}")
+        save_html_report(html, f"weekly_{date_str}")
 
         return show_settings(request, "Test Weekly Report generated successfully.", "success")
 
