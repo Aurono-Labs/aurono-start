@@ -35,17 +35,29 @@ from fastapi.templating import Jinja2Templates
 from datetime import datetime
 import sqlite3
 
+# ---------------------------
+# FASTAPI APP + TEMPLATES
+# ---------------------------
 app = FastAPI(title="Aurono Dashboard", version="1.3")
+
+# Define the template directory BEFORE loading routers
+TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+app.state.templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+
+# ---------------------------
+# ROUTERS (must load AFTER templates)
+# ---------------------------
 from routes import strategies
 app.include_router(strategies.router)
+
 from routes import settings
 app.include_router(settings.router)
+
 from routes.reports import router as reports_router
 app.include_router(reports_router)
 
-TEMPLATE_DIR = root_path("src","templates")
-templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
-templates.env.globals["abs"] = abs  # ✅ make abs() available in templates
+templates = app.state.templates
+templates.env.globals["abs"] = abs
 
 def log_path():
     cfg = current_config()
