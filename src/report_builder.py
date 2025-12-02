@@ -526,8 +526,8 @@ def generate_weekly_report() -> Dict[str, Any]:
             "buys": len(buys_s),
             "sells": len(sells_s),
             "weekly_pnl_eur": round(pnl_s, 2),
-            "avg_buy_price": round(avg_buy, 4) if avg_buy is not None else None,
-            "avg_sell_price": round(avg_sell, 4) if avg_sell is not None else None,
+            "avg_buy_price": round(avg_buy, 4) if avg_buy is not None else 0.0,
+            "avg_sell_price": round(avg_sell, 4) if avg_sell is not None else 0.0,
         })
 
     # --------------------------------------------------------

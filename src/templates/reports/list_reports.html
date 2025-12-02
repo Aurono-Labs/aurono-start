@@ -10,35 +10,85 @@
   a { color: #fbbf24; text-decoration: none; }
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   td, th { padding: 8px; border-bottom: 1px solid rgba(148,163,184,0.25); }
+  .muted { color: #94a3b8; font-size: 12px; }
 </style>
 </head>
 
 <body>
   <h1>Aurono Reports</h1>
 
+  <!-- DAILY ---------------------------------------------------------->
   <div class="section">
     <h2>Daily Reports</h2>
     <table>
-      <tr><th>File</th><th>View</th><th>JSON</th></tr>
+      <tr><th>JSON File</th><th>View</th><th>Download</th></tr>
+
       {% for f in daily_reports %}
+        {% set base = f.replace('.json','') %}
+        {% set html_name = base + '.html' %}
+        {% set html_exists = html_name in html_reports %}
+
       <tr>
         <td>{{ f }}</td>
-        <td><a href="/reports/view/daily_{{ f.split('.')[0].split('_')[1] }}.html">View</a></td>
-        <td><a href="/reports/download/daily/{{ f }}">Download JSON</a></td>
+
+        <!-- VIEW -->
+        <td>
+          {% if html_exists %}
+            <a href="/reports/view/{{ html_name }}">View</a>
+          {% else %}
+            <span class="muted">No HTML</span>
+          {% endif %}
+        </td>
+
+        <!-- JSON DOWNLOAD -->
+        <td><a href="/reports/download/daily/{{ f }}">JSON</a></td>
       </tr>
+
       {% endfor %}
     </table>
   </div>
 
+  <!-- WEEKLY ---------------------------------------------------------->
   <div class="section">
     <h2>Weekly Reports</h2>
     <table>
-      <tr><th>File</th><th>View</th><th>JSON</th></tr>
+      <tr><th>JSON File</th><th>View</th><th>Download</th></tr>
+
       {% for f in weekly_reports %}
+        {% set base = f.replace('.json','') %}
+        {% set html_name = base + '.html' %}
+        {% set html_exists = html_name in html_reports %}
+
       <tr>
         <td>{{ f }}</td>
-        <td><a href="/reports/view/weekly_{{ f.split('.')[0].split('_')[1] }}.html">View</a></td>
-        <td><a href="/reports/download/weekly/{{ f }}">Download JSON</a></td>
+
+        <!-- VIEW -->
+        <td>
+          {% if html_exists %}
+            <a href="/reports/view/{{ html_name }}">View</a>
+          {% else %}
+            <span class="muted">No HTML</span>
+          {% endif %}
+        </td>
+
+        <!-- JSON DOWNLOAD -->
+        <td><a href="/reports/download/weekly/{{ f }}">JSON</a></td>
+      </tr>
+
+      {% endfor %}
+    </table>
+  </div>
+
+  <!-- HTML REPORT LIST ------------------------------------------------>
+  <div class="section">
+    <h2>HTML Reports (All)</h2>
+    <table>
+      <tr><th>HTML File</th><th>Open</th></tr>
+
+      {% for f in html_reports %}
+      <tr>
+        <td>{{ f }}</td>
+        <td><a href="/reports/view/{{ f }}">View</a></td>
       </tr>
       {% endfor %}
     </table>

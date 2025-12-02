@@ -21,17 +21,19 @@ def list_files(directory: str):
 
 
 # ------------------------------------------------------------
-# List all daily + weekly reports
+# List ALL reports (daily, weekly, html)
 # ------------------------------------------------------------
 @router.get("/", response_class=HTMLResponse)
 async def reports_index(request: Request):
     daily_files = list_files(DAILY_DIR)
     weekly_files = list_files(WEEKLY_DIR)
+    html_files = list_files(HTML_DIR)
 
     return request.app.state.templates.get_template("reports/list_reports.html").render(
         request=request,
         daily_reports=daily_files,
         weekly_reports=weekly_files,
+        html_reports=html_files,
     )
 
 
@@ -41,8 +43,13 @@ async def reports_index(request: Request):
 @router.get("/view/{name}", response_class=HTMLResponse)
 async def view_report(request: Request, name: str):
     html_path = os.path.join(HTML_DIR, name)
+
+    if not name.endswith(".html"):
+        name = name + ".html"
+        html_path = os.path.join(HTML_DIR, name)
+
     if not os.path.exists(html_path):
-        raise HTTPException(404, "Report HTML not found")
+        raise HTTPException(404, f"Report HTML '{name}' not found")
 
     with open(html_path, "r", encoding="utf-8") as f:
         html_content = f.read()
@@ -54,7 +61,7 @@ async def view_report(request: Request, name: str):
 
 
 # ------------------------------------------------------------
-# Download original JSON report
+# Download original JSON report (daily or weekly)
 # ------------------------------------------------------------
 @router.get("/download/{kind}/{name}")
 async def download_report(kind: str, name: str):
@@ -67,7 +74,7 @@ async def download_report(kind: str, name: str):
 
     path = os.path.join(folder, name)
     if not os.path.exists(path):
-        raise HTTPException(404, "Report not found")
+        raise HTTPException(404, f"Report JSON '{name}' not found")
 
     return FileResponse(path, filename=name)
 
