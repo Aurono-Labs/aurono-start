@@ -1,164 +1,263 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Aurono Daily Report</title>
-<style>
-  body {
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-    background: #0a0f1f;
-    color: #e5e7eb;
-    padding: 24px;
-    line-height: 1.45;
-  }
-  h1, h2 { color: #facc15; }
-  .card {
-    background: #020617;
-    border: 1px solid rgba(148,163,184,0.35);
-    padding: 16px;
-    border-radius: 10px;
-    margin-bottom: 22px;
-  }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  th, td {
-    padding: 6px 4px;
-    border-bottom: 1px solid rgba(148,163,184,0.25);
-    font-size: 14px;
-  }
-  th { color: #fbbf24; text-align: left; }
-  .green { color: #22c55e; }
-  .red { color: #ef4444; }
-</style>
+    <meta charset="UTF-8">
+    <title>Aurono Daily Report</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0a0f1f;
+            color: #e5e7eb;
+            padding: 24px;
+            line-height: 1.5;
+        }
+        h1, h2, h3 {
+            color: #facc15;
+            margin-top: 0;
+            letter-spacing: 0.5px;
+        }
+        .card {
+            background: #020617;
+            border: 1px solid rgba(148,163,184,0.25);
+            padding: 18px;
+            border-radius: 12px;
+            margin-bottom: 22px;
+        }
+        .section-title {
+            font-size: 20px;
+            margin-bottom: 4px;
+        }
+        .sub-text {
+            color: #94a3b8;
+            font-size: 13px;
+        }
+        .status-ok {
+            color: #22c55e;
+            font-weight: bold;
+        }
+        .status-bad {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+        th, td {
+            border-bottom: 1px solid rgba(148,163,184,0.18);
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+        .alert-badge {
+            background: rgba(239,68,68,0.15);
+            padding: 6px 10px;
+            border-left: 3px solid #ef4444;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+    </style>
 </head>
 
 <body>
-  <h1>Aurono Daily Report</h1>
-  <p>{{ report.date }}</p>
 
-  <!-- SYSTEM STATUS -->
-  <div class="card">
-    <h2>System</h2>
-    <p>Trader running: {{ "Yes" if report.system.trader_running else "No" }}</p>
-    <p>Dashboard running: {{ "Yes" if report.system.dashboard_running else "No" }}</p>
+<h1>Aurono Daily Report</h1>
+<p class="sub-text">Date: {{ report.date }}</p>
+
+<!-- SYSTEM STATUS ------------------------------------------------------------ -->
+<div class="card">
+    <h2 class="section-title">System Status</h2>
+
+    <p>
+        Trader:
+        {% if report.system.trader_running %}
+            <span class="status-ok">Running</span>
+        {% else %}
+            <span class="status-bad">Stopped</span>
+        {% endif %}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        Dashboard:
+        {% if report.system.dashboard_running %}
+            <span class="status-ok">Running</span>
+        {% else %}
+            <span class="status-bad">Stopped</span>
+        {% endif %}
+    </p>
 
     <h3>Exchanges</h3>
     <table>
-      <tr>
-        <th>Exchange</th>
-        <th>Connected</th>
-        <th>OHLC OK</th>
-        <th>Ticker OK</th>
-        <th>Errors</th>
-      </tr>
-      {% for ex in report.system.exchanges %}
-      <tr>
-        <td>{{ ex.name }}</td>
-        <td>{{ "Yes" if ex.connected else "No" }}</td>
-        <td>{{ "Yes" if ex.last_ohlc_update_ok else "No" }}</td>
-        <td>{{ "Yes" if ex.last_ticker_ok else "No" }}</td>
-        <td>
-          {% if ex.errors %}
-            {{ ex.errors|join(", ") }}
-          {% else %}
-            -
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
+        <thead>
+            <tr>
+                <th>Exchange</th>
+                <th>Connected</th>
+                <th>OHLC</th>
+                <th>Ticker</th>
+                <th>Errors</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ex in report.system.exchanges %}
+            <tr>
+                <td>{{ ex.name|capitalize }}</td>
+                <td>
+                    {% if ex.connected %}
+                        <span class="status-ok">OK</span>
+                    {% else %}
+                        <span class="status-bad">Fail</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ex.last_ohlc_update_ok %}
+                        <span class="status-ok">OK</span>
+                    {% else %}
+                        <span class="status-bad">Fail</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ex.last_ticker_ok %}
+                        <span class="status-ok">OK</span>
+                    {% else %}
+                        <span class="status-bad">Fail</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if ex.errors %}
+                        {{ ex.errors|length }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
-  </div>
+</div>
 
-  <!-- FILLED ORDERS -->
-  <div class="card">
-    <h2>Filled Orders (Last 24 Hours)</h2>
+<!-- FILLED ORDERS ------------------------------------------------------------ -->
+<div class="card">
+    <h2 class="section-title">Filled Orders (last 24h)</h2>
 
     {% if report.filled_orders %}
     <table>
-      <tr>
-        <th>Time</th>
-        <th>Pair</th>
-        <th>Side</th>
-        <th>Amount</th>
-        <th>Price</th>
-        <th>PnL</th>
-        <th>Strategy</th>
-      </tr>
-      {% for o in report.filled_orders %}
-      <tr>
-        <td>{{ o.timestamp }}</td>
-        <td>{{ o.symbol }} – {{ o.timeframe }} ({{ o.exchange }})</td>
-        <td>{{ o.side }}</td>
-        <td>{{ o.amount }}</td>
-        <td>{{ o.price }}</td>
-        <td class="{% if o.pnl >= 0 %}green{% else %}red{% endif %}">
-          {{ o.pnl }}
-        </td>
-        <td>{{ o.strategy_label }}</td>
-      </tr>
-      {% endfor %}
+        <thead>
+            <tr>
+                <th>Symbol</th>
+                <th>TF</th>
+                <th>Ex.</th>
+                <th>Side</th>
+                <th>Amount</th>
+                <th>Price</th>
+                <th>PnL</th>
+                <th>Time</th>
+                <th>Strategy</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in report.filled_orders %}
+            <tr>
+                <td>{{ o.symbol }}</td>
+                <td>{{ o.timeframe }}</td>
+                <td>{{ o.exchange }}</td>
+                <td>{{ o.side }}</td>
+                <td>{{ "%.6f"|format(o.amount) }}</td>
+                <td>€{{ "%.2f"|format(o.price) }}</td>
+                <td>
+                    {% if o.pnl %}
+                        €{{ "%.2f"|format(o.pnl) }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>{{ o.timestamp }}</td>
+                <td>{{ o.strategy_label }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
     {% else %}
-    <p>No fills in the last 24 hours.</p>
+        <p class="sub-text">No orders filled in the last 24 hours.</p>
     {% endif %}
-  </div>
+</div>
 
-  <!-- CAPITAL -->
-  <div class="card">
-    <h2>Capital</h2>
 
-    <h3>Reserved Capital</h3>
+<!-- CAPITAL ------------------------------------------------------------------ -->
+<div class="card">
+    <h2 class="section-title">Capital</h2>
+
+    <h3>Reserved (per strategy)</h3>
     <table>
-      <tr>
-        <th>Strategy</th>
-        <th>Symbol</th>
-        <th>Exchange</th>
-        <th>Reserved EUR</th>
-      </tr>
-      {% for r in report.capital.reserved %}
-      <tr>
-        <td>{{ r.strategy_id }}</td>
-        <td>{{ r.symbol }}</td>
-        <td>{{ r.exchange }}</td>
-        <td>{{ r.amount_eur }}</td>
-      </tr>
-      {% endfor %}
+        <thead>
+            <tr>
+                <th>Strategy ID</th>
+                <th>Symbol</th>
+                <th>Exchange</th>
+                <th>Reserved (€)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in report.capital.reserved %}
+            <tr>
+                <td>{{ r.strategy_id }}</td>
+                <td>{{ r.symbol }}</td>
+                <td>{{ r.exchange }}</td>
+                <td>€{{ "%.2f"|format(r.amount_eur) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
 
-    <h3>Available Capital</h3>
+    <h3 style="margin-top:18px;">Available Per Exchange</h3>
     <table>
-      <tr><th>Exchange</th><th>Available EUR</th></tr>
-      {% for ex, bal in report.capital.available.items() %}
-      <tr>
-        <td>{{ ex }}</td>
-        <td>{{ bal }}</td>
-      </tr>
-      {% endfor %}
+        <thead>
+            <tr>
+                <th>Exchange</th>
+                <th>Available (€)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ex, val in report.capital.available.items() %}
+            <tr>
+                <td>{{ ex }}</td>
+                <td>€{{ "%.2f"|format(val) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
-  </div>
+</div>
 
-  <!-- PORTFOLIO -->
-  <div class="card">
-    <h2>Portfolio</h2>
-    <p>Total value: €{{ report.portfolio.total_value_eur }}</p>
-    <p>Crypto value: €{{ report.portfolio.crypto_value_eur }}</p>
-    <p>Cash value: €{{ report.portfolio.cash_value_eur }}</p>
-    <p>Unrealized PnL: €{{ report.portfolio.unrealized_pnl_eur }}</p>
-    <p>Change vs yesterday: {{ report.portfolio.change_since_yesterday_pct }}%</p>
-  </div>
 
-  <!-- ALERTS -->
-  <div class="card">
-    <h2>Alerts</h2>
+<!-- PORTFOLIO ---------------------------------------------------------------- -->
+<div class="card">
+    <h2 class="section-title">Portfolio Overview</h2>
+
+    <p>Total value: <strong>€{{ "%.2f"|format(report.portfolio.total_value_eur) }}</strong></p>
+    <p>Crypto value: €{{ "%.2f"|format(report.portfolio.crypto_value_eur) }}</p>
+    <p>Cash value: €{{ "%.2f"|format(report.portfolio.cash_value_eur) }}</p>
+    <p>Unrealized PnL: €{{ "%.2f"|format(report.portfolio.unrealized_pnl_eur) }}</p>
+    <p>Change since yesterday: {{ "%.2f"|format(report.portfolio.change_since_yesterday_pct) }}%</p>
+</div>
+
+
+<!-- ALERTS ------------------------------------------------------------------- -->
+<div class="card">
+    <h2 class="section-title">Alerts</h2>
+
     {% if report.alerts %}
-      <ul>
         {% for a in report.alerts %}
-        <li>{{ a }}</li>
+            <div class="alert-badge">{{ a }}</div>
         {% endfor %}
-      </ul>
     {% else %}
-      <p>No alerts.</p>
+        <p class="sub-text">No alerts in the last 24 hours.</p>
     {% endif %}
-  </div>
+</div>
 
 </body>
 </html>

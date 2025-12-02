@@ -61,7 +61,7 @@ class BitvavoExchange(ExchangeBase):
         
     # Cache: stores price & amount ticks per market
     _market_tick_cache: Dict[str, Dict[str, Decimal]] = {}
-
+    
     def _load_market_ticks(self, market: str) -> Dict[str, Decimal]:
         """
         Load price tick and amount tick from Bitvavo /markets endpoint.
@@ -74,7 +74,8 @@ class BitvavoExchange(ExchangeBase):
             return self._market_tick_cache[market]
 
         try:
-            r = requests.get(f"{BITVAVO_BASE}/markets", timeout=10).json()
+            r = requests.get(f"{BITVAVO_BASE}/markets", timeout=10)
+            data = r.json()
         except Exception as e:
             log_event(f"⚠️ Bitvavo tick fetch failed: {e}")
             # Safe fallback
@@ -82,17 +83,38 @@ class BitvavoExchange(ExchangeBase):
             self._market_tick_cache[market] = ticks
             return ticks
 
-        for info in r:
+        if not isinstance(data, list):
+            log_event(f"⚠️ Bitvavo /markets unexpected JSON: {data}")
+            ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
+            self._market_tick_cache[market] = ticks
+            return ticks
+
+        for info in data:
+            if not isinstance(info, dict):
+                continue
             if info.get("market", "").upper() == market:
-                price_dec = info.get("priceDecimals", 2)
-                amount_dec = info.get("amountDecimals", 4)
+                # Bitvavo docs: use quantityDecimals for amount
+                # priceDecimals is still used for price precision
+                price_dec = info.get("priceDecimals")
+                qty_dec = info.get("quantityDecimals") or info.get("amountDecimals")
+
+                try:
+                    price_dec_int = int(price_dec) if price_dec is not None else 2
+                except Exception:
+                    price_dec_int = 2
+
+                try:
+                    qty_dec_int = int(qty_dec) if qty_dec is not None else 4
+                except Exception:
+                    qty_dec_int = 4
 
                 ticks = {
-                    "price": Decimal("1") / (Decimal("10")**Decimal(price_dec)),
-                    "amount": Decimal("1") / (Decimal("10")**Decimal(amount_dec)),
+                    "price": Decimal("1") / (Decimal("10") ** price_dec_int),
+                    "amount": Decimal("1") / (Decimal("10") ** qty_dec_int),
                 }
 
                 self._market_tick_cache[market] = ticks
+                log_event(f"ℹ️ Bitvavo ticks for {market}: {ticks}")
                 return ticks
 
         # Fallback if market not found
@@ -100,16 +122,48 @@ class BitvavoExchange(ExchangeBase):
         ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
         self._market_tick_cache[market] = ticks
         return ticks
-
+        
     def _normalize_amount(self, market: str, amount: Decimal) -> Decimal:
+        """
+        Snap amount down to the nearest valid tick for this market.
+        Never round up, to avoid trying to trade more than allowed.
+        """
         ticks = self._load_market_ticks(market)
         tick = ticks["amount"]
 
         try:
-            return amount.quantize(tick, rounding=ROUND_HALF_UP)
+            if tick <= 0:
+                return amount
+            units = (amount / tick).quantize(Decimal("0"), rounding=ROUND_DOWN)
+            norm = units * tick
+            return norm
         except Exception:
             log_event(f"⚠️ Bitvavo amount rounding failed for {market} amount={amount}, tick={tick}")
             return amount
+
+    def _normalize_price(self, market: str, side: str, price: Decimal) -> Decimal:
+        """
+        Snap price to the nearest valid tick:
+        - BUY  → round UP (so price is not too low)
+        - SELL → round DOWN (so price is not too high)
+        """
+        ticks = self._load_market_ticks(market)
+        tick = ticks["price"]
+
+        try:
+            if tick <= 0:
+                return price
+
+            if side.lower() == "buy":
+                units = (price / tick).quantize(Decimal("0"), rounding=ROUND_UP)
+            else:
+                units = (price / tick).quantize(Decimal("0"), rounding=ROUND_DOWN)
+
+            norm = units * tick
+            return norm
+        except Exception:
+            log_event(f"⚠️ Bitvavo price rounding failed for {market} price={price}, tick={tick}")
+            return price
 
 
     # ----------------------------------------
@@ -345,20 +399,14 @@ class BitvavoExchange(ExchangeBase):
         """
         cfg = current_config()
         live = cfg.get("live_trading", False)
-        market = self._market(symbol)
         
-        # Side-aware rounding
-        ticks = self._load_market_ticks(market)
-        tick = ticks["price"]
+        market = self._market(symbol)
 
-        if side.lower() == "buy":
-            # BUY → price must be rounded UP to avoid being too low
-            price = price.quantize(tick, rounding=ROUND_UP)
-        else:
-            # SELL → price must be rounded DOWN to avoid being too high
-            price = price.quantize(tick, rounding=ROUND_DOWN)
+        # Normalize to Bitvavo tick sizes
+        price = self._normalize_price(market, side, to_decimal(price))
+        volume = self._normalize_amount(market, to_decimal(volume))
 
-        volume = self._normalize_amount(market, volume)
+        log_event(f"📏 Bitvavo normalized {side.upper()} for {market}: price={price}, amount={volume}")
 
         if not live:
             log_event(f"🧪 Simulated {side.upper()} {volume} {market} @ €{price} (Bitvavo)")

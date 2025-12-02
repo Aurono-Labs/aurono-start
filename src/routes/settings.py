@@ -149,7 +149,6 @@ def update_email_settings(
 
     return RedirectResponse(url="/settings", status_code=HTTP_303_SEE_OTHER)
 
-
 # --------------------------------------------------------------
 # Generate Test Daily Report (manual trigger)
 # --------------------------------------------------------------
@@ -163,10 +162,16 @@ def test_generate_daily_report(request: Request):
     )
 
     try:
+        # Build the full schema-aligned daily report
         report = generate_daily_report()
+
+        # Convert to HTML using the daily_report.html template
         html = render_daily_report_html(report)
+
+        # Filename
         date_str = report["date"].split("T")[0]
 
+        # Save JSON + HTML in /reports/daily + /reports/html
         save_daily_report_json(report)
         save_html_report(html, f"daily_test_{date_str}")
 
@@ -175,11 +180,45 @@ def test_generate_daily_report(request: Request):
             "Test Daily Report generated successfully.",
             "success",
         )
+
     except Exception as e:
         return show_settings(
             request,
             f"Test Report failed: {e}",
             "error",
+        )
+
+# --------------------------------------------------------------
+# Generate Test Weekly Report (manual trigger)
+# --------------------------------------------------------------
+@router.post("/test-weekly-report")
+def test_generate_weekly_report(request: Request):
+    from report_builder import generate_weekly_report
+    from report_storage import (
+        save_weekly_report_json,
+        save_html_report,
+        render_weekly_report_html
+    )
+
+    try:
+        report = generate_weekly_report()
+        html = render_weekly_report_html(report)
+
+        date_str = report["week_end"]
+
+        save_weekly_report_json(report)
+        save_html_report(html, f"weekly_test_{date_str}")
+
+        return show_settings(
+            request,
+            "Test Weekly Report generated successfully.",
+            "success"
+        )
+    except Exception as e:
+        return show_settings(
+            request,
+            f"Weekly Test Report failed: {e}",
+            "error"
         )
 
 
