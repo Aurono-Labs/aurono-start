@@ -1,221 +1,155 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Aurono Weekly Report</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #0a0f1f;
-            color: #e5e7eb;
-            padding: 28px;
-            line-height: 1.55;
-        }
-
-        h1 {
-            color: #facc15;
-            margin-bottom: 4px;
-        }
-        h2 {
-            color: #fbbf24;
-            margin-top: 0;
-        }
-        h3 {
-            color: #e5e7eb;
-            margin-bottom: 6px;
-        }
-
-        .subtle {
-            color: #94a3b8;
-            font-size: 14px;
-            margin-bottom: 20px;
-        }
-
-        .card {
-            background: #020617;
-            border: 1px solid rgba(148,163,184,0.28);
-            padding: 16px 20px;
-            border-radius: 14px;
-            margin-bottom: 26px;
-        }
-
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 18px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 12px;
-            font-size: 14px;
-        }
-
-        th {
-            text-align: left;
-            color: #94a3b8;
-            padding: 6px;
-            border-bottom: 1px solid rgba(148,163,184,0.2);
-            text-transform: uppercase;
-            font-size: 11px;
-            letter-spacing: 0.05em;
-        }
-
-        td {
-            padding: 6px;
-            border-bottom: 1px solid rgba(148,163,184,0.14);
-        }
-
-        .tag {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 8px;
-            background: rgba(148,163,184,0.12);
-            color: #cbd5e1;
-            font-size: 11px;
-        }
-
-        .pnl-pos { color: #4ade80; }
-        .pnl-neg { color: #f87171; }
-    </style>
+<meta charset="UTF-8">
+<title>Aurono Weekly Report</title>
+<style>
+  body { font-family: system-ui; background: #0a0f1f; color: #e5e7eb; padding: 24px; }
+  h1, h2 { color: #facc15; }
+  .card {
+    background: #020617;
+    border: 1px solid rgba(148,163,184,0.35);
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(148,163,184,0.2);
+    text-align: left;
+  }
+  th { font-size: 12px; color: #94a3b8; text-transform: uppercase; }
+  .placeholder { color: #94a3b8; padding: 12px; font-style: italic; }
+</style>
 </head>
 
 <body>
 
 <h1>Aurono Weekly Report</h1>
-<div class="subtle">
-    Week of <strong>{{ report.week_start }}</strong> → <strong>{{ report.week_end }}</strong>
-</div>
+<p>Week: {{ report.week_start }} → {{ report.week_end }}</p>
+
 
 <!-- PERFORMANCE -->
 <div class="card">
-    <h2>Performance Summary</h2>
+  <h2>Weekly Performance</h2>
 
-    <div class="grid-2">
-        <div>
-            <h3>Overview</h3>
-            <p>Weekly P/L:
-                {% if report.performance.weekly_pnl_eur >= 0 %}
-                    <span class="pnl-pos">€{{ "%.2f"|format(report.performance.weekly_pnl_eur) }}</span>
-                {% else %}
-                    <span class="pnl-neg">€{{ "%.2f"|format(report.performance.weekly_pnl_eur) }}</span>
-                {% endif %}
-            </p>
-            <p>Buys: {{ report.performance.buys }}</p>
-            <p>Sells: {{ report.performance.sells }}</p>
-            <p>Sell Win Rate: {{ "%.1f"|format(report.performance.sell_win_rate) }}%</p>
-        </div>
-
-        <div>
-            <h3>Highlights</h3>
-
-            <p><strong>Best Trade:</strong><br>
-                {% if report.highlights.best_trade %}
-                    {{ report.highlights.best_trade.symbol }}
-                    @ {{ report.highlights.best_trade.exchange }},
-                    TF {{ report.highlights.best_trade.timeframe }}
-                    <br>
-                    <span class="pnl-pos">P/L: €{{ "%.2f"|format(report.highlights.best_trade.pnl) }}</span>
-                {% else %}
-                    None
-                {% endif %}
-            </p>
-
-            <p><strong>Worst Trade:</strong><br>
-                {% if report.highlights.worst_trade %}
-                    {{ report.highlights.worst_trade.symbol }}
-                    @ {{ report.highlights.worst_trade.exchange }},
-                    TF {{ report.highlights.worst_trade.timeframe }}
-                    <br>
-                    <span class="pnl-neg">P/L: €{{ "%.2f"|format(report.highlights.worst_trade.pnl) }}</span>
-                {% else %}
-                    None
-                {% endif %}
-            </p>
-        </div>
-    </div>
+  {% if report.performance.buys == 0 and report.performance.sells == 0 %}
+    <div class="placeholder">No trading activity this week.</div>
+  {% else %}
+    <p>Weekly PNL: €{{ "%.2f"|format(report.performance.weekly_pnl_eur) }}</p>
+    <p>Buys: {{ report.performance.buys }}</p>
+    <p>Sells: {{ report.performance.sells }}</p>
+    <p>Sell win rate: {{ "%.2f"|format(report.performance.sell_win_rate) }}%</p>
+  {% endif %}
 </div>
+
 
 <!-- STRATEGIES -->
 <div class="card">
-    <h2>Per-Strategy Breakdown</h2>
+  <h2>Strategy Breakdown</h2>
 
+  {% if report.strategies|length == 0 %}
+    <div class="placeholder">No active strategies this week.</div>
+  {% else %}
     <table>
-        <thead>
-            <tr>
-                <th>Strategy</th>
-                <th>Buys</th>
-                <th>Sells</th>
-                <th>Avg Buy</th>
-                <th>Avg Sell</th>
-                <th>Weekly P/L</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for s in report.strategies %}
-            <tr>
-                <td>
-                    <span class="tag">{{ s.symbol }} {{ s.timeframe }} ({{ s.exchange }})</span>
-                </td>
-                <td>{{ s.buys }}</td>
-                <td>{{ s.sells }}</td>
-                <td>{% if s.avg_buy_price %} €{{ "%.4f"|format(s.avg_buy_price) }} {% else %}-{% endif %}</td>
-                <td>{% if s.avg_sell_price %} €{{ "%.4f"|format(s.avg_sell_price) }} {% else %}-{% endif %}</td>
-                <td>
-                    {% if s.weekly_pnl_eur >= 0 %}
-                        <span class="pnl-pos">€{{ "%.2f"|format(s.weekly_pnl_eur) }}</span>
-                    {% else %}
-                        <span class="pnl-neg">€{{ "%.2f"|format(s.weekly_pnl_eur) }}</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
+      <thead>
+        <tr>
+          <th>Strategy</th><th>Buys</th><th>Sells</th>
+          <th>PNL (€)</th><th>Avg Buy</th><th>Avg Sell</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in report.strategies %}
+        <tr>
+          <td>{{ s.label }}</td>
+          <td>{{ s.buys }}</td>
+          <td>{{ s.sells }}</td>
+          <td>€{{ "%.2f"|format(s.weekly_pnl_eur) }}</td>
+          <td>{% if s.avg_buy_price %}€{{ "%.4f"|format(s.avg_buy_price) }}{% else %}-{% endif %}</td>
+          <td>{% if s.avg_sell_price %}€{{ "%.4f"|format(s.avg_sell_price) }}{% else %}-{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
     </table>
+  {% endif %}
 </div>
+
+
+<!-- HIGHLIGHTS -->
+<div class="card">
+  <h2>Highlights</h2>
+
+  {% if not report.highlights.best_trade and not report.highlights.worst_trade %}
+    <div class="placeholder">No notable trades this week.</div>
+  {% else %}
+    <p><strong>Best trade:</strong>
+      {% if report.highlights.best_trade %}
+        {{ report.highlights.best_trade.symbol }} ({{ report.highlights.best_trade.timeframe }}) —
+        €{{ "%.2f"|format(report.highlights.best_trade.pnl) }}
+      {% else %}
+        -
+      {% endif %}
+    </p>
+
+    <p><strong>Worst trade:</strong>
+      {% if report.highlights.worst_trade %}
+        {{ report.highlights.worst_trade.symbol }} ({{ report.highlights.worst_trade.timeframe }}) —
+        €{{ "%.2f"|format(report.highlights.worst_trade.pnl) }}
+      {% else %}
+        -
+      {% endif %}
+    </p>
+  {% endif %}
+</div>
+
 
 <!-- EXPOSURE -->
 <div class="card">
-    <h2>Exposure</h2>
+  <h2>Portfolio Exposure</h2>
 
-    <div class="grid-2">
-        <div>
-            <h3>Allocation</h3>
-            <p>Crypto: {{ report.exposure.crypto_pct }}%</p>
-            <p>Cash: {{ report.exposure.cash_pct }}%</p>
-        </div>
-
-        <div>
-            <h3>By Exchange</h3>
-            {% for ex, pct in report.exposure.by_exchange.items() %}
-                <p>{{ ex|capitalize }}: {{ pct }}%</p>
-            {% endfor %}
-        </div>
-    </div>
+  {% if report.exposure.crypto_pct == 0 and report.exposure.cash_pct == 0 %}
+    <div class="placeholder">No exposure data available.</div>
+  {% else %}
+    <p>Crypto: {{ report.exposure.crypto_pct }}%</p>
+    <p>Cash: {{ report.exposure.cash_pct }}%</p>
 
     <h3>By Coin</h3>
-    {% for coin, pct in report.exposure.by_coin.items() %}
-        <p>{{ coin }}: {{ pct }}%</p>
-    {% endfor %}
+    {% if report.exposure.by_coin|length == 0 %}
+      <div class="placeholder">No coins held.</div>
+    {% else %}
+      <ul>
+        {% for coin, pct in report.exposure.by_coin.items() %}
+          <li>{{ coin }} — {{ pct }}%</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <h3>By Exchange</h3>
+    {% if report.exposure.by_exchange|length == 0 %}
+      <div class="placeholder">No exchange exposure.</div>
+    {% else %}
+      <ul>
+        {% for ex, pct in report.exposure.by_exchange.items() %}
+          <li>{{ ex }} — {{ pct }}%</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endif %}
 </div>
+
 
 <!-- CAPITAL EFFICIENCY -->
 <div class="card">
-    <h2>Capital Efficiency</h2>
-    <p>Deployed (crypto): €{{ "%.2f"|format(report.capital_efficiency.eur_deployed) }}</p>
-    <p>Reserved (cash): €{{ "%.2f"|format(report.capital_efficiency.eur_reserved) }}</p>
-    <p>Free: €{{ "%.2f"|format(report.capital_efficiency.eur_free) }}</p>
-</div>
+  <h2>Capital Efficiency</h2>
 
-<!-- SYSTEM RELIABILITY -->
-<div class="card">
-    <h2>System Reliability</h2>
-    <p>API uptime: {{ report.system_reliability.api_uptime_pct }}%</p>
-    <p>OHLC failures: {{ report.system_reliability.ohlc_failures }}</p>
-    <p>Order retries: {{ report.system_reliability.order_retries }}</p>
-    <p>Credential issues: {{ report.system_reliability.credential_issues }}</p>
-    <p>Trader uptime: {{ report.system_reliability.trader_uptime_pct }}%</p>
+  {% if report.capital_efficiency.eur_deployed == 0 and report.capital_efficiency.eur_reserved == 0 %}
+    <div class="placeholder">No capital deployed or reserved.</div>
+  {% else %}
+    <p>EUR Deployed: €{{ report.capital_efficiency.eur_deployed }}</p>
+    <p>EUR Reserved: €{{ report.capital_efficiency.eur_reserved }}</p>
+    <p>EUR Free: €{{ report.capital_efficiency.eur_free }}</p>
+  {% endif %}
 </div>
 
 </body>
