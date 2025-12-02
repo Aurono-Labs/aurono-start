@@ -3,17 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <title>Report Viewer</title>
+
 <style>
+  :root {
+    --bg: #0a0f1f;
+    --nav-bg: #020617;
+    --border: rgba(148,163,184,0.3);
+    --gold: #facc15;
+    --text: #e5e7eb;
+  }
+
   body {
     margin: 0;
     padding: 0;
-    background: #0a0f1f;
+    background: var(--bg);
     font-family: system-ui, sans-serif;
+    color: var(--text);
   }
 
   .topbar {
-    background: #020617;
-    border-bottom: 1px solid rgba(148,163,184,0.3);
+    background: var(--nav-bg);
+    border-bottom: 1px solid var(--border);
     padding: 14px 20px;
     position: sticky;
     top: 0;
@@ -23,7 +33,7 @@
   }
 
   .topbar a {
-    color: #facc15;
+    color: var(--gold);
     text-decoration: none;
     font-weight: 600;
     font-size: 15px;
@@ -31,7 +41,7 @@
 
   iframe {
     width: 100%;
-    height: calc(100vh - 50px);
+    height: calc(100vh - 60px);
     border: none;
     background: #ffffff;
   }
@@ -45,7 +55,8 @@
     <a href="/reports">Reports</a>
   </div>
 
-  <iframe src="{{ html_file }}"></iframe>
+  <!-- Safe fallback -->
+  <iframe src="{{ html_file or '' }}"></iframe>
 
 </body>
 </html>

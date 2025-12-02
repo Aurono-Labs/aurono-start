@@ -36,25 +36,31 @@ async def reports_index(request: Request):
 
 
 # ------------------------------------------------------------
-# View HTML-rendered report
+# View a single HTML report using iframe
 # ------------------------------------------------------------
 @router.get("/view/{name}", response_class=HTMLResponse)
 async def view_report(request: Request, name: str):
+    """
+    Verifies the file exists in the HTML_DIR.
+    Then shows view_report.html containing an iframe
+    that loads `/reports/html/<name>`.
+    """
     html_path = os.path.join(HTML_DIR, name)
+
     if not os.path.exists(html_path):
         raise HTTPException(404, "Report HTML not found")
 
-    # Instead of embedding the file’s contents, we point iframe to static file:
+    # This is matched by `app.mount("/reports/html", ...)` in dashboard.py
     iframe_src = f"/reports/html/{name}"
 
     return request.app.state.templates.get_template("reports/view_report.html").render(
         request=request,
-        html_file=iframe_src
+        html_file=iframe_src,
     )
 
 
 # ------------------------------------------------------------
-# Download original JSON report
+# Download original daily/weekly JSON report
 # ------------------------------------------------------------
 @router.get("/download/{kind}/{name}")
 async def download_report(kind: str, name: str):
@@ -66,6 +72,7 @@ async def download_report(kind: str, name: str):
         raise HTTPException(404, "Invalid report type")
 
     path = os.path.join(folder, name)
+
     if not os.path.exists(path):
         raise HTTPException(404, "Report not found")
 
