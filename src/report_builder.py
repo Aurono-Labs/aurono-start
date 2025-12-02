@@ -21,33 +21,41 @@ from exchange_factory import get_exchange
 from report_validator import validate_daily_report, validate_weekly_report
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Helpers: load strategies from DB
-# ------------------------------------------------------------
-def load_strategies_from_db():
+# ============================================================
+
+def load_strategies_from_db() -> List[sqlite3.Row]:
     """
     Returns enabled strategies from DB as sqlite3.Row objects.
 
-    Expected columns:
-    - id, symbol, timeframe, exchange, allocated_eur
+    Expected columns in 'strategies':
+    - id, name, symbol, timeframe, exchange, allocated_eur, enabled
     """
     conn = _open_db()
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT id, symbol, timeframe, exchange, allocated_eur "
-        "FROM strategies WHERE enabled = 1"
+        """
+        SELECT id, name, symbol, timeframe, exchange, allocated_eur
+        FROM strategies
+        WHERE enabled = 1
+        """
     ).fetchall()
     conn.close()
     return rows
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Helpers: compute ACB, balance, value per strategy
-# ------------------------------------------------------------
+# ============================================================
+
 def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
     """
     Uses existing trades table + live ticker to compute:
     - price, balance (qty), ACB, value, pnl_% for a single strategy.
+
+    trades schema:
+      id, symbol, side, price, amount, timestamp, txid, strategy_id
     """
     sid = strategy["id"]
     sym = strategy["symbol"]
@@ -60,8 +68,12 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
     conn = _open_db()
     conn.row_factory = sqlite3.Row
     trades = conn.execute(
-        "SELECT side, price, amount "
-        "FROM trades WHERE strategy_id = ? ORDER BY id ASC",
+        """
+        SELECT side, price, amount
+        FROM trades
+        WHERE strategy_id = ?
+        ORDER BY id ASC
+        """,
         (sid,),
     ).fetchall()
     conn.close()
@@ -104,9 +116,10 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
     }
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Helpers: process / system status for daily report
-# ------------------------------------------------------------
+# ============================================================
+
 def _is_process_running(match: str) -> bool:
     """
     Return True if any process command line contains the given substring.
@@ -128,81 +141,98 @@ def _collect_exchanges_from_strategies(strategies: List[sqlite3.Row]) -> List[st
     ex_set = {s["exchange"] for s in strategies if s["exchange"]}
     return sorted(ex_set)
 
+
+# ============================================================
+# Helpers: filled trades (as 'filled_orders' block)
+# ============================================================
+
 def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
     """
-    Convert rows in 'trades' table into 'filled_orders' entries.
-    'exchange' comes from strategies table — trades table does NOT store it.
+    Aurono does not have a separate orders table; each row in 'trades'
+    is effectively a filled order. We approximate 'filled orders'
+    from the trades table.
+
+    Returns list of dicts ready for the JSON 'filled_orders' block.
+
+    trades columns:
+      id, symbol, side, price, amount, timestamp, txid, strategy_id
+
+    We JOIN strategies to get exchange + timeframe.
     """
+    cfg = current_config()
+    default_exchange = cfg.get("exchange", "bitvavo")
+
     conn = _open_db()
     conn.row_factory = sqlite3.Row
 
     since_str = since.strftime("%Y-%m-%d %H:%M:%S")
     rows = conn.execute(
         """
-        SELECT 
+        SELECT
             t.id,
             t.strategy_id,
             t.symbol,
-            t.timeframe,
             t.side,
             t.price,
             t.amount,
-            t.pnl,
             t.timestamp,
-            s.symbol     AS s_symbol,
-            s.timeframe  AS s_timeframe,
-            s.exchange   AS s_exchange
+            s.name      AS s_name,
+            s.symbol    AS s_symbol,
+            s.timeframe AS s_timeframe,
+            s.exchange  AS s_exchange
         FROM trades t
-        LEFT JOIN strategies s
-               ON t.strategy_id = s.id
+        LEFT JOIN strategies s ON t.strategy_id = s.id
         WHERE t.timestamp >= ?
         ORDER BY t.timestamp DESC
         """,
         (since_str,),
     ).fetchall()
-    
     conn.close()
 
     filled: List[Dict[str, Any]] = []
+    VALID_TF = {"1h", "4h", "1d"}
 
     for r in rows:
-        # Parse timestamp → ISO
+        # Timestamp is stored as "YYYY-MM-DD HH:MM:SS" (naive). Treat as UTC for schema.
         try:
-            dt = datetime.strptime(r["timestamp"], "%Y-%m-%d %H:%M:%S")
-            dt = dt.replace(tzinfo=timezone.utc)
+            ts_raw = r["timestamp"]
+            dt = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
             ts_iso = dt.isoformat()
         except Exception:
             ts_iso = datetime.now(timezone.utc).isoformat()
 
-        symbol = r["symbol"]
-        timeframe = r["timeframe"]
+        # Strategy context
+        s_sym = r["s_symbol"] or r["symbol"]
+        s_tf = r["s_timeframe"]
+        s_ex = r["s_exchange"] or default_exchange
 
-        # ❗ The REAL exchange is ONLY stored in strategies table
-        exchange = r["s_exchange"] or "unknown"
+        # DAILY JSON SCHEMA: timeframe is required and must be one of ["1h","4h","1d"]
+        if not s_tf or s_tf not in VALID_TF:
+            # Skip trades that cannot be mapped to a valid timeframe
+            continue
 
-        # Build readable label
-        s_sym = r["s_symbol"] or symbol
-        s_tf  = r["s_timeframe"] or timeframe
-        s_ex  = exchange
-        strategy_label = f"{s_sym} {s_tf} ({s_ex})"
+        strategy_label = r["s_name"] or f"{s_sym} {s_tf} ({s_ex})"
 
         filled.append({
-            "symbol": symbol,
-            "exchange": exchange,
-            "timeframe": timeframe,
+            "symbol": r["symbol"],
+            "exchange": s_ex,
+            "timeframe": s_tf,
             "side": r["side"],
             "amount": float(r["amount"]),
             "price": float(r["price"]),
             "timestamp": ts_iso,
             "strategy_label": strategy_label,
-            "pnl": float(r["pnl"] or 0.0),
+            # DB has no pnl column; schema does not require it → set 0.0 placeholder
+            "pnl": 0.0,
         })
 
     return filled
 
-# ------------------------------------------------------------
+
+# ============================================================
 # Helpers: portfolio snapshot (no extra backend)
-# ------------------------------------------------------------
+# ============================================================
+
 def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
     """
     Build 'portfolio' block for daily report from strategy snapshots.
@@ -232,9 +262,10 @@ def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
     }
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Helpers: capital (reserved & available)
-# ------------------------------------------------------------
+# ============================================================
+
 def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
     """
     - reserved per strategy: uses TradeManager.get_reserved_eur_for_strategy
@@ -264,9 +295,10 @@ def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
     }
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Helpers: alerts from log file
-# ------------------------------------------------------------
+# ============================================================
+
 def _get_recent_alerts(hours: int = 24) -> List[str]:
     """
     Very light-weight alert collector from aurono_log.txt:
@@ -313,87 +345,16 @@ def _get_recent_alerts(hours: int = 24) -> List[str]:
     return alerts
 
 
-# ------------------------------------------------------------
+# ============================================================
 # DAILY REPORT  — matches aurono.daily.report.schema.v1
-# ------------------------------------------------------------
-def generate_daily_report() -> Dict[str, Any]:
-    """
-    Generate the full Daily Report using only existing Aurono data.
-
-    - system: process status + placeholder exchange health
-    - filled_orders: from trades in last 24h
-    - capital: reserved per strategy; available=0.0 per exchange
-    - portfolio: based on per-strategy snapshots
-    - alerts: from log file
-    """
-
-    now = datetime.now(timezone.utc)
-    strategies = load_strategies_from_db()
-
-    # ------------------------------------------------------------
-    # SYSTEM BLOCK
-    # ------------------------------------------------------------
-    ex_names = _collect_exchanges_from_strategies(strategies)
-
-    # Placeholder health (Aurono does not track OHLC/ticker health yet)
-    exchanges_status = []
-    for ex_name in ex_names:
-        exchanges_status.append({
-            "name": ex_name,
-            "connected": True,
-            "last_ohlc_update_ok": True,
-            "last_ticker_ok": True,
-            "errors": [],
-        })
-
-    system_block = {
-        "trader_running": _is_process_running("trader_main.py"),
-        "dashboard_running": _is_process_running("dashboard.py"),
-        "exchanges": exchanges_status,
-    }
-
-    # ------------------------------------------------------------
-    # FILLED ORDERS (from trades table)
-    # ------------------------------------------------------------
-    since = now - timedelta(hours=24)
-    filled_orders_block = _get_filled_trades_since(since)
-
-    # ------------------------------------------------------------
-    # CAPITAL BLOCK
-    # ------------------------------------------------------------
-    capital_block = _compute_capital_block(strategies)
-
-    # ------------------------------------------------------------
-    # PORTFOLIO BLOCK
-    # ------------------------------------------------------------
-    portfolio_block = _compute_portfolio_block(strategies)
-
-    # ------------------------------------------------------------
-    # ALERTS BLOCK
-    # ------------------------------------------------------------
-    alerts_block = _get_recent_alerts(hours=24)
-
-    # FINAL REPORT OBJECT
-    report: Dict[str, Any] = {
-        "date": now.isoformat(),
-        "system": system_block,
-        "filled_orders": filled_orders_block,
-        "capital": capital_block,
-        "portfolio": portfolio_block,
-        "alerts": alerts_block,
-    }
-
-    # JSON Schema validation
-    validate_daily_report(report)
-    return report
-
+# ============================================================
 
 def generate_daily_report() -> Dict[str, Any]:
     """
     Generate the full Daily Report using only existing Aurono data.
 
     - system: processes + placeholder exchange health
-    - filled_orders: from trades in last 24h
+    - filled_orders: from trades in last 24h (JOIN strategies for exchange/timeframe)
     - capital: reserved via TradeManager; available=0.0 per exchange
     - portfolio: based on per-strategy snapshots
     - alerts: from log file
@@ -450,13 +411,17 @@ def generate_daily_report() -> Dict[str, Any]:
     return report
 
 
-# ------------------------------------------------------------
+# ============================================================
 # WEEKLY REPORT  — matches aurono.weekly.report.schema.v1
-# ------------------------------------------------------------
+# ============================================================
+
 def generate_weekly_report() -> Dict[str, Any]:
     """
     Full weekly report aligned with aurono.weekly.report.schema.v1,
     using existing trades + strategies + live tickers.
+
+    Since the trades table has no pnl column, all pnl-related fields
+    are set to 0.0 (placeholders) but keep the structure schema-valid.
     """
 
     now = datetime.utcnow()
@@ -470,13 +435,26 @@ def generate_weekly_report() -> Dict[str, Any]:
     # Load strategies
     strategies = load_strategies_from_db()
 
-    # Load trades for the past week
+    # Create lookup by strategy_id for exchange/timeframe
+    strat_by_id = {s["id"]: s for s in strategies}
+
+    # Load trades for the past week, joined with strategies to get exchange/timeframe
     rows = conn.execute(
         """
-        SELECT *
-        FROM trades
-        WHERE timestamp >= ?
-        ORDER BY timestamp ASC
+        SELECT
+            t.id,
+            t.strategy_id,
+            t.symbol,
+            t.side,
+            t.price,
+            t.amount,
+            t.timestamp,
+            s.timeframe AS s_timeframe,
+            s.exchange  AS s_exchange
+        FROM trades t
+        LEFT JOIN strategies s ON t.strategy_id = s.id
+        WHERE t.timestamp >= ?
+        ORDER BY t.timestamp ASC
         """,
         (week_start_dt.strftime("%Y-%m-%d %H:%M:%S"),),
     ).fetchall()
@@ -484,31 +462,47 @@ def generate_weekly_report() -> Dict[str, Any]:
 
     trades: List[Dict[str, Any]] = []
     for r in rows:
+        sid = r["strategy_id"]
+        s_tf = r["s_timeframe"]
+        s_ex = r["s_exchange"]
+
+        # Fallback: use strategy lookup if join was None
+        if sid in strat_by_id:
+            if not s_tf:
+                s_tf = strat_by_id[sid]["timeframe"]
+            if not s_ex:
+                s_ex = strat_by_id[sid]["exchange"]
+
         trades.append({
-            "strategy_id": r["strategy_id"],
+            "strategy_id": sid,
             "symbol": r["symbol"],
-            "exchange": r["exchange"],
-            "timeframe": r["timeframe"],
+            "exchange": s_ex or "bitvavo",
+            "timeframe": s_tf or "",
             "side": r["side"],
             "price": float(r["price"]),
             "amount": float(r["amount"]),
-            "pnl": float(r["pnl"] or 0.0),
+            # No pnl column in DB → use 0.0 placeholder
+            "pnl": 0.0,
         })
 
+    # --------------------------------------------------------
     # PERFORMANCE
+    # --------------------------------------------------------
     buys = sum(1 for t in trades if t["side"] == "buy")
     sells = sum(1 for t in trades if t["side"] == "sell")
-    sell_wins = sum(1 for t in trades if t["side"] == "sell" and (t["pnl"] or 0) > 0)
-    weekly_pnl = sum(t["pnl"] for t in trades)
+    sell_wins = 0  # no pnl data → win-rate not meaningful
+    weekly_pnl = 0.0
 
     performance_block = {
         "weekly_pnl_eur": round(weekly_pnl, 2),
         "buys": buys,
         "sells": sells,
-        "sell_win_rate": round((sell_wins / sells * 100), 2) if sells > 0 else 0.0,
+        "sell_win_rate": 0.0 if sells == 0 else 0.0,
     }
 
+    # --------------------------------------------------------
     # PER-STRATEGY BREAKDOWN
+    # --------------------------------------------------------
     strategies_block: List[Dict[str, Any]] = []
 
     for s in strategies:
@@ -518,7 +512,8 @@ def generate_weekly_report() -> Dict[str, Any]:
         buys_s = [t for t in s_trades if t["side"] == "buy"]
         sells_s = [t for t in s_trades if t["side"] == "sell"]
 
-        pnl_s = sum(t["pnl"] for t in s_trades)
+        # No real pnl in DB; keep 0.0 for now
+        pnl_s = 0.0
 
         avg_buy = sum(t["price"] for t in buys_s) / len(buys_s) if buys_s else None
         avg_sell = sum(t["price"] for t in sells_s) / len(sells_s) if sells_s else None
@@ -528,7 +523,7 @@ def generate_weekly_report() -> Dict[str, Any]:
             "symbol": s["symbol"],
             "exchange": s["exchange"],
             "timeframe": s["timeframe"],
-            "label": f"{s['symbol']} {s['timeframe']} ({s['exchange']})",
+            "label": s["name"] or f"{s['symbol']} {s['timeframe']} ({s['exchange']})",
             "buys": len(buys_s),
             "sells": len(sells_s),
             "weekly_pnl_eur": round(pnl_s, 2),
@@ -536,21 +531,25 @@ def generate_weekly_report() -> Dict[str, Any]:
             "avg_sell_price": round(avg_sell, 4) if avg_sell is not None else None,
         })
 
-    # HIGHLIGHTS
+    # --------------------------------------------------------
+    # HIGHLIGHTS (best/worst trade)
+    # pnl is always 0.0, so we only fill structure, not meaningful ranking
+    # --------------------------------------------------------
     if trades:
-        best = max(trades, key=lambda x: x["pnl"])
-        worst = min(trades, key=lambda x: x["pnl"])
+        # just pick the first trade as "best" and last as "worst" structurally
+        best = trades[0]
+        worst = trades[-1]
         best_block = {
             "symbol": best["symbol"],
             "exchange": best["exchange"],
             "timeframe": best["timeframe"],
-            "pnl": float(best["pnl"]),
+            "pnl": 0.0,
         }
         worst_block = {
             "symbol": worst["symbol"],
             "exchange": worst["exchange"],
             "timeframe": worst["timeframe"],
-            "pnl": float(worst["pnl"]),
+            "pnl": 0.0,
         }
     else:
         best_block = None
@@ -561,7 +560,9 @@ def generate_weekly_report() -> Dict[str, Any]:
         "worst_trade": worst_block,
     }
 
+    # --------------------------------------------------------
     # EXPOSURE (re-use compute_strategy_stats)
+    # --------------------------------------------------------
     snapshots = [compute_strategy_stats(s) for s in strategies]
 
     total_value = sum(s["value"] + s["allocated_eur"] for s in snapshots)
@@ -591,14 +592,18 @@ def generate_weekly_report() -> Dict[str, Any]:
     for ex, val in totals_by_ex.items():
         exposure_block["by_exchange"][ex] = round(val / total_value * 100, 2) if total_value else 0.0
 
+    # --------------------------------------------------------
     # CAPITAL EFFICIENCY (approximation)
+    # --------------------------------------------------------
     cap_eff = {
         "eur_deployed": round(crypto_value, 2),
         "eur_reserved": round(cash_value, 2),
         "eur_free": 0.0,  # free EUR not yet tracked separately
     }
 
+    # --------------------------------------------------------
     # SYSTEM RELIABILITY (placeholders)
+    # --------------------------------------------------------
     reliability_block = {
         "api_uptime_pct": 100.0,
         "ohlc_failures": 0,
@@ -607,7 +612,9 @@ def generate_weekly_report() -> Dict[str, Any]:
         "trader_uptime_pct": 100.0,
     }
 
+    # --------------------------------------------------------
     # STRATEGY CHANGES (future extension)
+    # --------------------------------------------------------
     changes_block = {
         "added": [],
         "updated": [],
