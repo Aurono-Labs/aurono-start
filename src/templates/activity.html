@@ -18,8 +18,6 @@
     --warn: #f59e0b;
   }
 
-  * { box-sizing: border-box; }
-
   body {
     margin: 0;
     padding: 20px;
@@ -29,180 +27,133 @@
     min-height: 100vh;
   }
 
-  /* TOPBAR */
   .topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 26px;
-    flex-wrap: wrap;
-    gap: 12px;
   }
 
   .brand {
     font-size: 22px;
     font-weight: 700;
-    letter-spacing: 0.05em;
     color: var(--gold);
-    text-transform: uppercase;
-  }
-
-  nav {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    letter-spacing: 0.05em;
   }
 
   nav a {
     padding: 6px 12px;
-    font-size: 14px;
     text-decoration: none;
     border-radius: 12px;
     color: var(--muted);
     border: 1px solid transparent;
     transition: .15s ease;
-  }
-
-  nav a:hover {
-    color: var(--text);
-    border-color: rgba(148,163,184,0.4);
-    background: rgba(255,255,255,0.03);
+    font-size: 14px;
   }
 
   nav a.active {
-    border-color: rgba(250,204,21,0.8);
     color: var(--gold);
+    border-color: rgba(250,204,21,0.8);
     background: rgba(250,204,21,0.12);
   }
 
-  /* HEADINGS */
-  h1 {
-    margin: 0 0 4px 0;
-    font-size: 26px;
-    font-weight: 600;
-  }
-
-  .subtitle {
-    margin: 0 0 18px 0;
-    font-size: 14px;
-    color: var(--muted);
-  }
-
-  /* CARD */
   .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 18px;
-    margin-bottom: 24px;
+    margin-bottom: 30px;
     box-shadow: 0 15px 40px rgba(0,0,0,0.35);
   }
 
   .card-title {
     font-size: 18px;
-    margin-bottom: 10px;
     font-weight: 600;
+    margin-bottom: 12px;
   }
 
-  /* LOG BOX */
   .log-box {
-    background: rgba(255,255,255,0.04);
+    background: rgba(255,255,255,0.05);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 14px;
+    padding: 12px;
     font-family: Menlo, monospace;
     font-size: 13px;
-    line-height: 1.45;
-    white-space: pre-wrap;
     max-height: 360px;
+    white-space: pre-wrap;
     overflow-y: auto;
   }
 
-  .log-entry {
-    margin-bottom: 6px;
-  }
-
-  .log-entry.error { color: #fecaca; }
-  .log-entry.warn  { color: #fde68a; }
-
-  /* MOBILE */
-  @media (max-width: 600px) {
-    body { padding: 16px; }
-    .card { padding: 16px; }
-    .log-box { max-height: 300px; }
-  }
+  .log-entry { margin-bottom: 8px; }
+  .error { color: #fecaca; }
+  .warn { color: #fde68a; }
 </style>
 </head>
 
 <body>
 
-  <!-- TOPBAR -->
-  <div class="topbar">
-    <div class="brand">Aurono</div>
+<div class="topbar">
+  <div class="brand">Aurono</div>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/strategies">Strategies</a>
+    <a class="active" href="/activity">Activity</a>
+    <a href="/settings">Settings</a>
+  </nav>
+</div>
 
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/strategies">Strategies</a>
-      <a class="active" href="/activity">Activity</a>
-      <a href="/settings">Settings</a>
-    </nav>
-  </div>
+<h1>Activity Log</h1>
+<p class="subtitle">Latest grouped events ({{ limit }} per category)</p>
 
-  <h1>Activity Log</h1>
-  <p class="subtitle">Showing recent system events (last {{ limit }} entries).</p>
-
-
-  <!-- ALL LOGS -->
-  <div class="card">
-    <div class="card-title">All activity</div>
-    <div class="log-box">
-      {% for line in logs_all %}
-        <div class="log-entry">{{ line }}</div>
+<!-- STRATEGY EVENTS -->
+<div class="card">
+  <div class="card-title">Strategy Events</div>
+  <div class="log-box">
+    {% if groups.strategy %}
+      {% for e in groups.strategy %}
+        <div class="log-entry">{{ e.text }}</div>
       {% endfor %}
-
-      {% if not logs_all %}
-        <div class="log-entry" style="color:var(--muted);">No log entries available.</div>
-      {% endif %}
-    </div>
+    {% else %}
+      <div class="log-entry" style="color:var(--muted);">No strategy logs.</div>
+    {% endif %}
   </div>
+</div>
 
-
-  <!-- ERRORS -->
-  <div class="card">
-    <div class="card-title">Errors</div>
-
-    <div class="log-box">
-      {% if logs_error %}
-        {% for line in logs_error %}
-          <div class="log-entry error">{{ line }}</div>
-        {% endfor %}
-      {% else %}
-        <div class="log-entry" style="color:var(--muted);">No errors found.</div>
-      {% endif %}
-    </div>
+<!-- TRADE EVENTS -->
+<div class="card">
+  <div class="card-title">Trade Events</div>
+  <div class="log-box">
+    {% if groups.trade %}
+      {% for e in groups.trade %}
+        <div class="log-entry">{{ e.text }}</div>
+      {% endfor %}
+    {% else %}
+      <div class="log-entry" style="color:var(--muted);">No trade logs.</div>
+    {% endif %}
   </div>
+</div>
 
-
-  <!-- WARNINGS -->
-  <div class="card">
-    <div class="card-title">Warnings</div>
-
-    <div class="log-box">
-      {% if logs_warning %}
-        {% for line in logs_warning %}
-          <div class="log-entry warn">{{ line }}</div>
-        {% endfor %}
-      {% else %}
-        <div class="log-entry" style="color:var(--muted);">No warnings found.</div>
-      {% endif %}
-    </div>
+<!-- ERRORS -->
+<div class="card">
+  <div class="card-title">Errors & API Issues</div>
+  <div class="log-box">
+    {% if groups.error %}
+      {% for e in groups.error %}
+        <div class="log-entry error">{{ e.text }}</div>
+      {% endfor %}
+    {% else %}
+      <div class="log-entry" style="color:var(--muted);">No errors found.</div>
+    {% endif %}
   </div>
+</div>
 
-
-  <p style="color:var(--muted); font-size:13px;">
-    Showing the last {{ limit }} events per category.
-    For full history, download the full log file.
-  </p>
+<!-- DOWNLOAD LOG -->
+<a href="/activity/download"
+   style="display:inline-block; margin-top:10px; padding:10px 16px;
+          border-radius:12px; background:var(--gold); color:#000;
+          text-decoration:none; font-weight:600;">
+  Download Full Log
+</a>
 
 </body>
 </html>

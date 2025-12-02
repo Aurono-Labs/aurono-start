@@ -21,19 +21,17 @@ def list_files(directory: str):
 
 
 # ------------------------------------------------------------
-# List ALL reports (daily, weekly, html)
+# List all daily + weekly reports
 # ------------------------------------------------------------
 @router.get("/", response_class=HTMLResponse)
 async def reports_index(request: Request):
     daily_files = list_files(DAILY_DIR)
     weekly_files = list_files(WEEKLY_DIR)
-    html_files = list_files(HTML_DIR)
 
     return request.app.state.templates.get_template("reports/list_reports.html").render(
         request=request,
         daily_reports=daily_files,
         weekly_reports=weekly_files,
-        html_reports=html_files,
     )
 
 
@@ -43,25 +41,20 @@ async def reports_index(request: Request):
 @router.get("/view/{name}", response_class=HTMLResponse)
 async def view_report(request: Request, name: str):
     html_path = os.path.join(HTML_DIR, name)
-
-    if not name.endswith(".html"):
-        name = name + ".html"
-        html_path = os.path.join(HTML_DIR, name)
-
     if not os.path.exists(html_path):
-        raise HTTPException(404, f"Report HTML '{name}' not found")
+        raise HTTPException(404, "Report HTML not found")
 
-    with open(html_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
+    # Instead of embedding the file’s contents, we point iframe to static file:
+    iframe_src = f"/reports/html/{name}"
 
     return request.app.state.templates.get_template("reports/view_report.html").render(
         request=request,
-        content=html_content
+        html_file=iframe_src
     )
 
 
 # ------------------------------------------------------------
-# Download original JSON report (daily or weekly)
+# Download original JSON report
 # ------------------------------------------------------------
 @router.get("/download/{kind}/{name}")
 async def download_report(kind: str, name: str):
@@ -74,7 +67,7 @@ async def download_report(kind: str, name: str):
 
     path = os.path.join(folder, name)
     if not os.path.exists(path):
-        raise HTTPException(404, f"Report JSON '{name}' not found")
+        raise HTTPException(404, "Report not found")
 
     return FileResponse(path, filename=name)
 

@@ -32,6 +32,7 @@ import os, signal, time, psutil
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 import sqlite3
 
@@ -43,6 +44,10 @@ app = FastAPI(title="Aurono Dashboard", version="1.3")
 # Define the template directory BEFORE loading routers
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 app.state.templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+
+html_reports_dir = Path(__file__).resolve().parent / "reports" / "html"
+app.mount("/reports/html", StaticFiles(directory=str(html_reports_dir)), name="reports_html")
+
 
 # ---------------------------
 # ROUTERS (must load AFTER templates)
