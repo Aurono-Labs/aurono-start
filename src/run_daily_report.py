@@ -1,6 +1,8 @@
 from datetime import datetime
 from report_builder import generate_daily_report
 from report_storage import save_html_report, render_daily_report_html, cleanup_old_reports
+from emailer import send_email
+
 
 report = generate_daily_report()
 html = render_daily_report_html(report)
