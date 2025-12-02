@@ -323,6 +323,78 @@ def generate_daily_report() -> Dict[str, Any]:
     """
     Generate the full Daily Report using only existing Aurono data.
 
+    - system: process status + placeholder exchange health
+    - filled_orders: from trades in last 24h
+    - capital: reserved per strategy; available=0.0 per exchange
+    - portfolio: based on per-strategy snapshots
+    - alerts: from log file
+    """
+
+    now = datetime.now(timezone.utc)
+    strategies = load_strategies_from_db()
+
+    # ------------------------------------------------------------
+    # SYSTEM BLOCK
+    # ------------------------------------------------------------
+    ex_names = _collect_exchanges_from_strategies(strategies)
+
+    # Placeholder health (Aurono does not track OHLC/ticker health yet)
+    exchanges_status = []
+    for ex_name in ex_names:
+        exchanges_status.append({
+            "name": ex_name,
+            "connected": True,
+            "last_ohlc_update_ok": True,
+            "last_ticker_ok": True,
+            "errors": [],
+        })
+
+    system_block = {
+        "trader_running": _is_process_running("trader_main.py"),
+        "dashboard_running": _is_process_running("dashboard.py"),
+        "exchanges": exchanges_status,
+    }
+
+    # ------------------------------------------------------------
+    # FILLED ORDERS (from trades table)
+    # ------------------------------------------------------------
+    since = now - timedelta(hours=24)
+    filled_orders_block = _get_filled_trades_since(since)
+
+    # ------------------------------------------------------------
+    # CAPITAL BLOCK
+    # ------------------------------------------------------------
+    capital_block = _compute_capital_block(strategies)
+
+    # ------------------------------------------------------------
+    # PORTFOLIO BLOCK
+    # ------------------------------------------------------------
+    portfolio_block = _compute_portfolio_block(strategies)
+
+    # ------------------------------------------------------------
+    # ALERTS BLOCK
+    # ------------------------------------------------------------
+    alerts_block = _get_recent_alerts(hours=24)
+
+    # FINAL REPORT OBJECT
+    report: Dict[str, Any] = {
+        "date": now.isoformat(),
+        "system": system_block,
+        "filled_orders": filled_orders_block,
+        "capital": capital_block,
+        "portfolio": portfolio_block,
+        "alerts": alerts_block,
+    }
+
+    # JSON Schema validation
+    validate_daily_report(report)
+    return report
+
+
+def generate_daily_report() -> Dict[str, Any]:
+    """
+    Generate the full Daily Report using only existing Aurono data.
+
     - system: processes + placeholder exchange health
     - filled_orders: from trades in last 24h
     - capital: reserved via TradeManager; available=0.0 per exchange
