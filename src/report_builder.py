@@ -128,17 +128,10 @@ def _collect_exchanges_from_strategies(strategies: List[sqlite3.Row]) -> List[st
     ex_set = {s["exchange"] for s in strategies if s["exchange"]}
     return sorted(ex_set)
 
-
-# ------------------------------------------------------------
-# Helpers: filled trades (as 'filled_orders' block)
-# ------------------------------------------------------------
 def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
     """
-    Aurono does not have a separate orders table; each row in 'trades'
-    is effectively a filled order. We approximate 'filled orders'
-    from the trades table.
-
-    Returns list of dicts ready for the JSON 'filled_orders' block.
+    Convert rows in 'trades' table into 'filled_orders' entries.
+    'exchange' comes from strategies table — trades table does NOT store it.
     """
     conn = _open_db()
     conn.row_factory = sqlite3.Row
@@ -146,46 +139,51 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
     since_str = since.strftime("%Y-%m-%d %H:%M:%S")
     rows = conn.execute(
         """
-        SELECT t.id,
-               t.strategy_id,
-               t.symbol,
-               t.exchange,
-               t.timeframe,
-               t.side,
-               t.price,
-               t.amount,
-               t.pnl,
-               t.timestamp,
-               s.symbol  AS s_symbol,
-               s.timeframe AS s_timeframe,
-               s.exchange  AS s_exchange
+        SELECT 
+            t.id,
+            t.strategy_id,
+            t.symbol,
+            t.timeframe,
+            t.side,
+            t.price,
+            t.amount,
+            t.pnl,
+            t.timestamp,
+            s.symbol     AS s_symbol,
+            s.timeframe  AS s_timeframe,
+            s.exchange   AS s_exchange
         FROM trades t
-        LEFT JOIN strategies s ON t.strategy_id = s.id
+        LEFT JOIN strategies s
+               ON t.strategy_id = s.id
         WHERE t.timestamp >= ?
         ORDER BY t.timestamp DESC
         """,
         (since_str,),
     ).fetchall()
+    
     conn.close()
 
     filled: List[Dict[str, Any]] = []
+
     for r in rows:
-        # timestamp is stored as "YYYY-MM-DD HH:MM:SS" (naive); treat as UTC for schema
+        # Parse timestamp → ISO
         try:
-            ts_raw = r["timestamp"]
-            dt = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            dt = datetime.strptime(r["timestamp"], "%Y-%m-%d %H:%M:%S")
+            dt = dt.replace(tzinfo=timezone.utc)
             ts_iso = dt.isoformat()
         except Exception:
             ts_iso = datetime.now(timezone.utc).isoformat()
 
         symbol = r["symbol"]
-        exchange = r["exchange"]
         timeframe = r["timeframe"]
 
-        # Build nice label (using strategy if available)
+        # ❗ The REAL exchange is ONLY stored in strategies table
+        exchange = r["s_exchange"] or "unknown"
+
+        # Build readable label
         s_sym = r["s_symbol"] or symbol
-        s_tf = r["s_timeframe"] or timeframe
-        s_ex = r["s_exchange"] or exchange
+        s_tf  = r["s_timeframe"] or timeframe
+        s_ex  = exchange
         strategy_label = f"{s_sym} {s_tf} ({s_ex})"
 
         filled.append({
@@ -201,7 +199,6 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
         })
 
     return filled
-
 
 # ------------------------------------------------------------
 # Helpers: portfolio snapshot (no extra backend)
