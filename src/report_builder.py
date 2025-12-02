@@ -268,26 +268,25 @@ def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
 
 def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
     """
-    - reserved per strategy: uses TradeManager.get_reserved_eur_for_strategy
-    - available per exchange: currently 0.0, as Aurono does not track free EUR per exchange.
-    """
-    tm = TradeManager(get_db_path())
+    CAPITAL block for the Daily Report.
 
+    - reserved: directly from strategies.allocated_eur  
+    - available: currently 0.0 per exchange (Aurono does not track free EUR yet)
+    """
+
+    # RESERVED: per strategy (allocated_eur)
     reserved_list = []
     for s in strategies:
-        sid = s["id"]
-        reserved_eur = float(tm.get_reserved_eur_for_strategy(sid))
         reserved_list.append({
-            "strategy_id": sid,
+            "strategy_id": s["id"],
             "symbol": s["symbol"],
             "exchange": s["exchange"],
-            "amount_eur": reserved_eur,
+            "amount_eur": float(s["allocated_eur"] or 0.0),
         })
 
-    ex_names = _collect_exchanges_from_strategies(strategies)
-
-    # We don't have actual free EUR by exchange yet; set to 0.0 for now.
-    available = {ex: 0.0 for ex in ex_names}
+    # AVAILABLE: 0 for now
+    exchanges = _collect_exchanges_from_strategies(strategies)
+    available = {ex: 0.0 for ex in exchanges}
 
     return {
         "reserved": reserved_list,
