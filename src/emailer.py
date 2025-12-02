@@ -1,53 +1,53 @@
+# src/emailer.py
+
 import smtplib
-from email.mime.multipart import MIMEMultipart
+import ssl
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+from email.mime.multipart import MIMEMultipart
+from email.header import Header
+
 from utils import current_config
 
 
 def send_email(subject: str, html_body: str, attachments=None):
     """
-    Sends an email using the SMTP settings stored in config.yaml.
-    Uses Gmail App Passwords (recommended).
+    Sends a UTF-8 encoded HTML email using SMTP.
     """
-
     cfg = current_config().get("email", {})
-    if not cfg.get("enabled", False):
-        raise RuntimeError("Email reporting is disabled in config.yaml")
-
     username = cfg.get("username")
     password = cfg.get("password")
     to_addr = cfg.get("to", username)
 
     if not username or not password:
-        raise RuntimeError("Email credentials not configured")
+        raise ValueError("Email username or password missing in config.yaml")
 
-    msg = MIMEMultipart()
+    # Create message
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = Header(subject, "utf-8")
     msg["From"] = username
     msg["To"] = to_addr
-    msg["Subject"] = subject
 
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    # Attach UTF-8 HTML body
+    part = MIMEText(html_body, "html", "utf-8")
+    msg.attach(part)
 
-    # Attach files
-    attachments = attachments or []
-    for file_path in attachments:
-        try:
-            part = MIMEBase("application", "octet-stream")
-            with open(file_path, "rb") as f:
-                part.set_payload(f.read())
-            encoders.encode_base64(part)
-            filename = file_path.split("/")[-1]
-            part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
-            msg.attach(part)
-        except Exception:
-            pass  # Never block email send for attachment error
+    # Attachments (future support)
+    if attachments:
+        for filename, data in attachments:
+            from email.mime.application import MIMEApplication
+            attachment = MIMEApplication(data, Name=filename)
+            attachment["Content-Disposition"] = f'attachment; filename="{filename}"'
+            msg.attach(attachment)
 
-    # Gmail SMTP
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    # SMTP settings (Gmail example)
+    smtp_server = "smtp.gmail.com"
+    port = 587
+
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP(smtp_server, port) as server:
+        server.ehlo()
+        server.starttls(context=context)
         server.login(username, password)
         server.sendmail(username, to_addr, msg.as_string())
-
-    return True
 
