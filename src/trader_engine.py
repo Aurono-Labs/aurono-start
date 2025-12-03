@@ -118,12 +118,12 @@ class TraderEngine:
             if pct_change <= drop_trigger:
                 if allocated < buy_eur:
                     log_event(
-                        f"❌ No BUY: price dropped {pct_change:.2f}% ≤ {drop_trigger}%, "
+                        f"❌ No BUY for {symbol} ({s_timeframe}) on {exchange.name}: price dropped {pct_change:.2f}% ≤ {drop_trigger}%, "
                         f"but insufficient capital (€{allocated:.2f} < €{buy_eur:.2f})"
                     )
                 else:
                     limit_price = (open_price * (Decimal("1") + drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
-                    vol = (buy_eur / limit_price).quantize(Decimal("0.00000001"))
+                    vol = (buy_eur / ticker).quantize(Decimal("0.00000001"))
                     trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
                     
                     eur_spent = limit_price * vol
@@ -142,12 +142,12 @@ class TraderEngine:
             if pct_change >= rise_trigger:
                 if acb is None:
                     log_event(
-                        f"❌ No SELL: rise +{pct_change:.2f}% ≥ {rise_trigger}%, but no ACB found."
+                        f"❌ No SELL for {symbol} ({s_timeframe}) on {exchange.name}: rise +{pct_change:.2f}% ≥ {rise_trigger}%, but no ACB found."
                     )
                     continue
                 if close_price <= acb:
                     log_event(
-                        f"❌ No SELL: rise +{pct_change:.2f}% ≥ {rise_trigger}%, "
+                        f"❌ No SELL for {symbol} ({s_timeframe}) on {exchange.name}: rise +{pct_change:.2f}% ≥ {rise_trigger}%, "
                         f"but still below ACB €{acb:.2f}"
                     )
                     continue
@@ -158,7 +158,7 @@ class TraderEngine:
                     continue
 
                 limit_price = (open_price * (Decimal("1") + rise_trigger / Decimal("100"))).quantize(Decimal("0.01"))
-                vol = min((sell_eur / limit_price).quantize(Decimal("0.00000001")), balance)
+                vol = min((sell_eur / ticker).quantize(Decimal("0.00000001")), balance)
                 trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
                 
                 eur_gained = limit_price * vol
@@ -175,11 +175,11 @@ class TraderEngine:
             # === 3️⃣ Otherwise: idle ===
             if pct_change < 0:
                 log_event(
-                    f"💤 No BUY: drop {pct_change:.2f}% smaller than threshold {drop_trigger}%"
+                    f"💤 No BUY for {symbol} ({s_timeframe}) on {exchange.name}: drop {pct_change:.2f}% smaller than threshold {drop_trigger}%"
                 )
             else:
                 log_event(
-                    f"💤 No SELL: rise +{pct_change:.2f}% smaller than threshold {rise_trigger}%"
+                    f"💤 No SELL for {symbol} ({s_timeframe}) on {exchange.name}: rise +{pct_change:.2f}% smaller than threshold {rise_trigger}%"
                 )
 
         log_event("Cycle completed.\n")

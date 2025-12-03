@@ -38,7 +38,7 @@ def log_event(msg:str):
     print(line)
     os.makedirs(logp.parent, exist_ok=True)
     with open(logp, "a") as f:
-        f.write(line + "\\n")
+        f.write(line + "\n")
 
 def to_decimal(v):
     try: return Decimal(str(v))
