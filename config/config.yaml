@@ -16,3 +16,10 @@ email:
   smtp_host: "smtp.gmail.com"  # static, no need to expose
   smtp_port: 587               # static, no need to expose
   from: "Aurono"               # static sender name
+
+exchanges:
+  bitvavo:
++    fee_rate: 0.0025   # 0.25% default estimate
+  kraken:
++    fee_rate: 0.0025   # 0.25% default estimate
+

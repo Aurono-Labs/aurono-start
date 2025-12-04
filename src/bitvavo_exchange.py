@@ -361,13 +361,23 @@ class BitvavoExchange(ExchangeBase):
         if fills and isinstance(fills, list) and len(fills) > 0:
             total = Decimal("0")
             cost = Decimal("0")
+            total_fee = Decimal("0")
             for f in fills:
                 amt = Decimal(f.get("amount", "0"))
                 p = Decimal(f.get("price", "0"))
+                fee = Decimal(f.get("fee", "0"))
                 total += amt
                 cost += amt * p
+                total_fee += fee
             if total > 0:
                 price = cost / total
+                
+                # Calculate effective fee rate
+                try:
+                    self.fee_rate = (total_fee / cost).quantize(Decimal("0.00001"))
+                    log_event(f"ℹ️ Bitvavo effective fee updated to {self.fee_rate}")
+                except Exception:
+                    pass
 
         return {"status": status, "vol_exec": vol_exec, "price": price}
 

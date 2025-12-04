@@ -207,6 +207,25 @@ class KrakenExchange(ExchangeBase):
             vol_exec = Decimal(info.get("vol_exec", "0"))
             status = info.get("status")
             descr = info.get("descr", {}).get("order", "")
+            
+            # --- FEE AUTO-DETECTION (new) ---
+            # Kraken provides 'cost' (EUR before fee) and 'fee' (EUR fee paid)
+            try:
+                cost = Decimal(info.get("cost", "0"))
+                fee = Decimal(info.get("fee", "0"))
+                
+                if cost > 0 and fee >= 0:
+                    fee_rate = (fee / cost).quantize(Decimal("0.00001"))
+                    
+                    # Update the exchange object's fee_rate for future trades
+                    self.fee_rate = fee_rate
+                    
+                    log_event(
+                        f"ℹ️ Kraken effective fee updated → cost={cost}, fee={fee}, rate={fee_rate}"
+                    )
+            except Exception as e:
+                log_event(f"⚠️ Kraken fee calculation failed: {e}")
+            
             return {
                 "price": price,
                 "vol_exec": vol_exec,

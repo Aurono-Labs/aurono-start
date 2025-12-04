@@ -118,7 +118,12 @@ class TraderEngine:
                     )
                 else:
                     limit_price = (open_price * (Decimal("1") + drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
-                    vol = (buy_eur / ticker).quantize(Decimal("0.00000001"))
+                    fee = self.exchange.fee_rate
+                    vol = (buy_eur / (ticker * (Decimal("1") + fee))).quantize(Decimal("0.00000001"))
+                    log_event(
+                        f"BUY calc → spend={buy_eur}, price={ticker}, fee={fee}, volume={vol}"
+                    )
+
                     trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
                     
                     eur_spent = limit_price * vol
@@ -153,7 +158,16 @@ class TraderEngine:
                     continue
 
                 limit_price = (open_price * (Decimal("1") + rise_trigger / Decimal("100"))).quantize(Decimal("0.01"))
-                vol = min((sell_eur / ticker).quantize(Decimal("0.00000001")), balance)
+                fee = self.exchange.fee_rate
+                vol = (sell_eur / (ticker * (Decimal("1") - fee))).quantize(Decimal("0.00000001"))
+
+                # Never exceed available balance
+                vol = min(vol, balance)
+
+                log_event(
+                    f"SELL calc → target={sell_eur}, price={ticker}, fee={fee}, volume={vol}, balance={balance}"
+                )
+
                 trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
                 
                 eur_gained = limit_price * vol
