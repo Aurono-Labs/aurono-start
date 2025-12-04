@@ -369,15 +369,8 @@ def generate_daily_report() -> Dict[str, Any]:
 
 def generate_weekly_report() -> Dict[str, Any]:
     """
-    Full weekly report aligned with aurono.weekly.report.schema.v1,
-    using existing trades + strategies + live tickers.
-
-    Now computes:
-    - Realized weekly PNL from SELL trades (using ACB at time of sell)
-    - Average / best / worst sell return (%)
-    - Per-strategy realized PNL and avg sell return
-    - Best / worst trade based on PNL
-    - By-exchange exposure including both crypto and cash
+    Full weekly report aligned with aurono.weekly.report.schema.v1.
+    Uses full trade history to reconstruct ACB at the moment of each SELL.
     """
 
     now = datetime.utcnow()
@@ -389,12 +382,9 @@ def generate_weekly_report() -> Dict[str, Any]:
     conn = _open_db()
     conn.row_factory = sqlite3.Row
 
-    # Load active strategies
     strategies = load_strategies_from_db()
     strat_by_id = {s["id"]: s for s in strategies}
 
-    # Load ALL trades in chronological order (we need full history
-    # to reconstruct ACB at the moment of each SELL)
     rows = conn.execute(
         """
         SELECT
@@ -414,26 +404,24 @@ def generate_weekly_report() -> Dict[str, Any]:
     ).fetchall()
     conn.close()
 
-    # --------------------------------------------------------
-    # Reconstruct ACB per strategy and compute sell PNL
-    # --------------------------------------------------------
     from collections import defaultdict
 
-    # Inventory state per strategy
-    inv_qty: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-    inv_cost: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    inv_qty = defaultdict(lambda: Decimal("0"))
+    inv_cost = defaultdict(lambda: Decimal("0"))
 
-    # Weekly aggregates
-    weekly_trades: List[Dict[str, Any]] = []  # trades within the 7d window
-    sell_records: List[Dict[str, Any]] = []   # SELLs within window with PNL/return
+    weekly_trades = []
+    sell_records = []
 
     buys = 0
     sells = 0
 
-    # For per-strategy stats
-    pnl_by_strategy: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-    sell_return_sum_by_strategy: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-    sell_return_count_by_strategy: Dict[int, int] = defaultdict(int)
+    pnl_by_strategy = defaultdict(lambda: Decimal("0"))
+    sell_return_sum_by_strategy = defaultdict(lambda: Decimal("0"))
+    sell_return_count_by_strategy = defaultdict(int)
+
+    # --------------------------------------------------------
+    # RECONSTRUCT ACB HISTORY
+    # --------------------------------------------------------
 
     for r in rows:
         sid = r["strategy_id"]
@@ -442,14 +430,11 @@ def generate_weekly_report() -> Dict[str, Any]:
         price_dec = to_decimal(r["price"])
         amt_dec = to_decimal(r["amount"])
 
-        # Parse timestamp
         try:
             ts_dt = datetime.strptime(r["timestamp"], "%Y-%m-%d %H:%M:%S")
         except Exception:
-            # If parsing fails, skip weekly classification but still update inventory
             ts_dt = datetime.min
 
-        # Resolve timeframe / exchange fallback
         s_tf = r["s_timeframe"]
         s_ex = r["s_exchange"]
 
@@ -459,7 +444,7 @@ def generate_weekly_report() -> Dict[str, Any]:
             if not s_ex:
                 s_ex = strat_by_id[sid]["exchange"]
 
-        # ---- Inventory updates (for strategies only) ----
+        # Inventory update
         if sid is not None:
             qty = inv_qty[sid]
             cost = inv_cost[sid]
@@ -469,23 +454,20 @@ def generate_weekly_report() -> Dict[str, Any]:
                 qty += amt_dec
 
             elif side == "sell":
-                # ACB BEFORE this sell
+                # ACB BEFORE the sell
                 if qty > 0:
                     acb = cost / qty
                     pnl_dec = (price_dec - acb) * amt_dec
-                    # Return in %, based on ACB
-                    if acb != 0:
-                        ret_pct = (price_dec - acb) / acb * Decimal("100")
-                    else:
-                        ret_pct = None
+                    ret_pct = (price_dec - acb) / acb * Decimal("100") if acb != 0 else None
                 else:
                     pnl_dec = Decimal("0")
                     ret_pct = None
 
-                # If this sell is inside the weekly window, record weekly PNL/return
+                # Inside weekly window → count PNL + stats
                 if week_start_dt <= ts_dt <= week_end_dt:
                     sells += 1
                     pnl_by_strategy[sid] += pnl_dec
+
                     if ret_pct is not None:
                         sell_return_sum_by_strategy[sid] += ret_pct
                         sell_return_count_by_strategy[sid] += 1
@@ -502,7 +484,7 @@ def generate_weekly_report() -> Dict[str, Any]:
                         "return_pct": float(ret_pct) if ret_pct is not None else None,
                     })
 
-                # After computing PNL, update inventory to reflect the sell
+                # Apply sell to inventory
                 if qty > 0:
                     proportion = amt_dec / qty
                     if proportion > 1:
@@ -516,17 +498,12 @@ def generate_weekly_report() -> Dict[str, Any]:
                 inv_qty[sid] = qty
                 inv_cost[sid] = cost
 
-            # End of strategy-specific inventory
-
-        # ---- Weekly-trade bookkeeping (for counts/averages) ----
+        # Weekly trade counts
         if week_start_dt <= ts_dt <= week_end_dt:
             if side == "buy":
                 buys += 1
-            elif side == "sell":
-                # 'sells' is already incremented above for valid strategy sells;
-                # but for trades without strategy, we still want weekly count.
-                if sid is None:
-                    sells += 1
+            elif side == "sell" and sid is None:
+                sells += 1
 
             weekly_trades.append({
                 "strategy_id": sid,
@@ -542,10 +519,10 @@ def generate_weekly_report() -> Dict[str, Any]:
     # --------------------------------------------------------
     # PERFORMANCE BLOCK
     # --------------------------------------------------------
+
     weekly_pnl_dec = sum(Decimal(str(sr["pnl"])) for sr in sell_records)
     weekly_pnl = float(weekly_pnl_dec)
 
-    # Sell returns (average / best / worst)
     all_returns = [sr["return_pct"] for sr in sell_records if sr["return_pct"] is not None]
 
     if all_returns:
@@ -553,25 +530,25 @@ def generate_weekly_report() -> Dict[str, Any]:
         best_sell_return = max(all_returns)
         worst_sell_return = min(all_returns)
     else:
-        avg_sell_return = 0.0
-        best_sell_return = 0.0
-        worst_sell_return = 0.0
+        avg_sell_return = 0
+        best_sell_return = 0
+        worst_sell_return = 0
 
     performance_block = {
         "weekly_pnl_eur": round(weekly_pnl, 2),
         "buys": buys,
         "sells": sells,
-        # keep field for schema compatibility, but it has no meaning now
         "sell_win_rate": 0.0,
-        "average_sell_return_pct": round(float(avg_sell_return), 2) if all_returns else 0.0,
-        "best_sell_return_pct": round(float(best_sell_return), 2) if all_returns else 0.0,
-        "worst_sell_return_pct": round(float(worst_sell_return), 2) if all_returns else 0.0,
+        "average_sell_return_pct": round(float(avg_sell_return), 2),
+        "best_sell_return_pct": round(float(best_sell_return), 2),
+        "worst_sell_return_pct": round(float(worst_sell_return), 2),
     }
 
     # --------------------------------------------------------
     # PER-STRATEGY BREAKDOWN
     # --------------------------------------------------------
-    strategies_block: List[Dict[str, Any]] = []
+
+    strategies_block = []
 
     for s in strategies:
         sid = s["id"]
@@ -583,10 +560,8 @@ def generate_weekly_report() -> Dict[str, Any]:
         avg_buy = sum(t["price"] for t in buys_s) / len(buys_s) if buys_s else None
         avg_sell = sum(t["price"] for t in sells_s) / len(sells_s) if sells_s else None
 
-        # Realized PNL from sells for this strategy
         pnl_s = float(pnl_by_strategy.get(sid, Decimal("0")))
 
-        # Average sell return (%) for this strategy
         if sell_return_count_by_strategy.get(sid, 0) > 0:
             avg_ret_s = sell_return_sum_by_strategy[sid] / sell_return_count_by_strategy[sid]
             avg_ret_s_f = round(float(avg_ret_s), 2)
@@ -602,77 +577,84 @@ def generate_weekly_report() -> Dict[str, Any]:
             "buys": len(buys_s),
             "sells": len(sells_s),
             "weekly_pnl_eur": round(pnl_s, 2),
-            "avg_buy_price": round(avg_buy, 4) if avg_buy is not None else 0.0,
-            "avg_sell_price": round(avg_sell, 4) if avg_sell is not None else 0.0,
+            "avg_buy_price": round(avg_buy, 4) if avg_buy else 0.0,
+            "avg_sell_price": round(avg_sell, 4) if avg_sell else 0.0,
             "avg_sell_return_pct": avg_ret_s_f,
         })
 
     # --------------------------------------------------------
-    # HIGHLIGHTS (best/worst trade based on realized PNL)
+    # HIGHLIGHTS
     # --------------------------------------------------------
+
     if sell_records:
-    best = max(sell_records, key=lambda x: x["pnl"])
-    worst = min(sell_records, key=lambda x: x["pnl"])
+        best = max(sell_records, key=lambda x: x["pnl"])
+        worst = min(sell_records, key=lambda x: x["pnl"])
 
-    best_block = {
-        "symbol": best["symbol"],
-        "exchange": best["exchange"],
-        "timeframe": best["timeframe"],
-        "pnl": round(best["pnl"], 2),
-        "return_pct": round(best["return_pct"], 2) if best["return_pct"] is not None else 0.0,
-    }
+        best_block = {
+            "symbol": best["symbol"],
+            "exchange": best["exchange"],
+            "timeframe": best["timeframe"],
+            "pnl": round(best["pnl"], 2),
+            "return_pct": round(best["return_pct"], 2) if best["return_pct"] is not None else 0.0,
+        }
 
-    worst_block = {
-        "symbol": worst["symbol"],
-        "exchange": worst["exchange"],
-        "timeframe": worst["timeframe"],
-        "pnl": round(worst["pnl"], 2),
-        "return_pct": round(worst["return_pct"], 2) if worst["return_pct"] is not None else 0.0,
-    }
-else:
-    # schema requires an object, not null
-    best_block = {
-        "symbol": "",
-        "exchange": "",
-        "timeframe": "",
-        "pnl": 0.0,
-        "return_pct": 0.0,
-    }
-    worst_block = {
-        "symbol": "",
-        "exchange": "",
-        "timeframe": "",
-        "pnl": 0.0,
-        "return_pct": 0.0,
+        worst_block = {
+            "symbol": worst["symbol"],
+            "exchange": worst["exchange"],
+            "timeframe": worst["timeframe"],
+            "pnl": round(worst["pnl"], 2),
+            "return_pct": round(worst["return_pct"], 2) if worst["return_pct"] is not None else 0.0,
+        }
+        
+    else:
+        best_block = {
+            "symbol": "",
+            "exchange": "",
+            "timeframe": "",
+            "pnl": 0.0,
+            "return_pct": 0.0,
+        }
+        worst_block = {
+            "symbol": "",
+            "exchange": "",
+            "timeframe": "",
+            "pnl": 0.0,
+            "return_pct": 0.0,
+        }
+
+    highlights_block = {
+        "best_trade": best_block,
+        "worst_trade": worst_block,
     }
 
     # --------------------------------------------------------
-    # EXPOSURE (reuse compute_strategy_stats)
+    # EXPOSURE
     # --------------------------------------------------------
+
     snapshots = [compute_strategy_stats(s) for s in strategies]
 
     total_value = sum(s["value"] + s["allocated_eur"] for s in snapshots)
     crypto_value = sum(s["value"] for s in snapshots)
     cash_value = sum(s["allocated_eur"] for s in snapshots)
 
-    exposure_block: Dict[str, Any] = {
+    exposure_block = {
         "cash_pct": round(cash_value / total_value * 100, 2) if total_value else 0.0,
         "crypto_pct": round(crypto_value / total_value * 100, 2) if total_value else 0.0,
         "by_coin": {},
         "by_exchange": {},
     }
 
-    # by_coin = crypto-only
-    totals_by_coin: Dict[str, float] = {}
+    totals_by_coin = {}
     for s in snapshots:
         totals_by_coin.setdefault(s["symbol"], 0.0)
         totals_by_coin[s["symbol"]] += s["value"]
+
     for coin, val in totals_by_coin.items():
         exposure_block["by_coin"][coin] = round(val / total_value * 100, 2) if total_value else 0.0
 
-    # by_exchange = crypto + cash (so totals ~100%)
-    totals_by_ex_crypto: Dict[str, float] = {}
-    totals_by_ex_cash: Dict[str, float] = {}
+    totals_by_ex_crypto = {}
+    totals_by_ex_cash = {}
+
     for s in snapshots:
         ex = s["exchange"]
         totals_by_ex_crypto.setdefault(ex, 0.0)
@@ -686,18 +668,19 @@ else:
         exposure_block["by_exchange"][ex] = round(ex_total / total_value * 100, 2) if total_value else 0.0
 
     # --------------------------------------------------------
-    # CAPITAL EFFICIENCY (approximation)
+    # CAPITAL EFFICIENCY
     # --------------------------------------------------------
+
     cap_eff = {
         "eur_deployed": round(crypto_value, 2),
         "eur_reserved": round(cash_value, 2),
-        # keep field for schema compatibility, but we will not show it in the template
         "eur_free": 0.0,
     }
 
     # --------------------------------------------------------
-    # SYSTEM RELIABILITY (placeholders)
+    # SYSTEM RELIABILITY
     # --------------------------------------------------------
+
     reliability_block = {
         "api_uptime_pct": 100.0,
         "ohlc_failures": 0,
@@ -706,16 +689,9 @@ else:
         "trader_uptime_pct": 100.0,
     }
 
-    # --------------------------------------------------------
-    # STRATEGY CHANGES (future extension)
-    # --------------------------------------------------------
-    changes_block = {
-        "added": [],
-        "updated": [],
-        "deleted": [],
-    }
+    changes_block = {"added": [], "updated": [], "deleted": []}
 
-    report: Dict[str, Any] = {
+    report = {
         "week_start": week_start,
         "week_end": week_end,
         "performance": performance_block,
@@ -729,3 +705,4 @@ else:
 
     validate_weekly_report(report)
     return report
+
