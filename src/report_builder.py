@@ -2,9 +2,11 @@
 
 import os
 import re
+import json
 import sqlite3
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Dict, Any, List
 
 import psutil
@@ -13,7 +15,6 @@ from utils import (
     _open_db,
     current_config,
     to_decimal,
-    get_db_path,
     root_path,
 )
 from trade_manager import TradeManager
@@ -26,12 +27,6 @@ from report_validator import validate_daily_report, validate_weekly_report
 # ============================================================
 
 def load_strategies_from_db() -> List[sqlite3.Row]:
-    """
-    Returns enabled strategies from DB as sqlite3.Row objects.
-
-    Expected columns in 'strategies':
-    - id, name, symbol, timeframe, exchange, allocated_eur, enabled
-    """
     conn = _open_db()
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
@@ -50,13 +45,6 @@ def load_strategies_from_db() -> List[sqlite3.Row]:
 # ============================================================
 
 def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
-    """
-    Uses existing trades table + live ticker to compute:
-    - price, balance (qty), ACB, value, pnl_% for a single strategy.
-
-    trades schema:
-      id, symbol, side, price, amount, timestamp, txid, strategy_id
-    """
     sid = strategy["id"]
     sym = strategy["symbol"]
     tf = strategy["timeframe"]
@@ -88,12 +76,15 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
         if t["side"] == "buy":
             total_cost += p * a
             total_qty += a
+
         elif t["side"] == "sell" and total_qty > 0:
             proportion = a / total_qty
             if proportion > 1:
                 proportion = 1
+
             total_cost -= total_cost * proportion
             total_qty -= a
+
             if total_qty < 0:
                 total_qty = Decimal("0")
                 total_cost = Decimal("0")
@@ -117,13 +108,10 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
 
 
 # ============================================================
-# Helpers: process / system status for daily report
+# Helpers: process & system status
 # ============================================================
 
 def _is_process_running(match: str) -> bool:
-    """
-    Return True if any process command line contains the given substring.
-    """
     try:
         for p in psutil.process_iter(attrs=["cmdline"]):
             cmd = " ".join(p.info.get("cmdline") or [])
@@ -135,37 +123,53 @@ def _is_process_running(match: str) -> bool:
 
 
 def _collect_exchanges_from_strategies(strategies: List[sqlite3.Row]) -> List[str]:
-    """
-    Return unique exchange names from strategies.
-    """
     ex_set = {s["exchange"] for s in strategies if s["exchange"]}
     return sorted(ex_set)
 
 
 # ============================================================
-# Helpers: filled trades (as 'filled_orders' block)
+# Helpers: load yesterday portfolio value (persistent)
+# ============================================================
+
+def _load_yesterday_portfolio_value() -> Decimal | None:
+    """
+    Loads yesterday's daily report from:
+        data/reports/daily/
+    """
+    base = Path(root_path("data", "reports", "daily"))
+    if not base.exists():
+        return None
+
+    files = sorted(base.glob("daily_*.json"))
+    if not files:
+        return None
+
+    yesterday_file = files[-1]
+
+    try:
+        with open(yesterday_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        val = data.get("portfolio", {}).get("total_value_eur")
+        if val is not None:
+            return Decimal(str(val))
+    except Exception:
+        return None
+
+    return None
+
+
+# ============================================================
+# Helpers: filled trades since (correct timestamps)
 # ============================================================
 
 def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
-    """
-    Aurono does not have a separate orders table; each row in 'trades'
-    is effectively a filled order. We approximate 'filled orders'
-    from the trades table.
-
-    Returns list of dicts ready for the JSON 'filled_orders' block.
-
-    trades columns:
-      id, symbol, side, price, amount, timestamp, txid, strategy_id
-
-    We JOIN strategies to get exchange + timeframe.
-    """
     cfg = current_config()
     default_exchange = cfg.get("exchange", "bitvavo")
 
     conn = _open_db()
     conn.row_factory = sqlite3.Row
-
     since_str = since.strftime("%Y-%m-%d %H:%M:%S")
+
     rows = conn.execute(
         """
         SELECT
@@ -189,29 +193,24 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
     ).fetchall()
     conn.close()
 
-    filled: List[Dict[str, Any]] = []
+    filled = []
     VALID_TF = {"1h", "4h", "1d"}
 
     for r in rows:
-        # Timestamp is stored as "YYYY-MM-DD HH:MM:SS" (naive). Treat as UTC for schema.
+        ts_raw = r["timestamp"]
         try:
-            ts_raw = r["timestamp"]
             dt = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
             ts_iso = dt.isoformat()
         except Exception:
             ts_iso = datetime.now(timezone.utc).isoformat()
 
-        # Strategy context
-        s_sym = r["s_symbol"] or r["symbol"]
         s_tf = r["s_timeframe"]
-        s_ex = r["s_exchange"] or default_exchange
-
-        # DAILY JSON SCHEMA: timeframe is required and must be one of ["1h","4h","1d"]
-        if not s_tf or s_tf not in VALID_TF:
-            # Skip trades that cannot be mapped to a valid timeframe
+        if s_tf not in VALID_TF:
             continue
 
-        strategy_label = r["s_name"] or f"{s_sym} {s_tf} ({s_ex})"
+        s_sym = r["s_symbol"] or r["symbol"]
+        s_ex = r["s_exchange"] or default_exchange
+        label = r["s_name"] or f"{s_sym} {s_tf} ({s_ex})"
 
         filled.append({
             "symbol": r["symbol"],
@@ -221,8 +220,7 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
             "amount": float(r["amount"]),
             "price": float(r["price"]),
             "timestamp": ts_iso,
-            "strategy_label": strategy_label,
-            # DB has no pnl column; schema does not require it → set 0.0 placeholder
+            "strategy_label": label,
             "pnl": 0.0,
         })
 
@@ -230,15 +228,10 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# Helpers: portfolio snapshot (no extra backend)
+# Helpers: portfolio block with daily % change
 # ============================================================
 
 def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
-    """
-    Build 'portfolio' block for daily report from strategy snapshots.
-
-    Uses existing trades + live tickers; does NOT require extra tables.
-    """
     snapshots = [compute_strategy_stats(s) for s in strategies]
 
     crypto_value = sum(s["value"] for s in snapshots)
@@ -250,41 +243,33 @@ def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
         if s["acb"] is not None and s["balance"] > 0:
             unrealized_pnl += (s["price"] - s["acb"]) * s["balance"]
 
-    # We do not have a historical snapshot for "yesterday", so we set 0 for now.
-    change_since_yesterday_pct = 0.0
+    yesterday_val = _load_yesterday_portfolio_value()
+    if yesterday_val and yesterday_val > 0:
+        change_pct = float((Decimal(str(total_value)) - yesterday_val) / yesterday_val * 100)
+    else:
+        change_pct = 0.0
 
     return {
         "total_value_eur": float(total_value),
         "crypto_value_eur": float(crypto_value),
         "cash_value_eur": float(cash_value),
         "unrealized_pnl_eur": float(unrealized_pnl),
-        "change_since_yesterday_pct": float(change_since_yesterday_pct),
+        "change_since_yesterday_pct": change_pct,
     }
 
 
 # ============================================================
-# Helpers: capital (reserved & available)
+# Helpers: capital block
 # ============================================================
 
 def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
-    """
-    CAPITAL block for the Daily Report.
+    reserved_list = [{
+        "strategy_id": s["id"],
+        "symbol": s["symbol"],
+        "exchange": s["exchange"],
+        "amount_eur": float(s["allocated_eur"] or 0.0),
+    } for s in strategies]
 
-    - reserved: directly from strategies.allocated_eur  
-    - available: currently 0.0 per exchange (Aurono does not track free EUR yet)
-    """
-
-    # RESERVED: per strategy (allocated_eur)
-    reserved_list = []
-    for s in strategies:
-        reserved_list.append({
-            "strategy_id": s["id"],
-            "symbol": s["symbol"],
-            "exchange": s["exchange"],
-            "amount_eur": float(s["allocated_eur"] or 0.0),
-        })
-
-    # AVAILABLE: 0 for now
     exchanges = _collect_exchanges_from_strategies(strategies)
     available = {ex: 0.0 for ex in exchanges}
 
@@ -295,15 +280,10 @@ def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
 
 
 # ============================================================
-# Helpers: alerts from log file
+# Helpers: alerts from log (correct 24h filter)
 # ============================================================
 
 def _get_recent_alerts(hours: int = 24) -> List[str]:
-    """
-    Very light-weight alert collector from aurono_log.txt:
-    - returns lines containing '⚠️' or '❌' or 'ERROR'
-    - within the last N hours (based on timestamp prefix).
-    """
     cfg = current_config()
     log_rel = cfg.get("log_path", "../data/aurono_log.txt")
     log_filename = log_rel.split("/")[-1]
@@ -312,8 +292,8 @@ def _get_recent_alerts(hours: int = 24) -> List[str]:
     if not os.path.exists(log_file):
         return []
 
-    cutoff = datetime.now() - timedelta(hours=hours)
-    alerts: List[str] = []
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    alerts = []
 
     ts_re = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})]")
 
@@ -328,14 +308,11 @@ def _get_recent_alerts(hours: int = 24) -> List[str]:
 
             m = ts_re.match(text)
             if not m:
-                # If no timestamp, include as generic alert
-                alerts.append(text)
                 continue
 
             try:
-                ts = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+                ts = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
             except Exception:
-                alerts.append(text)
                 continue
 
             if ts >= cutoff:
@@ -345,37 +322,21 @@ def _get_recent_alerts(hours: int = 24) -> List[str]:
 
 
 # ============================================================
-# DAILY REPORT  — matches aurono.daily.report.schema.v1
+# DAILY REPORT
 # ============================================================
 
 def generate_daily_report() -> Dict[str, Any]:
-    """
-    Generate the full Daily Report using only existing Aurono data.
-
-    - system: processes + placeholder exchange health
-    - filled_orders: from trades in last 24h (JOIN strategies for exchange/timeframe)
-    - capital: reserved via TradeManager; available=0.0 per exchange
-    - portfolio: based on per-strategy snapshots
-    - alerts: from log file
-    """
-
     now = datetime.now(timezone.utc)
     strategies = load_strategies_from_db()
 
-    # SYSTEM
     ex_names = _collect_exchanges_from_strategies(strategies)
-
-    exchanges_status = []
-    for ex_name in ex_names:
-        # We don't yet expose fine-grained health metrics in the exchange classes.
-        # Use simple placeholders here (schema-compatible).
-        exchanges_status.append({
-            "name": ex_name,
-            "connected": True,
-            "last_ohlc_update_ok": True,
-            "last_ticker_ok": True,
-            "errors": [],
-        })
+    exchanges_status = [{
+        "name": ex_name,
+        "connected": True,
+        "last_ohlc_update_ok": True,
+        "last_ticker_ok": True,
+        "errors": [],
+    } for ex_name in ex_names]
 
     system_block = {
         "trader_running": _is_process_running("trader_main.py"),
@@ -383,20 +344,13 @@ def generate_daily_report() -> Dict[str, Any]:
         "exchanges": exchanges_status,
     }
 
-    # FILLED ORDERS (24h)
     since = now - timedelta(hours=24)
     filled_orders_block = _get_filled_trades_since(since)
-
-    # CAPITAL (reserved + available)
     capital_block = _compute_capital_block(strategies)
-
-    # PORTFOLIO SNAPSHOT
     portfolio_block = _compute_portfolio_block(strategies)
-
-    # ALERTS (from log)
     alerts_block = _get_recent_alerts(hours=24)
 
-    report: Dict[str, Any] = {
+    report = {
         "date": now.isoformat(),
         "system": system_block,
         "filled_orders": filled_orders_block,
@@ -405,13 +359,12 @@ def generate_daily_report() -> Dict[str, Any]:
         "alerts": alerts_block,
     }
 
-    # Validate against aurono.daily.report.schema.v1
     validate_daily_report(report)
     return report
 
 
 # ============================================================
-# WEEKLY REPORT  — matches aurono.weekly.report.schema.v1
+# WEEKLY REPORT
 # ============================================================
 
 def generate_weekly_report() -> Dict[str, Any]:
@@ -419,25 +372,29 @@ def generate_weekly_report() -> Dict[str, Any]:
     Full weekly report aligned with aurono.weekly.report.schema.v1,
     using existing trades + strategies + live tickers.
 
-    Since the trades table has no pnl column, all pnl-related fields
-    are set to 0.0 (placeholders) but keep the structure schema-valid.
+    Now computes:
+    - Realized weekly PNL from SELL trades (using ACB at time of sell)
+    - Average / best / worst sell return (%)
+    - Per-strategy realized PNL and avg sell return
+    - Best / worst trade based on PNL
+    - By-exchange exposure including both crypto and cash
     """
 
     now = datetime.utcnow()
-    week_end = now.strftime("%Y-%m-%d")
+    week_end_dt = now
     week_start_dt = now - timedelta(days=7)
+    week_end = week_end_dt.strftime("%Y-%m-%d")
     week_start = week_start_dt.strftime("%Y-%m-%d")
 
     conn = _open_db()
     conn.row_factory = sqlite3.Row
 
-    # Load strategies
+    # Load active strategies
     strategies = load_strategies_from_db()
-
-    # Create lookup by strategy_id for exchange/timeframe
     strat_by_id = {s["id"]: s for s in strategies}
 
-    # Load trades for the past week, joined with strategies to get exchange/timeframe
+    # Load ALL trades in chronological order (we need full history
+    # to reconstruct ACB at the moment of each SELL)
     rows = conn.execute(
         """
         SELECT
@@ -452,51 +409,163 @@ def generate_weekly_report() -> Dict[str, Any]:
             s.exchange  AS s_exchange
         FROM trades t
         LEFT JOIN strategies s ON t.strategy_id = s.id
-        WHERE t.timestamp >= ?
         ORDER BY t.timestamp ASC
-        """,
-        (week_start_dt.strftime("%Y-%m-%d %H:%M:%S"),),
+        """
     ).fetchall()
     conn.close()
 
-    trades: List[Dict[str, Any]] = []
+    # --------------------------------------------------------
+    # Reconstruct ACB per strategy and compute sell PNL
+    # --------------------------------------------------------
+    from collections import defaultdict
+
+    # Inventory state per strategy
+    inv_qty: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    inv_cost: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+
+    # Weekly aggregates
+    weekly_trades: List[Dict[str, Any]] = []  # trades within the 7d window
+    sell_records: List[Dict[str, Any]] = []   # SELLs within window with PNL/return
+
+    buys = 0
+    sells = 0
+
+    # For per-strategy stats
+    pnl_by_strategy: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    sell_return_sum_by_strategy: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    sell_return_count_by_strategy: Dict[int, int] = defaultdict(int)
+
     for r in rows:
         sid = r["strategy_id"]
+        sym = r["symbol"]
+        side = r["side"]
+        price_dec = to_decimal(r["price"])
+        amt_dec = to_decimal(r["amount"])
+
+        # Parse timestamp
+        try:
+            ts_dt = datetime.strptime(r["timestamp"], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            # If parsing fails, skip weekly classification but still update inventory
+            ts_dt = datetime.min
+
+        # Resolve timeframe / exchange fallback
         s_tf = r["s_timeframe"]
         s_ex = r["s_exchange"]
 
-        # Fallback: use strategy lookup if join was None
         if sid in strat_by_id:
             if not s_tf:
                 s_tf = strat_by_id[sid]["timeframe"]
             if not s_ex:
                 s_ex = strat_by_id[sid]["exchange"]
 
-        trades.append({
-            "strategy_id": sid,
-            "symbol": r["symbol"],
-            "exchange": s_ex or "bitvavo",
-            "timeframe": s_tf or "",
-            "side": r["side"],
-            "price": float(r["price"]),
-            "amount": float(r["amount"]),
-            # No pnl column in DB → use 0.0 placeholder
-            "pnl": 0.0,
-        })
+        # ---- Inventory updates (for strategies only) ----
+        if sid is not None:
+            qty = inv_qty[sid]
+            cost = inv_cost[sid]
+
+            if side == "buy":
+                cost += price_dec * amt_dec
+                qty += amt_dec
+
+            elif side == "sell":
+                # ACB BEFORE this sell
+                if qty > 0:
+                    acb = cost / qty
+                    pnl_dec = (price_dec - acb) * amt_dec
+                    # Return in %, based on ACB
+                    if acb != 0:
+                        ret_pct = (price_dec - acb) / acb * Decimal("100")
+                    else:
+                        ret_pct = None
+                else:
+                    pnl_dec = Decimal("0")
+                    ret_pct = None
+
+                # If this sell is inside the weekly window, record weekly PNL/return
+                if week_start_dt <= ts_dt <= week_end_dt:
+                    sells += 1
+                    pnl_by_strategy[sid] += pnl_dec
+                    if ret_pct is not None:
+                        sell_return_sum_by_strategy[sid] += ret_pct
+                        sell_return_count_by_strategy[sid] += 1
+
+                    sell_records.append({
+                        "strategy_id": sid,
+                        "symbol": sym,
+                        "exchange": s_ex or "bitvavo",
+                        "timeframe": s_tf or "",
+                        "price": float(price_dec),
+                        "amount": float(amt_dec),
+                        "timestamp": r["timestamp"],
+                        "pnl": float(pnl_dec),
+                        "return_pct": float(ret_pct) if ret_pct is not None else None,
+                    })
+
+                # After computing PNL, update inventory to reflect the sell
+                if qty > 0:
+                    proportion = amt_dec / qty
+                    if proportion > 1:
+                        proportion = Decimal("1")
+                    cost -= cost * proportion
+                    qty -= amt_dec
+                    if qty < 0:
+                        qty = Decimal("0")
+                        cost = Decimal("0")
+
+                inv_qty[sid] = qty
+                inv_cost[sid] = cost
+
+            # End of strategy-specific inventory
+
+        # ---- Weekly-trade bookkeeping (for counts/averages) ----
+        if week_start_dt <= ts_dt <= week_end_dt:
+            if side == "buy":
+                buys += 1
+            elif side == "sell":
+                # 'sells' is already incremented above for valid strategy sells;
+                # but for trades without strategy, we still want weekly count.
+                if sid is None:
+                    sells += 1
+
+            weekly_trades.append({
+                "strategy_id": sid,
+                "symbol": sym,
+                "exchange": s_ex or "bitvavo",
+                "timeframe": s_tf or "",
+                "side": side,
+                "price": float(price_dec),
+                "amount": float(amt_dec),
+                "timestamp": r["timestamp"],
+            })
 
     # --------------------------------------------------------
-    # PERFORMANCE
+    # PERFORMANCE BLOCK
     # --------------------------------------------------------
-    buys = sum(1 for t in trades if t["side"] == "buy")
-    sells = sum(1 for t in trades if t["side"] == "sell")
-    sell_wins = 0  # no pnl data → win-rate not meaningful
-    weekly_pnl = 0.0
+    weekly_pnl_dec = sum(Decimal(str(sr["pnl"])) for sr in sell_records)
+    weekly_pnl = float(weekly_pnl_dec)
+
+    # Sell returns (average / best / worst)
+    all_returns = [sr["return_pct"] for sr in sell_records if sr["return_pct"] is not None]
+
+    if all_returns:
+        avg_sell_return = sum(all_returns) / len(all_returns)
+        best_sell_return = max(all_returns)
+        worst_sell_return = min(all_returns)
+    else:
+        avg_sell_return = 0.0
+        best_sell_return = 0.0
+        worst_sell_return = 0.0
 
     performance_block = {
         "weekly_pnl_eur": round(weekly_pnl, 2),
         "buys": buys,
         "sells": sells,
-        "sell_win_rate": 0.0 if sells == 0 else 0.0,
+        # keep field for schema compatibility, but it has no meaning now
+        "sell_win_rate": 0.0,
+        "average_sell_return_pct": round(float(avg_sell_return), 2) if all_returns else 0.0,
+        "best_sell_return_pct": round(float(best_sell_return), 2) if all_returns else 0.0,
+        "worst_sell_return_pct": round(float(worst_sell_return), 2) if all_returns else 0.0,
     }
 
     # --------------------------------------------------------
@@ -506,16 +575,23 @@ def generate_weekly_report() -> Dict[str, Any]:
 
     for s in strategies:
         sid = s["id"]
-        s_trades = [t for t in trades if t["strategy_id"] == sid]
+        s_trades = [t for t in weekly_trades if t["strategy_id"] == sid]
 
         buys_s = [t for t in s_trades if t["side"] == "buy"]
         sells_s = [t for t in s_trades if t["side"] == "sell"]
 
-        # No real pnl in DB; keep 0.0 for now
-        pnl_s = 0.0
-
         avg_buy = sum(t["price"] for t in buys_s) / len(buys_s) if buys_s else None
         avg_sell = sum(t["price"] for t in sells_s) / len(sells_s) if sells_s else None
+
+        # Realized PNL from sells for this strategy
+        pnl_s = float(pnl_by_strategy.get(sid, Decimal("0")))
+
+        # Average sell return (%) for this strategy
+        if sell_return_count_by_strategy.get(sid, 0) > 0:
+            avg_ret_s = sell_return_sum_by_strategy[sid] / sell_return_count_by_strategy[sid]
+            avg_ret_s_f = round(float(avg_ret_s), 2)
+        else:
+            avg_ret_s_f = 0.0
 
         strategies_block.append({
             "strategy_id": sid,
@@ -528,27 +604,29 @@ def generate_weekly_report() -> Dict[str, Any]:
             "weekly_pnl_eur": round(pnl_s, 2),
             "avg_buy_price": round(avg_buy, 4) if avg_buy is not None else 0.0,
             "avg_sell_price": round(avg_sell, 4) if avg_sell is not None else 0.0,
+            "avg_sell_return_pct": avg_ret_s_f,
         })
 
     # --------------------------------------------------------
-    # HIGHLIGHTS (best/worst trade)
-    # pnl is always 0.0, so we only fill structure, not meaningful ranking
+    # HIGHLIGHTS (best/worst trade based on realized PNL)
     # --------------------------------------------------------
-    if trades:
-        # just pick the first trade as "best" and last as "worst" structurally
-        best = trades[0]
-        worst = trades[-1]
+    if sell_records:
+        best = max(sell_records, key=lambda x: x["pnl"])
+        worst = min(sell_records, key=lambda x: x["pnl"])
+
         best_block = {
             "symbol": best["symbol"],
             "exchange": best["exchange"],
             "timeframe": best["timeframe"],
-            "pnl": 0.0,
+            "pnl": round(best["pnl"], 2),
+            "return_pct": round(best["return_pct"], 2) if best["return_pct"] is not None else 0.0,
         }
         worst_block = {
             "symbol": worst["symbol"],
             "exchange": worst["exchange"],
             "timeframe": worst["timeframe"],
-            "pnl": 0.0,
+            "pnl": round(worst["pnl"], 2),
+            "return_pct": round(worst["return_pct"], 2) if worst["return_pct"] is not None else 0.0,
         }
     else:
         best_block = None
@@ -560,7 +638,7 @@ def generate_weekly_report() -> Dict[str, Any]:
     }
 
     # --------------------------------------------------------
-    # EXPOSURE (re-use compute_strategy_stats)
+    # EXPOSURE (reuse compute_strategy_stats)
     # --------------------------------------------------------
     snapshots = [compute_strategy_stats(s) for s in strategies]
 
@@ -575,7 +653,7 @@ def generate_weekly_report() -> Dict[str, Any]:
         "by_exchange": {},
     }
 
-    # by_coin
+    # by_coin = crypto-only
     totals_by_coin: Dict[str, float] = {}
     for s in snapshots:
         totals_by_coin.setdefault(s["symbol"], 0.0)
@@ -583,13 +661,20 @@ def generate_weekly_report() -> Dict[str, Any]:
     for coin, val in totals_by_coin.items():
         exposure_block["by_coin"][coin] = round(val / total_value * 100, 2) if total_value else 0.0
 
-    # by_exchange
-    totals_by_ex: Dict[str, float] = {}
+    # by_exchange = crypto + cash (so totals ~100%)
+    totals_by_ex_crypto: Dict[str, float] = {}
+    totals_by_ex_cash: Dict[str, float] = {}
     for s in snapshots:
-        totals_by_ex.setdefault(s["exchange"], 0.0)
-        totals_by_ex[s["exchange"]] += s["value"]
-    for ex, val in totals_by_ex.items():
-        exposure_block["by_exchange"][ex] = round(val / total_value * 100, 2) if total_value else 0.0
+        ex = s["exchange"]
+        totals_by_ex_crypto.setdefault(ex, 0.0)
+        totals_by_ex_cash.setdefault(ex, 0.0)
+        totals_by_ex_crypto[ex] += s["value"]
+        totals_by_ex_cash[ex] += s["allocated_eur"]
+
+    for ex, crypto_val_ex in totals_by_ex_crypto.items():
+        cash_val_ex = totals_by_ex_cash.get(ex, 0.0)
+        ex_total = crypto_val_ex + cash_val_ex
+        exposure_block["by_exchange"][ex] = round(ex_total / total_value * 100, 2) if total_value else 0.0
 
     # --------------------------------------------------------
     # CAPITAL EFFICIENCY (approximation)
@@ -597,7 +682,8 @@ def generate_weekly_report() -> Dict[str, Any]:
     cap_eff = {
         "eur_deployed": round(crypto_value, 2),
         "eur_reserved": round(cash_value, 2),
-        "eur_free": 0.0,  # free EUR not yet tracked separately
+        # keep field for schema compatibility, but we will not show it in the template
+        "eur_free": 0.0,
     }
 
     # --------------------------------------------------------
@@ -634,4 +720,3 @@ def generate_weekly_report() -> Dict[str, Any]:
 
     validate_weekly_report(report)
     return report
-

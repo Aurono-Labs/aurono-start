@@ -45,11 +45,16 @@ app = FastAPI(title="Aurono Dashboard", version="1.3")
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 app.state.templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
-# Ensure reports/html directory exists
-html_reports_dir = Path(__file__).resolve().parent / "reports" / "html"
+# Ensure persistent reports/html directory exists in data/
+html_reports_dir = Path(root_path("data", "reports", "html"))
 html_reports_dir.mkdir(parents=True, exist_ok=True)
 
-app.mount("/reports/html", StaticFiles(directory=str(html_reports_dir)), name="reports_html")
+# Serve static HTML reports from the persistent directory
+app.mount(
+    "/reports/html",
+    StaticFiles(directory=str(html_reports_dir)),
+    name="reports_html"
+)
 
 
 # ---------------------------

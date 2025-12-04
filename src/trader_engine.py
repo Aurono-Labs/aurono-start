@@ -81,11 +81,6 @@ class TraderEngine:
             exchange_name = s["exchange"] if "exchange" in s.keys() else "bitvavo"
             exchange = get_exchange(exchange_name)
 
-            log_event(
-                f"📊 Running strategy {symbol} ({s_timeframe}) on {exchange.name}: "
-                f"drop {drop_trigger}%, rise {rise_trigger}%"
-            )
-
             # --- Live ticker ---
             ticker = exchange.get_ticker(symbol)
             if ticker <= 0:

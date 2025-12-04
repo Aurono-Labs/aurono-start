@@ -1,21 +1,25 @@
 # src/routes/reports.py
 
 import os
+from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 
-from report_storage import (
-    DAILY_DIR,
-    WEEKLY_DIR,
-    HTML_DIR,
-)
+from utils import root_path
+from report_storage import _ensure_report_dirs  # internal helper to create folders
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+# Persistent directories
+BASE = Path(root_path("data", "reports"))
+DAILY_DIR = BASE / "daily"
+WEEKLY_DIR = BASE / "weekly"
+HTML_DIR = BASE / "html"
 
-def list_files(directory: str):
+
+def list_files(directory: Path):
     """Return files newest first."""
-    if not os.path.exists(directory):
+    if not directory.exists():
         return []
     return sorted(os.listdir(directory), reverse=True)
 
@@ -25,6 +29,10 @@ def list_files(directory: str):
 # ------------------------------------------------------------
 @router.get("/", response_class=HTMLResponse)
 async def reports_index(request: Request):
+
+    # Ensure directories exist (first use)
+    _ensure_report_dirs()
+
     daily_files = list_files(DAILY_DIR)
     weekly_files = list_files(WEEKLY_DIR)
 
@@ -41,16 +49,15 @@ async def reports_index(request: Request):
 @router.get("/view/{name}", response_class=HTMLResponse)
 async def view_report(request: Request, name: str):
     """
-    Verifies the file exists in the HTML_DIR.
-    Then shows view_report.html containing an iframe
+    Confirms file exists in data/reports/html.
+    Shows view_report.html containing an iframe
     that loads `/reports/html/<name>`.
     """
-    html_path = os.path.join(HTML_DIR, name)
 
-    if not os.path.exists(html_path):
+    path = HTML_DIR / name
+    if not path.exists():
         raise HTTPException(404, "Report HTML not found")
 
-    # This is matched by `app.mount("/reports/html", ...)` in dashboard.py
     iframe_src = f"/reports/html/{name}"
 
     return request.app.state.templates.get_template("reports/view_report.html").render(
@@ -64,6 +71,7 @@ async def view_report(request: Request, name: str):
 # ------------------------------------------------------------
 @router.get("/download/{kind}/{name}")
 async def download_report(kind: str, name: str):
+
     if kind == "daily":
         folder = DAILY_DIR
     elif kind == "weekly":
@@ -71,9 +79,8 @@ async def download_report(kind: str, name: str):
     else:
         raise HTTPException(404, "Invalid report type")
 
-    path = os.path.join(folder, name)
-
-    if not os.path.exists(path):
+    path = folder / name
+    if not path.exists():
         raise HTTPException(404, "Report not found")
 
     return FileResponse(path, filename=name)
