@@ -611,30 +611,39 @@ def generate_weekly_report() -> Dict[str, Any]:
     # HIGHLIGHTS (best/worst trade based on realized PNL)
     # --------------------------------------------------------
     if sell_records:
-        best = max(sell_records, key=lambda x: x["pnl"])
-        worst = min(sell_records, key=lambda x: x["pnl"])
+    best = max(sell_records, key=lambda x: x["pnl"])
+    worst = min(sell_records, key=lambda x: x["pnl"])
 
-        best_block = {
-            "symbol": best["symbol"],
-            "exchange": best["exchange"],
-            "timeframe": best["timeframe"],
-            "pnl": round(best["pnl"], 2),
-            "return_pct": round(best["return_pct"], 2) if best["return_pct"] is not None else 0.0,
-        }
-        worst_block = {
-            "symbol": worst["symbol"],
-            "exchange": worst["exchange"],
-            "timeframe": worst["timeframe"],
-            "pnl": round(worst["pnl"], 2),
-            "return_pct": round(worst["return_pct"], 2) if worst["return_pct"] is not None else 0.0,
-        }
-    else:
-        best_block = None
-        worst_block = None
+    best_block = {
+        "symbol": best["symbol"],
+        "exchange": best["exchange"],
+        "timeframe": best["timeframe"],
+        "pnl": round(best["pnl"], 2),
+        "return_pct": round(best["return_pct"], 2) if best["return_pct"] is not None else 0.0,
+    }
 
-    highlights_block = {
-        "best_trade": best_block,
-        "worst_trade": worst_block,
+    worst_block = {
+        "symbol": worst["symbol"],
+        "exchange": worst["exchange"],
+        "timeframe": worst["timeframe"],
+        "pnl": round(worst["pnl"], 2),
+        "return_pct": round(worst["return_pct"], 2) if worst["return_pct"] is not None else 0.0,
+    }
+else:
+    # schema requires an object, not null
+    best_block = {
+        "symbol": "",
+        "exchange": "",
+        "timeframe": "",
+        "pnl": 0.0,
+        "return_pct": 0.0,
+    }
+    worst_block = {
+        "symbol": "",
+        "exchange": "",
+        "timeframe": "",
+        "pnl": 0.0,
+        "return_pct": 0.0,
     }
 
     # --------------------------------------------------------
