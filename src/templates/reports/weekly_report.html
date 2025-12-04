@@ -171,37 +171,39 @@
     {% endif %}
   </div>
 
+  
+  
   <!-- HIGHLIGHTS -->
   <div class="card">
     <h2>Highlights</h2>
     <div class="grid-2">
       <div>
         <h3>Best Trade</h3>
-        {% if report.highlights.best_trade %}
-          <p>
-            <strong>{{ report.highlights.best_trade.symbol }}</strong>
-            ({{ report.highlights.best_trade.timeframe }},
-             {{ report.highlights.best_trade.exchange }})<br>
-            PNL: €{{ "%.2f"|format(report.highlights.best_trade.pnl) }}<br>
-            Return: {{ "%.2f"|format(report.highlights.best_trade.return_pct) }}%
-          </p>
-        {% else %}
-          <p class="muted">No SELL trades this week.</p>
-        {% endif %}
+          {% set bt = report.highlights.best_trade %}
+          {% if bt.symbol == "" %}
+            <p class="muted">No SELL trades this week.</p>
+          {% else %}
+            <p>
+              <strong>{{ bt.symbol }}</strong>
+              ({{ bt.timeframe }}, {{ bt.exchange }})<br>
+              PNL: €{{ "%.2f"|format(bt.pnl) }}<br>
+              Return: {{ "%.2f"|format(bt.return_pct) }}%
+            </p>
+          {% endif %}
       </div>
       <div>
         <h3>Weakest Trade</h3>
-        {% if report.highlights.worst_trade %}
-          <p>
-            <strong>{{ report.highlights.worst_trade.symbol }}</strong>
-            ({{ report.highlights.worst_trade.timeframe }},
-             {{ report.highlights.worst_trade.exchange }})<br>
-            PNL: €{{ "%.2f"|format(report.highlights.worst_trade.pnl) }}<br>
-            Return: {{ "%.2f"|format(report.highlights.worst_trade.return_pct) }}%
-          </p>
-        {% else %}
-          <p class="muted">No SELL trades this week.</p>
-        {% endif %}
+          {% set wt = report.highlights.worst_trade %}
+          {% if wt.symbol == "" %}
+            <p class="muted">No SELL trades this week.</p>
+          {% else %}
+            <p>
+              <strong>{{ wt.symbol }}</strong>
+              ({{ wt.timeframe }}, {{ wt.exchange }})<br>
+              PNL: €{{ "%.2f"|format(wt.pnl) }}<br>
+              Return: {{ "%.2f"|format(wt.return_pct) }}%
+            </p>
+          {% endif %}
       </div>
     </div>
   </div>
