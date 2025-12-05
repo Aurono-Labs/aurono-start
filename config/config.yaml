@@ -1,4 +1,4 @@
-mode: dev
+mode: live
 dev_sleep_hours: 4
 exchange: bitvavo
 api_credentials: bitvavo_api_key.json
@@ -6,7 +6,7 @@ log_path: ../data/aurono_log.txt
 db_path: ../data/trades.db
 dashboard_host: 0.0.0.0
 dashboard_port: 8000
-live_trading: false
+live_trading: true
 
 email:
   enabled: false           # controlled from Settings UI
@@ -22,4 +22,7 @@ exchanges:
 +    fee_rate: 0.0025   # 0.25% default estimate
   kraken:
 +    fee_rate: 0.0025   # 0.25% default estimate
+
+
+
 
