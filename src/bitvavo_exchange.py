@@ -63,65 +63,79 @@ class BitvavoExchange(ExchangeBase):
     _market_tick_cache: Dict[str, Dict[str, Decimal]] = {}
     
     def _load_market_ticks(self, market: str) -> Dict[str, Decimal]:
-        """
-        Load price tick and amount tick from Bitvavo /markets endpoint.
-        Example return: {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
-        """
-        market = market.upper()
+    """
+    Load correct price & amount ticks based on Bitvavo /markets.
+    
+    Bitvavo fields:
+      - pricePrecision       → number of decimals for price
+      - quantityDecimals     → number of decimals for amount
+      - (sometimes) quantityPrecision → same meaning
 
-        # Already cached
-        if market in self._market_tick_cache:
-            return self._market_tick_cache[market]
+    Tick derivation:
+      price_tick  = 1 / 10^pricePrecision
+      amount_tick = 1 / 10^quantityDecimals
+    """
+    market = market.upper()
 
-        try:
-            r = requests.get(f"{BITVAVO_BASE}/markets", timeout=10)
-            data = r.json()
-        except Exception as e:
-            log_event(f"⚠️ Bitvavo tick fetch failed: {e}")
-            # Safe fallback
-            ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
-            self._market_tick_cache[market] = ticks
-            return ticks
+    if market in self._market_tick_cache:
+        return self._market_tick_cache[market]
 
-        if not isinstance(data, list):
-            log_event(f"⚠️ Bitvavo /markets unexpected JSON: {data}")
-            ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
-            self._market_tick_cache[market] = ticks
-            return ticks
-
-        for info in data:
-            if not isinstance(info, dict):
-                continue
-            if info.get("market", "").upper() == market:
-                # Bitvavo docs: use quantityDecimals for amount
-                # priceDecimals is still used for price precision
-                price_dec = info.get("priceDecimals")
-                qty_dec = info.get("quantityDecimals") or info.get("amountDecimals")
-
-                try:
-                    price_dec_int = int(price_dec) if price_dec is not None else 2
-                except Exception:
-                    price_dec_int = 2
-
-                try:
-                    qty_dec_int = int(qty_dec) if qty_dec is not None else 4
-                except Exception:
-                    qty_dec_int = 4
-
-                ticks = {
-                    "price": Decimal("1") / (Decimal("10") ** price_dec_int),
-                    "amount": Decimal("1") / (Decimal("10") ** qty_dec_int),
-                }
-
-                self._market_tick_cache[market] = ticks
-                log_event(f"ℹ️ Bitvavo ticks for {market}: {ticks}")
-                return ticks
-
-        # Fallback if market not found
-        log_event(f"⚠️ Bitvavo: no tick info found for {market}, using defaults")
+    # Fetch markets list
+    try:
+        resp = requests.get(f"{BITVAVO_BASE}/markets", timeout=10)
+        data = resp.json()
+    except Exception as e:
+        log_event(f"⚠️ Bitvavo tick fetch failed: {e}")
         ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
         self._market_tick_cache[market] = ticks
         return ticks
+
+    if not isinstance(data, list):
+        log_event(f"⚠️ Bitvavo /markets unexpected JSON: {data}")
+        ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
+        self._market_tick_cache[market] = ticks
+        return ticks
+
+    for info in data:
+        if not isinstance(info, dict):
+            continue
+
+        if info.get("market", "").upper() != market:
+            continue
+
+        # Extract decimals
+        price_prec = info.get("pricePrecision")
+        qty_prec = info.get("quantityDecimals") or info.get("quantityPrecision")
+
+        # Defaults if missing
+        try:
+            price_prec = int(price_prec) if price_prec is not None else 2
+        except:
+            price_prec = 2
+
+        try:
+            qty_prec = int(qty_prec) if qty_prec is not None else 4
+        except:
+            qty_prec = 4
+
+        # Convert decimals → ticks
+        price_tick = Decimal("1") / (Decimal("10") ** price_prec)
+        amount_tick = Decimal("1") / (Decimal("10") ** qty_prec)
+
+        ticks = {
+            "price": price_tick,
+            "amount": amount_tick
+        }
+
+        self._market_tick_cache[market] = ticks
+        log_event(f"ℹ️ Bitvavo ticks for {market}: {ticks}")
+        return ticks
+
+    # Fallback
+    log_event(f"⚠️ Bitvavo: no tick info found for {market}, using defaults")
+    ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
+    self._market_tick_cache[market] = ticks
+    return ticks
         
     def _normalize_amount(self, market: str, amount: Decimal) -> Decimal:
         """
