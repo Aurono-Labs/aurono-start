@@ -1,28 +1,18 @@
-mode: live
-dev_sleep_hours: 4
-exchange: bitvavo
 api_credentials: bitvavo_api_key.json
-log_path: ../data/aurono_log.txt
-db_path: ../data/trades.db
+buy_drop_pct: -2.5
 dashboard_host: 0.0.0.0
 dashboard_port: 8000
-live_trading: true
-
+db_path: ../data/trades.db
+dev_sleep_hours: 4
 email:
-  enabled: false           # controlled from Settings UI
-  username: ""             # user email
-  password: ""             # app password
-  to: ""                   # normally same as username
-  smtp_host: "smtp.gmail.com"  # static, no need to expose
-  smtp_port: 587               # static, no need to expose
-  from: "Aurono"               # static sender name
-
-exchanges:
-  bitvavo:
-+    fee_rate: 0.0025   # 0.25% default estimate
-  kraken:
-+    fee_rate: 0.0025   # 0.25% default estimate
-
-
-
-
+  enabled: false
+  password: ""
+  to: ""
+  username: ""
+exchange: bitvavo
+invest_eur: 50.0
+live_trading: true
+log_path: ../data/aurono_log.txt
+mode: live
+pair: BTCEUR
+sell_rise_pct: 2.1

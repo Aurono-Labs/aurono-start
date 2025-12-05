@@ -1,4 +1,3 @@
-# src/kraken_exchange.py
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -21,7 +20,6 @@ from utils import (
     to_decimal,
     get_db_path,
     get_credentials_for_exchange,
-    
 )
 from utils import _open_db
 from trade_manager import TradeManager
@@ -42,7 +40,6 @@ class KrakenExchange(ExchangeBase):
     def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
         # Allow overriding keys (used by Settings "Test" button)
         if api_key and api_secret:
-            # Used ONLY for Settings → "Test Kraken Credentials"
             self.api_key = api_key
             self.api_secret = api_secret
         else:
@@ -50,22 +47,19 @@ class KrakenExchange(ExchangeBase):
             self.api_key, self.api_secret = get_credentials_for_exchange("kraken")
 
         self.tm = TradeManager(get_db_path())
-        
+
+        # --- DEFAULT FEE RATE (new) ---
+        self.fee_rate = Decimal("0.0025")
+
     # Cache for Kraken tick sizes: {"BTCEUR": Decimal("0.1"), ... }
     _tick_cache: Dict[str, Dict[str, Decimal]] = {}
-    
+
     def _load_tick_size(self, symbol: str) -> Dict[str, Decimal]:
-        """
-        Load both price tick and amount tick for a Kraken symbol using /AssetPairs.
-        Returns a dict: { "price": Decimal, "amount": Decimal }
-        """
         symbol = symbol.upper()
 
-        # Return cached entry
         if symbol in self._tick_cache:
             return self._tick_cache[symbol]
 
-        # Default fallback (safe minimums)
         fallback = {
             "price": Decimal("0.01"),
             "amount": Decimal("0.0001")
@@ -80,13 +74,11 @@ class KrakenExchange(ExchangeBase):
             return fallback
 
         for pair_name, info in pairs.items():
-            altname = info.get("altname", "").upper()  # e.g. "BTCEUR"
+            altname = info.get("altname", "").upper()
             if altname == symbol:
-                # Price precision (pair_decimals)
                 price_dec = info.get("pair_decimals", 2)
                 price_tick = Decimal("1") / (Decimal("10") ** Decimal(price_dec))
 
-                # Amount precision (lot_decimals)
                 lot_dec = info.get("lot_decimals", 4)
                 amount_tick = Decimal("1") / (Decimal("10") ** Decimal(lot_dec))
 
@@ -97,16 +89,11 @@ class KrakenExchange(ExchangeBase):
                 self._tick_cache[symbol] = result
                 return result
 
-        # No match found — fallback
         log_event(f"⚠️ Kraken: no tick size found for {symbol}, using defaults")
         self._tick_cache[symbol] = fallback
         return fallback
-        
-            
+
     def _normalize_amount(self, symbol: str, amount: Decimal) -> Decimal:
-        """
-        Normalize the amount (volume) based on Kraken's lot_decimals.
-        """
         ticks = self._load_tick_size(symbol)
         tick = ticks["amount"]
 
@@ -116,15 +103,9 @@ class KrakenExchange(ExchangeBase):
             log_event(f"⚠️ Kraken amount rounding failed for {symbol}, tick={tick}, amount={amount}")
             return amount
 
-
-
-
     # -------------------- Public API --------------------
 
     def get_ticker(self, symbol: str) -> Decimal:
-        """
-        symbol: 'BTCEUR' (config pair)
-        """
         pair = symbol.upper()
         try:
             r = requests.get(
@@ -138,10 +119,6 @@ class KrakenExchange(ExchangeBase):
             return Decimal("0")
 
     def get_ohlc(self, symbol: str, timeframe: str) -> List[list]:
-        """
-        symbol: 'BTCEUR'
-        timeframe: '1h', '4h', '1d'
-        """
         pair = symbol.upper()
         interval_map = {"1h": 60, "4h": 240, "6h": 360, "1d": 1440, "1w": 10080}
         interval = interval_map.get(timeframe, 1440)
@@ -160,10 +137,6 @@ class KrakenExchange(ExchangeBase):
     # -------------------- Private API helper --------------------
 
     def _private_request(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Send a signed request to Kraken's private API (same signing logic as v2.2).
-        endpoint: '/AddOrder', '/QueryOrders', etc.
-        """
         data = data or {}
         data["nonce"] = str(int(time.time() * 1000))
         postdata = urllib.parse.urlencode(data)
@@ -197,9 +170,6 @@ class KrakenExchange(ExchangeBase):
             return {"error": [str(e)]}
 
     def _get_order_details(self, txid: str) -> Optional[Dict[str, Any]]:
-        """
-        Query Kraken for order details and return fill info.
-        """
         res = self._private_request("/QueryOrders", {"txid": txid})
         if res.get("result"):
             info = list(res["result"].values())[0]
@@ -207,25 +177,20 @@ class KrakenExchange(ExchangeBase):
             vol_exec = Decimal(info.get("vol_exec", "0"))
             status = info.get("status")
             descr = info.get("descr", {}).get("order", "")
-            
-            # --- FEE AUTO-DETECTION (new) ---
-            # Kraken provides 'cost' (EUR before fee) and 'fee' (EUR fee paid)
+
             try:
                 cost = Decimal(info.get("cost", "0"))
                 fee = Decimal(info.get("fee", "0"))
-                
+
                 if cost > 0 and fee >= 0:
                     fee_rate = (fee / cost).quantize(Decimal("0.00001"))
-                    
-                    # Update the exchange object's fee_rate for future trades
                     self.fee_rate = fee_rate
-                    
                     log_event(
                         f"ℹ️ Kraken effective fee updated → cost={cost}, fee={fee}, rate={fee_rate}"
                     )
             except Exception as e:
                 log_event(f"⚠️ Kraken fee calculation failed: {e}")
-            
+
             return {
                 "price": price,
                 "vol_exec": vol_exec,
@@ -235,7 +200,7 @@ class KrakenExchange(ExchangeBase):
         return None
 
     # -------------------- Place limit order --------------------
-    
+
     def place_limit_order(
         self,
         symbol: str,
@@ -244,27 +209,10 @@ class KrakenExchange(ExchangeBase):
         volume: Decimal,
         trade_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """
-        Place a live Kraken order or simulate if live_trading=False.
-        Symbol: 'BTCEUR', 'NEAREUR', etc.
-
-        Behaviour:
-        - TraderEngine already updates strategies.allocated_eur based on the *limit* price
-          (as a reservation).
-        - Here we:
-            1) send the order to Kraken
-            2) store the Kraken order id (txid) into trades.txid
-            3) fetch the actual fill (price, vol_exec)
-            4) update trades.price / trades.amount to the actuals
-            5) adjust strategies.allocated_eur by the difference between:
-               reserved EUR vs. actual EUR.
-        """
         cfg = current_config()
         live = cfg.get("live_trading", False)
         pair = symbol.upper()
 
-        # Normalize both price and amount using Kraken's precision rules
-        # Side-aware price rounding
         ticks = self._load_tick_size(symbol)
         tick = ticks["price"]
 
@@ -296,7 +244,6 @@ class KrakenExchange(ExchangeBase):
         txid = res["result"]["txid"][0]
         log_event(f"📤 Sent {side.upper()} order → Kraken TXID: {txid}")
 
-        # Attach TXID to DB record
         if trade_id:
             try:
                 conn = _open_db()
@@ -309,8 +256,7 @@ class KrakenExchange(ExchangeBase):
             except Exception as e:
                 log_event(f"⚠️ Could not store Kraken TXID in DB: {e}")
 
-        # Wait for execution, then try to update trade with final fill
-        time.sleep(12)  # a bit longer to allow Kraken to close the order
+        time.sleep(12)
         detail = self._get_order_details(txid)
         if not detail:
             log_event(f"⚠️ Kraken returned no order details for TXID={txid}")
@@ -318,19 +264,15 @@ class KrakenExchange(ExchangeBase):
 
         log_event(f"📊 Order status: {detail['status']} ({detail['descr']})")
 
-        # Only adjust if fully closed and we have a valid fill
-        
         if (
             detail["status"] == "closed"
             and detail["price"] > 0
             and detail["vol_exec"] > 0
             and trade_id is not None
         ):
-            actual_price = detail["price"]          # Decimal
-            actual_amount = detail["vol_exec"]      # Decimal
+            actual_price = detail["price"]
+            actual_amount = detail["vol_exec"]
 
-            # Reserved EUR that TraderEngine already used
-            # --- FIX: use the original reserved values from DB ---
             try:
                 conn = _open_db()
                 cur = conn.cursor()
@@ -347,7 +289,6 @@ class KrakenExchange(ExchangeBase):
 
             except Exception as e:
                 log_event(f"⚠️ Kraken: could not load original reserved values: {e}")
-                # fallback: use normalized
                 reserved_eur = (price * volume).quantize(Decimal("0.01"))
 
             actual_eur = (actual_price * actual_amount).quantize(Decimal("0.01"))
@@ -357,12 +298,10 @@ class KrakenExchange(ExchangeBase):
             else:
                 delta = actual_eur - reserved_eur
 
-
             try:
                 conn = _open_db()
                 cur = conn.cursor()
 
-                # 1. Update trade with actual execution details
                 cur.execute(
                     """
                     UPDATE trades
@@ -372,7 +311,6 @@ class KrakenExchange(ExchangeBase):
                     (float(actual_price), float(actual_amount), trade_id),
                 )
 
-                # 2. Fetch strategy_id
                 cur.execute(
                     "SELECT strategy_id FROM trades WHERE id = ?",
                     (trade_id,),
@@ -380,7 +318,6 @@ class KrakenExchange(ExchangeBase):
                 row = cur.fetchone()
                 strategy_id = row[0] if row and row[0] is not None else None
 
-                # 3. Adjust allocated_eur and fetch updated value
                 new_alloc = None
                 if strategy_id is not None and delta != 0:
                     cur.execute(
@@ -391,7 +328,7 @@ class KrakenExchange(ExchangeBase):
                         """,
                         (float(delta), strategy_id),
                     )
-                    # fetch new alloc after update
+
                     cur.execute(
                         "SELECT allocated_eur FROM strategies WHERE id = ?",
                         (strategy_id,),
@@ -411,14 +348,12 @@ class KrakenExchange(ExchangeBase):
             except Exception as e:
                 log_event(f"⚠️ Could not update executed Kraken trade / allocation in DB: {e}")
 
-            # 4. Log DB update
             log_event(
                 f"💾 Updated executed Kraken trade → "
                 f"€{actual_price} × {actual_amount} "
                 f"(was {price} × {volume}, trade_id={trade_id})"
             )
 
-            # 5. FINAL SUMMARY LOG (new)
             final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
 
             log_event(
@@ -428,3 +363,4 @@ class KrakenExchange(ExchangeBase):
             )
 
         return res
+
