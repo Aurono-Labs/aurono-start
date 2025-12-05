@@ -118,7 +118,7 @@ class TraderEngine:
                     )
                 else:
                     limit_price = (open_price * (Decimal("1") + drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
-                    fee = self.exchange.fee_rate
+                    fee = exchange.fee_rate
                     vol = (buy_eur / (ticker * (Decimal("1") + fee))).quantize(Decimal("0.00000001"))
                     log_event(
                         f"BUY calc → spend={buy_eur}, price={ticker}, fee={fee}, volume={vol}"
@@ -158,7 +158,7 @@ class TraderEngine:
                     continue
 
                 limit_price = (open_price * (Decimal("1") + rise_trigger / Decimal("100"))).quantize(Decimal("0.01"))
-                fee = self.exchange.fee_rate
+                fee = exchange.fee_rate
                 vol = (sell_eur / (ticker * (Decimal("1") - fee))).quantize(Decimal("0.00000001"))
 
                 # Never exceed available balance
