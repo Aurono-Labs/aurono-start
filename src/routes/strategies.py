@@ -195,15 +195,23 @@ def delete_strategy(id: int):
     log_event(f"🗑 Deleted strategy {id}")
 
     return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
-    
+
+
 # -----------------------------------------------------------
-# GET RECENT TRADES OF A STRATEGY
+# GET RECENT TRADES OF A STRATEGY (WITH FORMATTED PRICE)
 # -----------------------------------------------------------
 @router.get("/api/strategy/{symbol}/{timeframe}/{exchange}/trades")
 def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
     """
-    Returns the last 10 trades for a specific strategy.
+    Returns the last 10 trades for a specific strategy, including formatted prices.
     """
+
+    from formatting import format_price
+    from utils import to_decimal
+    from exchange_factory import get_exchange
+
+    ex = get_exchange(exchange)
+    ticks = ex._market_ticks[symbol]["price_tick"]
 
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -223,16 +231,24 @@ def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
     rows = cur.fetchall()
     conn.close()
 
-    return [
-        {
+    result = []
+    for r in rows:
+        price = to_decimal(r["price"])
+        amount = to_decimal(r["amount"])
+
+        result.append({
             "timestamp": r["timestamp"],
             "symbol": r["symbol"],
             "side": r["side"],
-            "price": float(r["price"]),
-            "amount": float(r["amount"]),
+
+            # raw numeric values
+            "price": float(price),
+            "amount": float(amount),
+
+            # formatted string using tickSize (NEW!)
+            "price_str": format_price(price, ticks),
+
             "strategy_id": r["strategy_id"],
-        }
-        for r in rows
-    ]
+        })
 
-
+    return result

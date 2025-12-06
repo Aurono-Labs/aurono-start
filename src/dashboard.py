@@ -20,6 +20,7 @@ from trade_manager import TradeManager
 from kraken_exchange import KrakenExchange
 from bitvavo_exchange import BitvavoExchange
 from exchange_factory import get_exchange
+from formatting import format_price
 
 def get_exchange_backend():
     cfg = current_config()
@@ -117,7 +118,11 @@ def get_portfolio_snapshot():
             ex = get_exchange(exchange_name)
 
             # fetch live price
-            price = float(ex.get_ticker(sym))
+            raw_price = ex.get_ticker(sym)
+            ticks = ex._market_ticks[sym]["price_tick"]
+            price = float(raw_price)
+            price_str = format_price(raw_price, ticks)
+
             # compute only trades linked to this strategy
             balance = 0.0
             acb_f = None
@@ -157,16 +162,25 @@ def get_portfolio_snapshot():
             total_crypto_value += value
             pnl_pct = ((price - acb_f) / acb_f * 100) if acb_f else 0
             alloc = float(s["allocated_eur"] or 0.0)
+            
+            # ACB formatting
+            acb_str = format_price(acb_f, ticks) if acb_f else "-"
 
             portfolio.append({
                 "strategy_id": sid,
                 "symbol": sym,
                 "timeframe": tf,
                 "exchange": exchange_name,
-                "price": price,
+                
+                "price": price,            # numeric
+                "price_str": price_str,    # formatted string
+
                 "balance": balance,
                 "value": value,
-                "acb": acb_f,
+
+                "acb": acb_f,              # numeric
+                "acb_str": acb_str,        # formatted string
+
                 "pnl_pct": pnl_pct,
                 "allocated_eur": alloc,
             })
@@ -225,12 +239,19 @@ def get_recent_trades(limit=15, days=7):
                 strategy_name = f"{r['s_symbol']} {r['timeframe']} ({exch})"
             else:
                 strategy_name = "-"
+                
+            # Format trade price
+            sym = r["symbol"].upper()
+            ex = get_exchange(r["exchange"] or "bitvavo")
+            ticks = ex._market_ticks[sym]["price_tick"]
+            price_str = format_price(to_decimal(r["price"]), ticks)
 
             trades.append({
                 "timestamp": r["timestamp"],
-                "symbol": r["symbol"],
+                "symbol": sym,
                 "side": r["side"],
                 "price": r["price"],
+                "price_str": price_str,
                 "amount": r["amount"],
                 "strategy": strategy_name,
             })

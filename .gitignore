@@ -16,3 +16,5 @@ data/trades_backup_*.db
 .DS_Store
 */.DS_Store
 **/.DS_Store
+*checkpoint.py
+
