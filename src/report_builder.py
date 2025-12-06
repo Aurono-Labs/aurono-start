@@ -19,7 +19,6 @@ from utils import (
 )
 from trade_manager import TradeManager
 from exchange_factory import get_exchange
-from formatting import format_price
 from report_validator import validate_daily_report, validate_weekly_report
 
 
@@ -94,24 +93,19 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
     acb = float(total_cost / total_qty) if total_qty > 0 else None
     value = balance * price
     pnl_pct = ((price - acb) / acb * 100) if acb else 0.0
-    
-    ticks = exchange._market_ticks[sym]["price_tick"]
-    price_str = format_price(Decimal(str(price)), ticks)
-    acb_str = format_price(Decimal(str(acb)), ticks) if acb else None
 
     return {
         "symbol": sym,
         "timeframe": tf,
         "exchange": exch,
         "price": price,
-        "price_str": price_str,
         "balance": balance,
         "value": value,
         "acb": acb,
-        "acb_str": acb_str,
         "pnl_pct": pnl_pct,
         "allocated_eur": float(strategy["allocated_eur"] or 0.0),
     }
+
 
 # ============================================================
 # Helpers: process & system status
@@ -307,27 +301,16 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
 
             inv_qty[sid] = qty
             inv_cost[sid] = cost
-            
+
         # ----- Filter for daily report window + valid timeframes -----
         if s_tf in VALID_TF and ts_dt >= since:
-            # Format price using market tickSize
-            ex_backend = get_exchange(s_ex)
-            ticks = ex_backend._market_ticks[s_sym]["price_tick"]
-            price_str = format_price(price_dec, ticks)
-
             filled.append({
                 "symbol": r["symbol"],
                 "exchange": s_ex,
                 "timeframe": s_tf,
                 "side": side,
                 "amount": float(amt_dec),
-
-                # raw value
                 "price": float(price_dec),
-
-                # formatted value (NEW)
-                "price_str": price_str,
-
                 "timestamp": ts_iso,
                 "strategy_label": label,
                 "pnl": float(round(pnl_dec, 2)),
@@ -583,24 +566,13 @@ def generate_weekly_report() -> Dict[str, Any]:
                     if ret_pct is not None:
                         sell_return_sum_by_strategy[sid] += ret_pct
                         sell_return_count_by_strategy[sid] += 1
-                        
-                    # Get tickSize for formatting
-                    ex_backend = get_exchange(s_ex or "bitvavo")
-                    ticks = ex_backend._market_ticks[sym]["price_tick"]
-                    price_str = format_price(price_dec, ticks)
 
                     sell_records.append({
                         "strategy_id": sid,
                         "symbol": sym,
                         "exchange": s_ex or "bitvavo",
                         "timeframe": s_tf or "",
-
-                        # raw
                         "price": float(price_dec),
-
-                        # formatted
-                        "price_str": price_str,
-
                         "amount": float(amt_dec),
                         "timestamp": r["timestamp"],
                         "pnl": float(pnl_dec),
@@ -627,11 +599,6 @@ def generate_weekly_report() -> Dict[str, Any]:
                 buys += 1
             elif side == "sell" and sid is None:
                 sells += 1
-                
-            # Get tickSize for formatting
-            ex_backend = get_exchange(s_ex or "bitvavo")
-            ticks = ex_backend._market_ticks[sym]["price_tick"]
-            price_str = format_price(price_dec, ticks)
 
             weekly_trades.append({
                 "strategy_id": sid,
@@ -639,13 +606,7 @@ def generate_weekly_report() -> Dict[str, Any]:
                 "exchange": s_ex or "bitvavo",
                 "timeframe": s_tf or "",
                 "side": side,
-
-                # raw
                 "price": float(price_dec),
-
-                # formatted
-                "price_str": price_str,
-
                 "amount": float(amt_dec),
                 "timestamp": r["timestamp"],
             })
@@ -702,13 +663,6 @@ def generate_weekly_report() -> Dict[str, Any]:
             avg_ret_s_f = round(float(avg_ret_s), 2)
         else:
             avg_ret_s_f = 0.0
-            
-        # tickSize formatting for averages
-        ex_backend = get_exchange(s["exchange"])
-        ticks = ex_backend._market_ticks[s["symbol"]]["price_tick"]
-
-        avg_buy_str = format_price(Decimal(str(avg_buy)), ticks) if avg_buy is not None else None
-        avg_sell_str = format_price(Decimal(str(avg_sell)), ticks) if avg_sell is not None else None
 
         strategies_block.append({
             "strategy_id": sid,
@@ -718,17 +672,9 @@ def generate_weekly_report() -> Dict[str, Any]:
             "label": s["name"] or f"{s['symbol']} {s['timeframe']} ({s['exchange']})",
             "buys": len(buys_s),
             "sells": len(sells_s),
-
             "weekly_pnl_eur": round(pnl_s, 2),
-
-            # raw values
-            "avg_buy_price": float(avg_buy) if avg_buy is not None else None,
-            "avg_sell_price": float(avg_sell) if avg_sell is not None else None,
-
-            # formatted values
-            "avg_buy_price_str": avg_buy_str,
-            "avg_sell_price_str": avg_sell_str,
-
+            "avg_buy_price": round(avg_buy, 4) if avg_buy is not None else 0.0,
+            "avg_sell_price": round(avg_sell, 4) if avg_sell is not None else 0.0,
             "avg_sell_return_pct": avg_ret_s_f,
         })
 

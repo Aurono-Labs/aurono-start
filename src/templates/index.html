@@ -302,9 +302,8 @@ th.numeric { text-align: right; }
         <td class="numeric">{{ s.price_str }}</td>
         <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
         <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
-        <td class="numeric">
-          {% if s.acb_str %}{{ s.acb_str }}{% else %}-{% endif %}
-        </td>
+        <td class="numeric">{{ s.acb_str }}</td>
+
         <td class="numeric"
             style="color:
               {% if s.pnl_pct > 0 %}#22c55e
@@ -592,7 +591,7 @@ function openStrategyDetails(symbol, timeframe, exchange) {
           <tr>
             <td>${t.timestamp.slice(0,16)}</td>
             <td>${t.side.toUpperCase()}</td>
-            <td class="numeric">${t.price_str}</td>
+            <td class="numeric">${parseFloat(t.price).toFixed(2)}</td>
             <td class="numeric">${parseFloat(t.amount).toFixed(6)}</td>
           </tr>`;
       });

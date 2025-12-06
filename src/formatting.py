@@ -1,21 +1,27 @@
-# src/formatting.py
 from decimal import Decimal
 
-def decimals_from_ticksize(tick: Decimal) -> int:
+def format_price_dynamic(value):
     """
-    Convert a price tickSize like Decimal('0.00001') → 5 decimals.
-    """
-    return max(0, -tick.as_tuple().exponent)
+    Dynamic visual formatting for dashboard / reports.
 
-def format_price(value: Decimal, tick_size: Decimal) -> str:
+    - >= 1 euro     → 2 decimals (1.23)
+    - >= 0.01       → 4 decimals (0.1234)
+    - >= 0.0001     → 6 decimals (0.000123)
+    - <  0.0001     → 8 decimals (0.00001234)
     """
-    Format a price with the correct number of decimals for the market.
-    """
-    decimals = decimals_from_ticksize(tick_size)
-    return f"{value:.{decimals}f}"
+    if value is None:
+        return "-"
 
-def format_amount(value: Decimal, amount_decimals: int) -> str:
-    """
-    Format amounts (volume) using quantityDecimals.
-    """
-    return f"{value:.{amount_decimals}f}"
+    try:
+        v = float(value)
+    except:
+        return str(value)
+
+    if v >= 1:
+        return f"{v:.2f}"
+    if v >= 0.01:
+        return f"{v:.4f}"
+    if v >= 0.0001:
+        return f"{v:.6f}"
+    return f"{v:.8f}"
+

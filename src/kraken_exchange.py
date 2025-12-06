@@ -28,7 +28,6 @@ from exchange_base import ExchangeBase
 KRAKEN_API_PUBLIC = "https://api.kraken.com/0/public"
 KRAKEN_API_PRIVATE = "https://api.kraken.com/0/private"
 
-
 class KrakenExchange(ExchangeBase):
     """
     Kraken implementation for Aurono.
@@ -39,35 +38,21 @@ class KrakenExchange(ExchangeBase):
     name = "kraken"
 
     def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
-        # Allow overriding keys (Settings "Test" button)
+        # Allow overriding keys (used by Settings "Test" button)
         if api_key and api_secret:
             self.api_key = api_key
             self.api_secret = api_secret
         else:
+            # Trader mode → ALWAYS load encrypted Kraken keys from the credentials DB
             self.api_key, self.api_secret = get_credentials_for_exchange("kraken")
 
         self.tm = TradeManager(get_db_path())
 
-        # NEW: required for dashboard + reports formatting
-        self._market_ticks: Dict[str, Dict[str, Decimal]] = {}
-
-        # old cache for internal use (kept for backwards-compatibility)
-        self._tick_cache: Dict[str, Dict[str, Decimal]] = {}
-
-        # Default fee
+        # --- DEFAULT FEE RATE (new) ---
         self.fee_rate = Decimal("0.0025")
 
-    # ----------------------------------------
-    # Tick Size Loader (patched)
-    # ----------------------------------------
-
-    def _save_ticks(self, symbol: str, ticks: Dict[str, Decimal]):
-        """Store ticks in both old + new structures."""
-        self._tick_cache[symbol] = ticks
-        self._market_ticks[symbol] = {
-            "price_tick": ticks["price"],
-            "amount_tick": ticks["amount"],
-        }
+    # Cache for Kraken tick sizes: {"BTCEUR": Decimal("0.1"), ... }
+    _tick_cache: Dict[str, Dict[str, Decimal]] = {}
 
     def _load_tick_size(self, symbol: str) -> Dict[str, Decimal]:
         symbol = symbol.upper()
@@ -85,7 +70,7 @@ class KrakenExchange(ExchangeBase):
             pairs = r.get("result", {})
         except Exception as e:
             log_event(f"⚠️ Kraken tick-size fetch failed: {e}")
-            self._save_ticks(symbol, fallback)
+            self._tick_cache[symbol] = fallback
             return fallback
 
         for pair_name, info in pairs.items():
@@ -97,20 +82,16 @@ class KrakenExchange(ExchangeBase):
                 lot_dec = info.get("lot_decimals", 4)
                 amount_tick = Decimal("1") / (Decimal("10") ** Decimal(lot_dec))
 
-                ticks = {
+                result = {
                     "price": price_tick,
                     "amount": amount_tick
                 }
-                self._save_ticks(symbol, ticks)
-                return ticks
+                self._tick_cache[symbol] = result
+                return result
 
         log_event(f"⚠️ Kraken: no tick size found for {symbol}, using defaults")
-        self._save_ticks(symbol, fallback)
+        self._tick_cache[symbol] = fallback
         return fallback
-
-    # ----------------------------------------
-    # Rounding helpers
-    # ----------------------------------------
 
     def _normalize_amount(self, symbol: str, amount: Decimal) -> Decimal:
         ticks = self._load_tick_size(symbol)
@@ -153,7 +134,7 @@ class KrakenExchange(ExchangeBase):
             log_event(f"⚠️ Kraken OHLC error for {pair} ({timeframe}): {e}")
             return []
 
-    # -------------------- Private API --------------------
+    # -------------------- Private API helper --------------------
 
     def _private_request(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         data = data or {}
@@ -168,7 +149,6 @@ class KrakenExchange(ExchangeBase):
             message,
             hashlib.sha512
         )
-
         headers = {
             "API-Key": self.api_key,
             "API-Sign": base64.b64encode(signature.digest()),
@@ -205,8 +185,11 @@ class KrakenExchange(ExchangeBase):
                 if cost > 0 and fee >= 0:
                     fee_rate = (fee / cost).quantize(Decimal("0.00001"))
                     self.fee_rate = fee_rate
-            except Exception:
-                pass
+                    log_event(
+                        f"ℹ️ Kraken effective fee updated → cost={cost}, fee={fee}, rate={fee_rate}"
+                    )
+            except Exception as e:
+                log_event(f"⚠️ Kraken fee calculation failed: {e}")
 
             return {
                 "price": price,
@@ -226,7 +209,6 @@ class KrakenExchange(ExchangeBase):
         volume: Decimal,
         trade_id: Optional[int] = None
     ) -> Dict[str, Any]:
-
         cfg = current_config()
         live = cfg.get("live_trading", False)
         pair = symbol.upper()
@@ -305,7 +287,8 @@ class KrakenExchange(ExchangeBase):
                 orig_amount = Decimal(str(row[1]))
                 reserved_eur = (orig_price * orig_amount).quantize(Decimal("0.01"))
 
-            except Exception:
+            except Exception as e:
+                log_event(f"⚠️ Kraken: could not load original reserved values: {e}")
                 reserved_eur = (price * volume).quantize(Decimal("0.01"))
 
             actual_eur = (actual_price * actual_amount).quantize(Decimal("0.01"))
@@ -354,19 +337,29 @@ class KrakenExchange(ExchangeBase):
                     if row2:
                         new_alloc = float(row2[0])
 
+                    log_event(
+                        f"🔁 Adjusted allocated_eur for strategy {strategy_id} on Kraken "
+                        f"by €{delta:.2f} (reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f})"
+                    )
+
                 conn.commit()
                 conn.close()
 
-            except Exception:
-                pass
+            except Exception as e:
+                log_event(f"⚠️ Could not update executed Kraken trade / allocation in DB: {e}")
 
             log_event(
-                f"💾 Updated executed Kraken trade → €{actual_price} × {actual_amount} "
+                f"💾 Updated executed Kraken trade → "
+                f"€{actual_price} × {actual_amount} "
                 f"(was {price} × {volume}, trade_id={trade_id})"
             )
 
+            final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
+
             log_event(
-                f"✅ {side.upper()} executed: {actual_amount} {symbol} @ €{actual_price}"
+                f"✅ {side.upper()} executed: {actual_amount} {symbol} @ €{actual_price} "
+                f"on kraken (actual €{actual_eur:.2f}, reserved €{reserved_eur:.2f}"
+                f"{final_alloc_str})"
             )
 
         return res

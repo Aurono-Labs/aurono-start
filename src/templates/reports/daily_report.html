@@ -82,10 +82,7 @@
           <td>{{ o.timeframe }}</td>
           <td>{{ o.side }}</td>
           <td>{{ "%.6f"|format(o.amount) }}</td>
-
-          <!-- formatted price -->
-          <td>€{{ o.price_str }}</td>
-
+          <td>€{{ "%.2f"|format(o.price) }}</td>
           <td>{{ o.timestamp }}</td>
           <td>€{{ "%.2f"|format(o.pnl) }}</td>
         </tr>

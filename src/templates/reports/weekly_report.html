@@ -159,24 +159,8 @@
                 <span class="pill pill-neutral">{{ "%.2f"|format(s.weekly_pnl_eur) }}</span>
               {% endif %}
             </td>
-
-            <!-- UPDATED: use formatted avg prices -->
-            <td>
-              {% if s.avg_buy_price_str %}
-                €{{ s.avg_buy_price_str }}
-              {% else %}
-                0.0000
-              {% endif %}
-            </td>
-
-            <td>
-              {% if s.avg_sell_price_str %}
-                €{{ s.avg_sell_price_str }}
-              {% else %}
-                0.0000
-              {% endif %}
-            </td>
-
+            <td>€{{ "%.4f"|format(s.avg_buy_price) if s.avg_buy_price else "0.0000" }}</td>
+            <td>€{{ "%.4f"|format(s.avg_sell_price) if s.avg_sell_price else "0.0000" }}</td>
             <td>{{ "%.2f"|format(s.avg_sell_return_pct) }}%</td>
           </tr>
         {% endfor %}
@@ -187,6 +171,8 @@
     {% endif %}
   </div>
 
+  
+  
   <!-- HIGHLIGHTS -->
   <div class="card">
     <h2>Highlights</h2>
@@ -257,7 +243,7 @@
     {% endif %}
   </div>
 
-  <!-- CAPITAL EFFICIENCY -->
+  <!-- CAPITAL EFFICIENCY (no EUR free shown) -->
   <div class="card">
     <h2>Capital</h2>
     <p>Deployed (in crypto): €{{ "%.2f"|format(report.capital_efficiency.eur_deployed) }}</p>
