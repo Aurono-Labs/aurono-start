@@ -60,7 +60,6 @@
   {% endif %}
 </div>
 
-
 <!-- ===========================
      FILLED ORDERS LAST 24H
 =========================== -->
@@ -70,6 +69,11 @@
   {% if report.filled_orders|length == 0 %}
     <div class="placeholder">No trades executed in the last 24 hours.</div>
   {% else %}
+
+    <style>
+      td.numeric { text-align: right; }
+    </style>
+
     <table>
       <thead>
         <tr>
@@ -90,21 +94,17 @@
           <td>{{ o.exchange }}</td>
           <td>{{ o.timeframe }}</td>
           <td>{{ o.side }}</td>
+
+          <!-- right-aligned numbers -->
           <td class="numeric">{{ "%.6f"|format(o.amount) }}</td>
-
-          <!-- FORMATTED PRICE -->
           <td class="numeric">€{{ o.price_str }}</td>
-
           <td>{{ o.timestamp }}</td>
-
-          <!-- PNL -->
-          <td class="numeric">
-            €{{ "%.2f"|format(o.pnl) }}
-          </td>
+          <td class="numeric">€{{ "%.2f"|format(o.pnl) }}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
+
   {% endif %}
 </div>
 
@@ -135,7 +135,6 @@
     </table>
   {% endif %}
 </div>
-
 
 <!-- ===========================
      ALERTS
