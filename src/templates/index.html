@@ -591,7 +591,7 @@ function openStrategyDetails(symbol, timeframe, exchange) {
           <tr>
             <td>${t.timestamp.slice(0,16)}</td>
             <td>${t.side.toUpperCase()}</td>
-            <td class="numeric">${parseFloat(t.price).toFixed(2)}</td>
+            <td class="numeric">${t.price_str}</td>
             <td class="numeric">${parseFloat(t.amount).toFixed(6)}</td>
           </tr>`;
       });

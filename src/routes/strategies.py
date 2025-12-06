@@ -28,10 +28,7 @@ def list_strategies(request: Request, exchange: Optional[str] = None):
     rows = db.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
     db.close()
 
-    # Default exchange = Bitvavo unless ?exchange=kraken is provided
     current_exchange = (exchange or "bitvavo").lower()
-
-    # Get symbols for the exchange (EUR pairs)
     symbols = get_supported_pairs(current_exchange)
 
     return templates.TemplateResponse("strategies.html", {
@@ -103,11 +100,9 @@ def add_strategy(
     conn.commit()
     conn.close()
 
-    # Optional existing position import
     if import_existing and existing_amount_val > 0 and existing_acb_val > 0:
         from trade_manager import TradeManager
         from decimal import Decimal
-
         try:
             tm = TradeManager()
             tm.record_trade(
@@ -125,9 +120,6 @@ def add_strategy(
 
     log_event(f"🧩 Added strategy {symbol} {timeframe} on {exchange}")
     
-    # -------------------------
-    # Decide RETURN LOCATION
-    # -------------------------
     if return_to == "index":
         return RedirectResponse("/", status_code=303)
     else:
@@ -195,15 +187,20 @@ def delete_strategy(id: int):
     log_event(f"🗑 Deleted strategy {id}")
 
     return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
-    
+
+
 # -----------------------------------------------------------
-# GET RECENT TRADES OF A STRATEGY
+# GET RECENT TRADES OF A STRATEGY  **(PATCHED)**
 # -----------------------------------------------------------
 @router.get("/api/strategy/{symbol}/{timeframe}/{exchange}/trades")
 def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
     """
-    Returns the last 10 trades for a specific strategy.
+    Returns last 10 trades for the strategy,
+    INCLUDING dynamic formatted price_str.
     """
+
+    from formatting import format_price_dynamic
+    from utils import to_decimal
 
     conn = get_db()
     conn.row_factory = sqlite3.Row
@@ -223,16 +220,20 @@ def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
     rows = cur.fetchall()
     conn.close()
 
-    return [
-        {
+    output = []
+    for r in rows:
+        price_dec = to_decimal(r["price"])
+        price_str = format_price_dynamic(price_dec)
+
+        output.append({
             "timestamp": r["timestamp"],
             "symbol": r["symbol"],
             "side": r["side"],
             "price": float(r["price"]),
+            "price_str": price_str,          # NEW
             "amount": float(r["amount"]),
             "strategy_id": r["strategy_id"],
-        }
-        for r in rows
-    ]
+        })
 
+    return output
 
