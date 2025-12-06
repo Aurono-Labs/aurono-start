@@ -139,7 +139,7 @@ class TraderEngine:
                     )
                 else:
                     fee = exchange.fee_rate
-                    limit_price = (open_price * (Decimal("1") + drop_trigger / Decimal("100"))).quantize(Decimal("0.01"))
+                    limit_price = open_price * (Decimal("1") + drop_trigger / Decimal("100"))
                     vol = (buy_eur / (ticker * (Decimal("1") + fee))).quantize(Decimal("0.00000001"))
 
                     log_event(
@@ -180,7 +180,7 @@ class TraderEngine:
                     continue
 
                 fee = exchange.fee_rate
-                limit_price = (open_price * (Decimal("1") + rise_trigger / Decimal("100"))).quantize(Decimal("0.01"))
+                limit_price = open_price * (Decimal("1") + rise_trigger / Decimal("100"))
                 vol = (sell_eur / (ticker * (Decimal("1") - fee))).quantize(Decimal("0.00000001"))
 
                 # cap at available coin balance

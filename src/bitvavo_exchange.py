@@ -63,19 +63,20 @@ class BitvavoExchange(ExchangeBase):
 
     # Cache: stores price & amount ticks per market
     _market_tick_cache: Dict[str, Dict[str, Decimal]] = {}
-
+    
     def _load_market_ticks(self, market: str) -> Dict[str, Decimal]:
         """
         Load correct price & amount ticks based on Bitvavo /markets.
 
-        Bitvavo fields:
-          - pricePrecision       → number of decimals for price
-          - quantityDecimals     → number of decimals for amount
-          - (sometimes) quantityPrecision → same meaning
-
-        Tick derivation:
-          price_tick  = 1 / 10^pricePrecision
-          amount_tick = 1 / 10^quantityDecimals
+        Bitvavo fields (as of v2.8+ in 2025):
+          - tickSize (string)          → actual price increment (NEW, replaces pricePrecision)
+          - quantityDecimals (int)     → number of decimals for amount
+          - pricePrecision (int)       → DEPRECATED (often null now)
+        
+        Examples:
+          - BTC-EUR: tickSize="1" (only whole euros)
+          - SOL-EUR: tickSize="0.01" (cent precision)
+          - VELO-EUR: tickSize="0.00001" (5 decimals)
         """
         market = market.upper()
 
@@ -105,23 +106,39 @@ class BitvavoExchange(ExchangeBase):
             if info.get("market", "").upper() != market:
                 continue
 
-            # Extract decimals
-            price_prec = info.get("pricePrecision")
+            # =====================================================
+            # PRICE TICK: Use new tickSize field (preferred)
+            # =====================================================
+            price_tick = None
+            tick_size_str = info.get("tickSize")
+            
+            if tick_size_str:
+                try:
+                    price_tick = Decimal(str(tick_size_str))
+                    log_event(f"ℹ️ Bitvavo {market}: using tickSize={price_tick}")
+                except Exception as e:
+                    log_event(f"⚠️ Bitvavo {market}: invalid tickSize '{tick_size_str}': {e}")
+                    price_tick = None
+
+            # Fallback to old pricePrecision (if tickSize missing/invalid)
+            if price_tick is None:
+                price_prec = info.get("pricePrecision")
+                try:
+                    price_prec = int(price_prec) if price_prec is not None else 2
+                except Exception:
+                    price_prec = 2
+                price_tick = Decimal("1") / (Decimal("10") ** price_prec)
+                log_event(f"ℹ️ Bitvavo {market}: fallback pricePrecision={price_prec} → tick={price_tick}")
+
+            # =====================================================
+            # AMOUNT TICK: Use quantityDecimals
+            # =====================================================
             qty_prec = info.get("quantityDecimals") or info.get("quantityPrecision")
-
-            # Defaults if missing
-            try:
-                price_prec = int(price_prec) if price_prec is not None else 2
-            except:
-                price_prec = 2
-
             try:
                 qty_prec = int(qty_prec) if qty_prec is not None else 4
-            except:
+            except Exception:
                 qty_prec = 4
 
-            # Convert decimals → ticks
-            price_tick = Decimal("1") / (Decimal("10") ** price_prec)
             amount_tick = Decimal("1") / (Decimal("10") ** qty_prec)
 
             ticks = {
@@ -133,7 +150,7 @@ class BitvavoExchange(ExchangeBase):
             log_event(f"ℹ️ Bitvavo ticks for {market}: {ticks}")
             return ticks
 
-        # Fallback
+        # Fallback if market not found
         log_event(f"⚠️ Bitvavo: no tick info found for {market}, using defaults")
         ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
         self._market_tick_cache[market] = ticks
