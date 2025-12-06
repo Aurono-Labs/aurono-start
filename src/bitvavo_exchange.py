@@ -26,6 +26,7 @@ from exchange_base import ExchangeBase
 
 BITVAVO_BASE = "https://api.bitvavo.com/v2"
 
+
 class BitvavoExchange(ExchangeBase):
     """
     Bitvavo implementation for Aurono.
@@ -45,7 +46,11 @@ class BitvavoExchange(ExchangeBase):
 
         self.tm = TradeManager(get_db_path())
 
-        # --- DEFAULT FEE RATE (new) ---
+        # NEW: required for dashboard + reports formatting
+        self._market_ticks: Dict[str, Dict[str, Decimal]] = {}
+        self._market_tick_cache: Dict[str, Dict[str, Decimal]] = {}
+
+        # Default fee rate
         self.fee_rate = Decimal("0.0025")
 
     # ----------------------------------------
@@ -53,33 +58,31 @@ class BitvavoExchange(ExchangeBase):
     # ----------------------------------------
 
     def _market(self, symbol: str) -> str:
-        """
-        Convert 'BTCEUR' → 'BTC-EUR', 'SOLEUR' → 'SOL-EUR', etc.
-        """
         p = symbol.replace("/", "").upper()
         if p.endswith("EUR"):
             return f"{p[:-3]}-EUR"
         return p
 
-    # Cache: stores price & amount ticks per market
-    _market_tick_cache: Dict[str, Dict[str, Decimal]] = {}
-    
+    def _save_ticks(self, market: str, ticks: Dict[str, Decimal]):
+        """Internal helper: mirror ticks into both caches."""
+        self._market_tick_cache[market] = ticks
+        self._market_ticks[market] = {
+            "price_tick": ticks["price"],
+            "amount_tick": ticks["amount"],
+        }
+
     def _load_market_ticks(self, market: str) -> Dict[str, Decimal]:
         """
         Load correct price & amount ticks based on Bitvavo /markets.
 
-        Bitvavo fields (as of v2.8+ in 2025):
-          - tickSize (string)          → actual price increment (NEW, replaces pricePrecision)
-          - quantityDecimals (int)     → number of decimals for amount
-          - pricePrecision (int)       → DEPRECATED (often null now)
-        
-        Examples:
-          - BTC-EUR: tickSize="1" (only whole euros)
-          - SOL-EUR: tickSize="0.01" (cent precision)
-          - VELO-EUR: tickSize="0.00001" (5 decimals)
+        Bitvavo fields:
+          - tickSize          → actual price increment
+          - quantityDecimals  → decimals for amount
+          - pricePrecision    → deprecated fallback
         """
         market = market.upper()
 
+        # Cached?
         if market in self._market_tick_cache:
             return self._market_tick_cache[market]
 
@@ -90,15 +93,16 @@ class BitvavoExchange(ExchangeBase):
         except Exception as e:
             log_event(f"⚠️ Bitvavo tick fetch failed: {e}")
             ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
-            self._market_tick_cache[market] = ticks
+            self._save_ticks(market, ticks)
             return ticks
 
         if not isinstance(data, list):
             log_event(f"⚠️ Bitvavo /markets unexpected JSON: {data}")
             ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
-            self._market_tick_cache[market] = ticks
+            self._save_ticks(market, ticks)
             return ticks
 
+        # Find requested market
         for info in data:
             if not isinstance(info, dict):
                 continue
@@ -106,21 +110,18 @@ class BitvavoExchange(ExchangeBase):
             if info.get("market", "").upper() != market:
                 continue
 
-            # =====================================================
-            # PRICE TICK: Use new tickSize field (preferred)
-            # =====================================================
+            # PRICE TICK via tickSize
             price_tick = None
             tick_size_str = info.get("tickSize")
-            
+
             if tick_size_str:
                 try:
                     price_tick = Decimal(str(tick_size_str))
-                    log_event(f"ℹ️ Bitvavo {market}: using tickSize={price_tick}")
                 except Exception as e:
                     log_event(f"⚠️ Bitvavo {market}: invalid tickSize '{tick_size_str}': {e}")
                     price_tick = None
 
-            # Fallback to old pricePrecision (if tickSize missing/invalid)
+            # Fallback: pricePrecision
             if price_tick is None:
                 price_prec = info.get("pricePrecision")
                 try:
@@ -128,11 +129,8 @@ class BitvavoExchange(ExchangeBase):
                 except Exception:
                     price_prec = 2
                 price_tick = Decimal("1") / (Decimal("10") ** price_prec)
-                log_event(f"ℹ️ Bitvavo {market}: fallback pricePrecision={price_prec} → tick={price_tick}")
 
-            # =====================================================
-            # AMOUNT TICK: Use quantityDecimals
-            # =====================================================
+            # AMOUNT tick via quantityDecimals
             qty_prec = info.get("quantityDecimals") or info.get("quantityPrecision")
             try:
                 qty_prec = int(qty_prec) if qty_prec is not None else 4
@@ -141,26 +139,17 @@ class BitvavoExchange(ExchangeBase):
 
             amount_tick = Decimal("1") / (Decimal("10") ** qty_prec)
 
-            ticks = {
-                "price": price_tick,
-                "amount": amount_tick
-            }
-
-            self._market_tick_cache[market] = ticks
-            log_event(f"ℹ️ Bitvavo ticks for {market}: {ticks}")
+            ticks = {"price": price_tick, "amount": amount_tick}
+            self._save_ticks(market, ticks)
             return ticks
 
-        # Fallback if market not found
+        # Fallback if not found
         log_event(f"⚠️ Bitvavo: no tick info found for {market}, using defaults")
         ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
-        self._market_tick_cache[market] = ticks
+        self._save_ticks(market, ticks)
         return ticks
 
     def _normalize_amount(self, market: str, amount: Decimal) -> Decimal:
-        """
-        Snap amount down to the nearest valid tick for this market.
-        Never round up, to avoid trying to trade more than allowed.
-        """
         ticks = self._load_market_ticks(market)
         tick = ticks["amount"]
 
@@ -175,11 +164,6 @@ class BitvavoExchange(ExchangeBase):
             return amount
 
     def _normalize_price(self, market: str, side: str, price: Decimal) -> Decimal:
-        """
-        Snap price to the nearest valid tick:
-        - BUY  → round UP (so price is not too low)
-        - SELL → round DOWN (so price is not too high)
-        """
         ticks = self._load_market_ticks(market)
         tick = ticks["price"]
 
@@ -215,12 +199,6 @@ class BitvavoExchange(ExchangeBase):
             return Decimal("0")
 
     def get_ohlc(self, symbol: str, timeframe: str, limit: int = 730) -> List[list]:
-        """
-        Fetch OHLC candlestick data from Bitvavo.
-
-        Bitvavo returns: [timestamp, open, high, low, close, volume]
-        Data is returned newest → oldest, so we reverse it to oldest → newest.
-        """
         market = self._market(symbol)
         interval_map = {"1h": "1h", "4h": "4h", "6h": "6h", "1d": "1d", "1w": "1w"}
         interval = interval_map.get(timeframe, "1d")
@@ -233,70 +211,32 @@ class BitvavoExchange(ExchangeBase):
         )
 
         try:
-            resp = requests.get(
-                url,
-                timeout=10,
-                headers={"Content-Type": "application/json"},
-            )
-
-            try:
-                data = resp.json()
-            except ValueError:
-                raw = resp.text.strip()
-                log_event(f"⚠️ Bitvavo OHLC non-JSON for {market} ({timeframe}): {raw[:200]}...")
-                return []
-
-            if not isinstance(data, list):
-                log_event(f"⚠️ Bitvavo OHLC unexpected JSON format for {market}: {data}")
-                return []
-
-            if len(data) == 0:
-                log_event(f"⚠️ Bitvavo OHLC returned empty list for {market}")
-                return []
-
-            data.reverse()
-
-            try:
-                import datetime
-
-                def fmt(ts):
-                    return datetime.datetime.utcfromtimestamp(ts/1000).strftime("%Y-%m-%d %H:%M:%S")
-
-                last = data[-1]
-                prev = data[-2]
-
-                print("📌 Active candle (ignored):")
-                print(f"  timestamp = {fmt(last[0])}")
-                print(f"  open={last[1]}, close={last[4]}")
-
-                print("📌 Previous closed candle (USED):")
-                print(f"  timestamp = {fmt(prev[0])}")
-                print(f"  open={prev[1]}, close={prev[4]}")
-
-            except Exception as e:
-                print("DEBUG ERROR (cannot print candles):", e)
-
-            return data
-
+            resp = requests.get(url, timeout=10, headers={"Content-Type": "application/json"})
+            data = resp.json()
         except Exception as e:
             log_event(f"⚠️ Bitvavo OHLC request failed for {market}: {e}")
             return []
+
+        if not isinstance(data, list):
+            log_event(f"⚠️ Bitvavo OHLC unexpected JSON for {market}: {data}")
+            return []
+
+        if len(data) == 0:
+            return []
+
+        data.reverse()
+        return data
 
     # ----------------------------------------
     # Private / signed request
     # ----------------------------------------
 
     def _private_request(self, method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        if body is None:
-            body_json = ""
-        else:
-            body_json = json.dumps(body, separators=(",", ":"))
-
+        body_json = "" if body is None else json.dumps(body, separators=(",", ":"))
         timestamp = str(int(time.time() * 1000))
         signature_path = path
 
         prehash = timestamp + method.upper() + "/v2/" + signature_path + body_json
-
         secret_bytes = self.api_secret.encode("utf-8")
 
         signature = hmac.new(
@@ -330,6 +270,7 @@ class BitvavoExchange(ExchangeBase):
                 )
 
             return result
+
         except Exception as e:
             log_event(f"❌ Bitvavo private request failed: {e}")
             return {"error": str(e)}
@@ -355,19 +296,20 @@ class BitvavoExchange(ExchangeBase):
             total = Decimal("0")
             cost = Decimal("0")
             total_fee = Decimal("0")
+
             for f in fills:
                 amt = Decimal(f.get("amount", "0"))
                 p = Decimal(f.get("price", "0"))
                 fee = Decimal(f.get("fee", "0"))
+
                 total += amt
                 cost += amt * p
                 total_fee += fee
+
             if total > 0:
                 price = cost / total
-
                 try:
                     self.fee_rate = (total_fee / cost).quantize(Decimal("0.00001"))
-                    log_event(f"ℹ️ Bitvavo effective fee updated to {self.fee_rate}")
                 except Exception:
                     pass
 
@@ -385,6 +327,7 @@ class BitvavoExchange(ExchangeBase):
         volume: Decimal,
         trade_id: Optional[int] = None
     ) -> Dict[str, Any]:
+
         cfg = current_config()
         live = cfg.get("live_trading", False)
 
@@ -430,12 +373,11 @@ class BitvavoExchange(ExchangeBase):
                 log_event(f"⚠️ Could not store Bitvavo orderId in DB: {e}")
 
         time.sleep(12)
+
         detail = self._get_order_details(order_id, market)
         if not detail:
             log_event(f"⚠️ Bitvavo returned no order details for orderId={order_id}")
             return res
-
-        log_event(f"📊 Bitvavo order status: {detail}")
 
         status = detail.get("status")
         actual_price = detail.get("price", Decimal("0"))
@@ -511,16 +453,13 @@ class BitvavoExchange(ExchangeBase):
                     if row2:
                         new_alloc = float(row2[0])
 
-                    log_event(
-                        f"🔁 Adjusted allocated_eur for strategy {strategy_id} on Bitvavo "
-                        f"by €{delta:.2f} (reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f})"
-                    )
-
                 conn.commit()
                 conn.close()
 
             except Exception as e:
                 log_event(f"⚠️ Could not update executed Bitvavo trade / allocation in DB: {e}")
+
+            final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
 
             log_event(
                 f"💾 Updated executed Bitvavo trade → "
@@ -528,12 +467,9 @@ class BitvavoExchange(ExchangeBase):
                 f"(was {price} × {volume}, trade_id={trade_id})"
             )
 
-            final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
-
             log_event(
                 f"✅ {side.upper()} executed: {actual_amount} {symbol} @ €{actual_price} "
-                f"on bitvavo (actual €{actual_eur:.2f}, reserved €{reserved_eur:.2f}"
-                f"{final_alloc_str})"
+                f"on bitvavo (actual €{actual_eur:.2f}, reserved €{reserved_eur:.2f}{final_alloc_str})"
             )
 
         return res
