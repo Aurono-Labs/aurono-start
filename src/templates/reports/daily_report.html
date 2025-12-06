@@ -31,6 +31,9 @@
     color: #94a3b8;
     font-style: italic;
   }
+  td.numeric {
+    text-align: right;
+  }
 </style>
 </head>
 
@@ -38,6 +41,7 @@
 
 <h1>Daily Report</h1>
 <p>Date: {{ report.date }}</p>
+
 
 <!-- ===========================
      PORTFOLIO
@@ -69,9 +73,14 @@
     <table>
       <thead>
         <tr>
-          <th>Symbol</th><th>Exchange</th><th>TF</th>
-          <th>Side</th><th>Amount</th><th>Price</th>
-          <th>Time</th><th>P/L</th>
+          <th>Symbol</th>
+          <th>Exchange</th>
+          <th>TF</th>
+          <th>Side</th>
+          <th class="numeric">Amount</th>
+          <th class="numeric">Price</th>
+          <th>Time</th>
+          <th class="numeric">P/L</th>
         </tr>
       </thead>
       <tbody>
@@ -81,10 +90,17 @@
           <td>{{ o.exchange }}</td>
           <td>{{ o.timeframe }}</td>
           <td>{{ o.side }}</td>
-          <td>{{ "%.6f"|format(o.amount) }}</td>
-          <td>€{{ "%.2f"|format(o.price) }}</td>
+          <td class="numeric">{{ "%.6f"|format(o.amount) }}</td>
+
+          <!-- FORMATTED PRICE -->
+          <td class="numeric">€{{ o.price_str }}</td>
+
           <td>{{ o.timestamp }}</td>
-          <td>€{{ "%.2f"|format(o.pnl) }}</td>
+
+          <!-- PNL -->
+          <td class="numeric">
+            €{{ "%.2f"|format(o.pnl) }}
+          </td>
         </tr>
       {% endfor %}
       </tbody>
@@ -103,14 +119,16 @@
     <div class="placeholder">No capital reserved. No active strategies.</div>
   {% else %}
     <table>
-      <thead><tr><th>Strategy ID</th><th>Symbol</th><th>Exchange</th><th>Reserved (€)</th></tr></thead>
+      <thead>
+        <tr><th>Strategy ID</th><th>Symbol</th><th>Exchange</th><th>Reserved (€)</th></tr>
+      </thead>
       <tbody>
       {% for c in report.capital.reserved %}
         <tr>
           <td>{{ c.strategy_id }}</td>
           <td>{{ c.symbol }}</td>
           <td>{{ c.exchange }}</td>
-          <td>€{{ "%.2f"|format(c.amount_eur) }}</td>
+          <td class="numeric">€{{ "%.2f"|format(c.amount_eur) }}</td>
         </tr>
       {% endfor %}
       </tbody>

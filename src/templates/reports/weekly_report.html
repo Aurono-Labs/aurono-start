@@ -68,6 +68,7 @@
     .pill-pos { color: #22c55e; border-color: #22c55e; }
     .pill-neg { color: #ef4444; border-color: #ef4444; }
     .pill-neutral { color: #e5e7eb; }
+
     .topbar {
       display: flex;
       justify-content: space-between;
@@ -81,6 +82,11 @@
     }
     .topbar a:hover {
       text-decoration: underline;
+    }
+
+    /* numeric alignment */
+    td.numeric {
+      text-align: right;
     }
   </style>
 </head>
@@ -128,6 +134,7 @@
     </div>
   </div>
 
+
   <!-- STRATEGIES -->
   <div class="card">
     <h2>Strategies</h2>
@@ -150,6 +157,8 @@
             <td>{{ s.label }}</td>
             <td>{{ s.buys }}</td>
             <td>{{ s.sells }}</td>
+
+            <!-- PNL with pill -->
             <td>
               {% if s.weekly_pnl_eur > 0 %}
                 <span class="pill pill-pos">+{{ "%.2f"|format(s.weekly_pnl_eur) }}</span>
@@ -159,8 +168,15 @@
                 <span class="pill pill-neutral">{{ "%.2f"|format(s.weekly_pnl_eur) }}</span>
               {% endif %}
             </td>
-            <td>€{{ "%.4f"|format(s.avg_buy_price) if s.avg_buy_price else "0.0000" }}</td>
-            <td>€{{ "%.4f"|format(s.avg_sell_price) if s.avg_sell_price else "0.0000" }}</td>
+
+            <!-- Dynamic price formatting -->
+            <td>
+              €{{ s.avg_buy_price_str if s.avg_buy_price_str else "0.0000" }}
+            </td>
+            <td>
+              €{{ s.avg_sell_price_str if s.avg_sell_price_str else "0.0000" }}
+            </td>
+
             <td>{{ "%.2f"|format(s.avg_sell_return_pct) }}%</td>
           </tr>
         {% endfor %}
@@ -171,8 +187,7 @@
     {% endif %}
   </div>
 
-  
-  
+
   <!-- HIGHLIGHTS -->
   <div class="card">
     <h2>Highlights</h2>
@@ -187,7 +202,8 @@
               <strong>{{ bt.symbol }}</strong>
               ({{ bt.timeframe }}, {{ bt.exchange }})<br>
               PNL: €{{ "%.2f"|format(bt.pnl) }}<br>
-              Return: {{ "%.2f"|format(bt.return_pct) }}%
+              Return: {{ "%.2f"|format(bt.return_pct) }}%<br>
+              Price: €{{ bt.price_str }}
             </p>
           {% endif %}
       </div>
@@ -201,12 +217,14 @@
               <strong>{{ wt.symbol }}</strong>
               ({{ wt.timeframe }}, {{ wt.exchange }})<br>
               PNL: €{{ "%.2f"|format(wt.pnl) }}<br>
-              Return: {{ "%.2f"|format(wt.return_pct) }}%
+              Return: {{ "%.2f"|format(wt.return_pct) }}%<br>
+              Price: €{{ wt.price_str }}
             </p>
           {% endif %}
       </div>
     </div>
   </div>
+
 
   <!-- EXPOSURE -->
   <div class="card">
@@ -243,7 +261,8 @@
     {% endif %}
   </div>
 
-  <!-- CAPITAL EFFICIENCY (no EUR free shown) -->
+
+  <!-- CAPITAL EFFICIENCY -->
   <div class="card">
     <h2>Capital</h2>
     <p>Deployed (in crypto): €{{ "%.2f"|format(report.capital_efficiency.eur_deployed) }}</p>

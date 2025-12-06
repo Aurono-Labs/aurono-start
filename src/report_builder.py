@@ -20,6 +20,7 @@ from utils import (
 from trade_manager import TradeManager
 from exchange_factory import get_exchange
 from report_validator import validate_daily_report, validate_weekly_report
+from formatting import format_price_dynamic
 
 
 # ============================================================
@@ -94,16 +95,26 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
     value = balance * price
     pnl_pct = ((price - acb) / acb * 100) if acb else 0.0
 
+    # formatted versions for reports (same logic as dashboard)
+    price_str = format_price_dynamic(price)
+    acb_str = format_price_dynamic(acb) if acb is not None else "-"
+
     return {
         "symbol": sym,
         "timeframe": tf,
         "exchange": exch,
+
+        # numeric
         "price": price,
         "balance": balance,
         "value": value,
         "acb": acb,
         "pnl_pct": pnl_pct,
         "allocated_eur": float(strategy["allocated_eur"] or 0.0),
+
+        # formatted
+        "price_str": price_str,
+        "acb_str": acb_str,
     }
 
 
@@ -311,6 +322,7 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
                 "side": side,
                 "amount": float(amt_dec),
                 "price": float(price_dec),
+                "price_str": format_price_dynamic(price_dec),  # formatted
                 "timestamp": ts_iso,
                 "strategy_label": label,
                 "pnl": float(round(pnl_dec, 2)),
@@ -639,7 +651,7 @@ def generate_weekly_report() -> Dict[str, Any]:
         "best_sell_return_pct": round(float(best_sell_return), 2),
         "worst_sell_return_pct": round(float(worst_sell_return), 2),
     }
-
+    
     # --------------------------------------------------------
     # PER-STRATEGY BREAKDOWN
     # --------------------------------------------------------
@@ -664,6 +676,10 @@ def generate_weekly_report() -> Dict[str, Any]:
         else:
             avg_ret_s_f = 0.0
 
+        # ----- formatted dynamic decimals -----
+        avg_buy_str = format_price_dynamic(avg_buy) if avg_buy is not None else "0.0000"
+        avg_sell_str = format_price_dynamic(avg_sell) if avg_sell is not None else "0.0000"
+
         strategies_block.append({
             "strategy_id": sid,
             "symbol": s["symbol"],
@@ -672,12 +688,18 @@ def generate_weekly_report() -> Dict[str, Any]:
             "label": s["name"] or f"{s['symbol']} {s['timeframe']} ({s['exchange']})",
             "buys": len(buys_s),
             "sells": len(sells_s),
-            "weekly_pnl_eur": round(pnl_s, 2),
-            "avg_buy_price": round(avg_buy, 4) if avg_buy is not None else 0.0,
-            "avg_sell_price": round(avg_sell, 4) if avg_sell is not None else 0.0,
-            "avg_sell_return_pct": avg_ret_s_f,
-        })
 
+            # numeric
+            "weekly_pnl_eur": round(pnl_s, 2),
+            "avg_buy_price": avg_buy,
+            "avg_sell_price": avg_sell,
+            "avg_sell_return_pct": avg_ret_s_f,
+
+            # formatted
+            "avg_buy_price_str": avg_buy_str,
+            "avg_sell_price_str": avg_sell_str,
+        })
+        
     # --------------------------------------------------------
     # HIGHLIGHTS
     # --------------------------------------------------------
@@ -692,6 +714,8 @@ def generate_weekly_report() -> Dict[str, Any]:
             "timeframe": best["timeframe"],
             "pnl": round(best["pnl"], 2),
             "return_pct": round(best["return_pct"], 2) if best["return_pct"] is not None else 0.0,
+            "price": best["price"],
+            "price_str": format_price_dynamic(best["price"]),
         }
 
         worst_block = {
@@ -700,16 +724,19 @@ def generate_weekly_report() -> Dict[str, Any]:
             "timeframe": worst["timeframe"],
             "pnl": round(worst["pnl"], 2),
             "return_pct": round(worst["return_pct"], 2) if worst["return_pct"] is not None else 0.0,
+            "price": worst["price"],
+            "price_str": format_price_dynamic(worst["price"]),
         }
 
     else:
-        # Schema requires objects, not null
         best_block = {
             "symbol": "",
             "exchange": "",
             "timeframe": "",
             "pnl": 0.0,
             "return_pct": 0.0,
+            "price": None,
+            "price_str": "-",
         }
         worst_block = {
             "symbol": "",
@@ -717,6 +744,8 @@ def generate_weekly_report() -> Dict[str, Any]:
             "timeframe": "",
             "pnl": 0.0,
             "return_pct": 0.0,
+            "price": None,
+            "price_str": "-",
         }
 
     highlights_block = {
