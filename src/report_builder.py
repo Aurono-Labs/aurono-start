@@ -95,7 +95,6 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
     value = balance * price
     pnl_pct = ((price - acb) / acb * 100) if acb else 0.0
 
-    # formatted versions for reports (same logic as dashboard)
     price_str = format_price_dynamic(price)
     acb_str = format_price_dynamic(acb) if acb is not None else "-"
 
@@ -104,7 +103,6 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
         "timeframe": tf,
         "exchange": exch,
 
-        # numeric
         "price": price,
         "balance": balance,
         "value": value,
@@ -112,7 +110,6 @@ def compute_strategy_stats(strategy: sqlite3.Row) -> Dict[str, Any]:
         "pnl_pct": pnl_pct,
         "allocated_eur": float(strategy["allocated_eur"] or 0.0),
 
-        # formatted
         "price_str": price_str,
         "acb_str": acb_str,
     }
@@ -139,23 +136,13 @@ def _collect_exchanges_from_strategies(strategies: List[sqlite3.Row]) -> List[st
 
 
 # ============================================================
-# Helpers: timestamp parsing for trades
+# Helpers: timestamp parsing
 # ============================================================
 
 def _parse_trade_timestamp(ts_raw: str) -> datetime:
-    """
-    Parse trade timestamp from DB into a timezone-aware UTC datetime.
-
-    Supports:
-    - "YYYY-MM-DDTHH:MM:SS.ssssss"
-    - "YYYY-MM-DDTHH:MM:SS"
-    - "YYYY-MM-DD HH:MM:SS"
-    - Generic ISO via datetime.fromisoformat
-    """
     if not ts_raw:
         return datetime.min.replace(tzinfo=timezone.utc)
 
-    # Try explicit patterns first
     for fmt in ("%Y-%m-%dT%H:%M:%S.%f",
                 "%Y-%m-%dT%H:%M:%S",
                 "%Y-%m-%d %H:%M:%S"):
@@ -165,7 +152,6 @@ def _parse_trade_timestamp(ts_raw: str) -> datetime:
         except Exception:
             pass
 
-    # Fallback: generic ISO
     try:
         dt = datetime.fromisoformat(ts_raw)
         if dt.tzinfo is None:
@@ -178,14 +164,10 @@ def _parse_trade_timestamp(ts_raw: str) -> datetime:
 
 
 # ============================================================
-# Helpers: load yesterday portfolio value (persistent)
+# Helpers: load yesterday portfolio value
 # ============================================================
 
 def _load_yesterday_portfolio_value() -> Decimal | None:
-    """
-    Loads yesterday's daily report from:
-        data/reports/daily/
-    """
     base = Path(root_path("data", "reports", "daily"))
     if not base.exists():
         return None
@@ -209,18 +191,10 @@ def _load_yesterday_portfolio_value() -> Decimal | None:
 
 
 # ============================================================
-# Helpers: filled trades since (correct timestamps + realized P/L)
+# DAILY: get filled trades with formatted prices
 # ============================================================
 
 def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
-    """
-    Returns all trades executed since `since` (UTC, aware), with:
-    - Correct ISO timestamps
-    - Realized P/L for SELLs based on ACB at time of trade
-    - Inventory updated per strategy (consistent with weekly logic)
-    """
-
-    # Ensure since is UTC-aware
     if since.tzinfo is None:
         since = since.replace(tzinfo=timezone.utc)
     else:
@@ -232,7 +206,6 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
     conn = _open_db()
     conn.row_factory = sqlite3.Row
 
-    # We fetch full history and filter by timestamp in Python
     rows = conn.execute(
         """
         SELECT
@@ -243,10 +216,10 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
             t.price,
             t.amount,
             t.timestamp,
-            s.name      AS s_name,
-            s.symbol    AS s_symbol,
+            s.name,
+            s.symbol AS s_symbol,
             s.timeframe AS s_timeframe,
-            s.exchange  AS s_exchange
+            s.exchange AS s_exchange
         FROM trades t
         LEFT JOIN strategies s ON t.strategy_id = s.id
         ORDER BY t.timestamp ASC
@@ -257,49 +230,40 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
     from collections import defaultdict
 
     VALID_TF = {"1h", "4h", "1d"}
-    filled: List[Dict[str, Any]] = []
 
-    # Inventory state per strategy for ACB calculation
-    inv_qty: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-    inv_cost: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    filled = []
+    inv_qty = defaultdict(lambda: Decimal("0"))
+    inv_cost = defaultdict(lambda: Decimal("0"))
 
     for r in rows:
         sid = r["strategy_id"]
-        raw_ts = r["timestamp"]
-        ts_dt = _parse_trade_timestamp(raw_ts)
+        ts_dt = _parse_trade_timestamp(r["timestamp"])
         ts_iso = ts_dt.isoformat()
 
         s_tf = r["s_timeframe"]
         s_sym = r["s_symbol"] or r["symbol"]
         s_ex = r["s_exchange"] or default_exchange
-        label = r["s_name"] or f"{s_sym} {s_tf} ({s_ex})"
+        label = r["name"] or f"{s_sym} {s_tf} ({s_ex})"
 
         side = r["side"]
         price_dec = to_decimal(r["price"])
         amt_dec = to_decimal(r["amount"])
 
-        # Default P/L is 0
         pnl_dec = Decimal("0")
 
-        # ----- Inventory / ACB update (per strategy) -----
         if sid is not None:
             qty = inv_qty[sid]
             cost = inv_cost[sid]
 
             if side == "buy":
-                # Buys increase inventory and cost basis, but no realized P/L
                 cost += price_dec * amt_dec
                 qty += amt_dec
 
             elif side == "sell":
-                # Realized P/L based on ACB before the sell
                 if qty > 0:
                     acb = cost / qty
                     pnl_dec = (price_dec - acb) * amt_dec
-                else:
-                    pnl_dec = Decimal("0")
 
-                # After computing P/L, update inventory
                 if qty > 0:
                     proportion = amt_dec / qty
                     if proportion > 1:
@@ -313,7 +277,6 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
             inv_qty[sid] = qty
             inv_cost[sid] = cost
 
-        # ----- Filter for daily report window + valid timeframes -----
         if s_tf in VALID_TF and ts_dt >= since:
             filled.append({
                 "symbol": r["symbol"],
@@ -321,8 +284,10 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
                 "timeframe": s_tf,
                 "side": side,
                 "amount": float(amt_dec),
+
                 "price": float(price_dec),
-                "price_str": format_price_dynamic(price_dec),  # formatted
+                "price_str": format_price_dynamic(price_dec),
+
                 "timestamp": ts_iso,
                 "strategy_label": label,
                 "pnl": float(round(pnl_dec, 2)),
@@ -332,7 +297,7 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# Helpers: portfolio block with daily % change
+# DAILY: portfolio block
 # ============================================================
 
 def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
@@ -348,6 +313,7 @@ def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
             unrealized_pnl += (s["price"] - s["acb"]) * s["balance"]
 
     yesterday_val = _load_yesterday_portfolio_value()
+
     if yesterday_val and yesterday_val > 0:
         change_pct = float((Decimal(str(total_value)) - yesterday_val) / yesterday_val * 100)
     else:
@@ -363,7 +329,7 @@ def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
 
 
 # ============================================================
-# Helpers: capital block
+# DAILY: capital block
 # ============================================================
 
 def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
@@ -377,14 +343,11 @@ def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
     exchanges = _collect_exchanges_from_strategies(strategies)
     available = {ex: 0.0 for ex in exchanges}
 
-    return {
-        "reserved": reserved_list,
-        "available": available,
-    }
+    return {"reserved": reserved_list, "available": available}
 
 
 # ============================================================
-# Helpers: alerts from log (correct 24h filter)
+# DAILY: alerts block
 # ============================================================
 
 def _get_recent_alerts(hours: int = 24) -> List[str]:
@@ -404,9 +367,6 @@ def _get_recent_alerts(hours: int = 24) -> List[str]:
     with open(log_file, "r", encoding="utf-8") as f:
         for line in f:
             text = line.strip()
-            if not text:
-                continue
-
             if "⚠️" not in text and "❌" not in text and "ERROR" not in text.upper():
                 continue
 
@@ -434,6 +394,7 @@ def generate_daily_report() -> Dict[str, Any]:
     strategies = load_strategies_from_db()
 
     ex_names = _collect_exchanges_from_strategies(strategies)
+
     exchanges_status = [{
         "name": ex_name,
         "connected": True,
@@ -449,18 +410,14 @@ def generate_daily_report() -> Dict[str, Any]:
     }
 
     since = now - timedelta(hours=24)
-    filled_orders_block = _get_filled_trades_since(since)
-    capital_block = _compute_capital_block(strategies)
-    portfolio_block = _compute_portfolio_block(strategies)
-    alerts_block = _get_recent_alerts(hours=24)
 
     report = {
         "date": now.isoformat(),
         "system": system_block,
-        "filled_orders": filled_orders_block,
-        "capital": capital_block,
-        "portfolio": portfolio_block,
-        "alerts": alerts_block,
+        "filled_orders": _get_filled_trades_since(since),
+        "capital": _compute_capital_block(strategies),
+        "portfolio": _compute_portfolio_block(strategies),
+        "alerts": _get_recent_alerts(hours=24),
     }
 
     validate_daily_report(report)
@@ -472,19 +429,10 @@ def generate_daily_report() -> Dict[str, Any]:
 # ============================================================
 
 def generate_weekly_report() -> Dict[str, Any]:
-    """
-    Full weekly report aligned with aurono.weekly.report.schema.v1.
-    Uses full trade history to reconstruct ACB at the moment of each SELL.
-    """
     now = datetime.now(timezone.utc)
 
-    # Ensure week boundaries are timezone-aware UTC
-    week_end_dt = now
-    week_start_dt = (now - timedelta(days=7))
-
-    # Make absolutely sure both are timezone-aware UTC
-    week_end_dt = week_end_dt.astimezone(timezone.utc)
-    week_start_dt = week_start_dt.astimezone(timezone.utc)
+    week_end_dt = now.astimezone(timezone.utc)
+    week_start_dt = (now - timedelta(days=7)).astimezone(timezone.utc)
 
     week_end = week_end_dt.strftime("%Y-%m-%d")
     week_start = week_start_dt.strftime("%Y-%m-%d")
@@ -519,8 +467,8 @@ def generate_weekly_report() -> Dict[str, Any]:
     inv_qty = defaultdict(lambda: Decimal("0"))
     inv_cost = defaultdict(lambda: Decimal("0"))
 
-    weekly_trades: List[Dict[str, Any]] = []
-    sell_records: List[Dict[str, Any]] = []
+    weekly_trades = []
+    sell_records = []
 
     buys = 0
     sells = 0
@@ -528,10 +476,6 @@ def generate_weekly_report() -> Dict[str, Any]:
     pnl_by_strategy = defaultdict(lambda: Decimal("0"))
     sell_return_sum_by_strategy = defaultdict(lambda: Decimal("0"))
     sell_return_count_by_strategy = defaultdict(int)
-
-    # --------------------------------------------------------
-    # RECONSTRUCT ACB HISTORY
-    # --------------------------------------------------------
 
     for r in rows:
         sid = r["strategy_id"]
@@ -551,7 +495,6 @@ def generate_weekly_report() -> Dict[str, Any]:
             if not s_ex:
                 s_ex = strat_by_id[sid]["exchange"]
 
-        # Inventory update
         if sid is not None:
             qty = inv_qty[sid]
             cost = inv_cost[sid]
@@ -561,7 +504,6 @@ def generate_weekly_report() -> Dict[str, Any]:
                 qty += amt_dec
 
             elif side == "sell":
-                # ACB BEFORE the sell
                 if qty > 0:
                     acb = cost / qty
                     pnl_dec = (price_dec - acb) * amt_dec
@@ -570,7 +512,6 @@ def generate_weekly_report() -> Dict[str, Any]:
                     pnl_dec = Decimal("0")
                     ret_pct = None
 
-                # Inside weekly window → count PNL + stats
                 if week_start_dt <= ts_dt <= week_end_dt:
                     sells += 1
                     pnl_by_strategy[sid] += pnl_dec
@@ -585,13 +526,13 @@ def generate_weekly_report() -> Dict[str, Any]:
                         "exchange": s_ex or "bitvavo",
                         "timeframe": s_tf or "",
                         "price": float(price_dec),
+                        "price_str": format_price_dynamic(price_dec),
                         "amount": float(amt_dec),
                         "timestamp": r["timestamp"],
                         "pnl": float(pnl_dec),
                         "return_pct": float(ret_pct) if ret_pct is not None else None,
                     })
 
-                # Apply sell to inventory
                 if qty > 0:
                     proportion = amt_dec / qty
                     if proportion > 1:
@@ -605,12 +546,9 @@ def generate_weekly_report() -> Dict[str, Any]:
             inv_qty[sid] = qty
             inv_cost[sid] = cost
 
-        # Weekly trade counts
         if week_start_dt <= ts_dt <= week_end_dt:
             if side == "buy":
                 buys += 1
-            elif side == "sell" and sid is None:
-                sells += 1
 
             weekly_trades.append({
                 "strategy_id": sid,
@@ -619,6 +557,7 @@ def generate_weekly_report() -> Dict[str, Any]:
                 "timeframe": s_tf or "",
                 "side": side,
                 "price": float(price_dec),
+                "price_str": format_price_dynamic(price_dec),
                 "amount": float(amt_dec),
                 "timestamp": r["timestamp"],
             })
@@ -645,28 +584,28 @@ def generate_weekly_report() -> Dict[str, Any]:
         "weekly_pnl_eur": round(weekly_pnl, 2),
         "buys": buys,
         "sells": sells,
-        # kept for schema compatibility; not meaningful because we only sell above ACB
         "sell_win_rate": 0.0,
         "average_sell_return_pct": round(float(avg_sell_return), 2),
         "best_sell_return_pct": round(float(best_sell_return), 2),
         "worst_sell_return_pct": round(float(worst_sell_return), 2),
     }
-    
+
     # --------------------------------------------------------
-    # PER-STRATEGY BREAKDOWN
+    # STRATEGIES BLOCK
     # --------------------------------------------------------
 
-    strategies_block: List[Dict[str, Any]] = []
+    strategies_block = []
 
     for s in strategies:
         sid = s["id"]
+
         s_trades = [t for t in weekly_trades if t["strategy_id"] == sid]
 
         buys_s = [t for t in s_trades if t["side"] == "buy"]
         sells_s = [t for t in s_trades if t["side"] == "sell"]
 
-        avg_buy = sum(t["price"] for t in buys_s) / len(buys_s) if buys_s else None
-        avg_sell = sum(t["price"] for t in sells_s) / len(sells_s) if sells_s else None
+        avg_buy = sum(t["price"] for t in buys_s) / len(buys_s) if buys_s else 0.0
+        avg_sell = sum(t["price"] for t in sells_s) / len(sells_s) if sells_s else 0.0
 
         pnl_s = float(pnl_by_strategy.get(sid, Decimal("0")))
 
@@ -676,32 +615,29 @@ def generate_weekly_report() -> Dict[str, Any]:
         else:
             avg_ret_s_f = 0.0
 
-        # ----- formatted dynamic decimals -----
-        avg_buy_str = format_price_dynamic(avg_buy) if avg_buy is not None else "0.0000"
-        avg_sell_str = format_price_dynamic(avg_sell) if avg_sell is not None else "0.0000"
-
         strategies_block.append({
             "strategy_id": sid,
             "symbol": s["symbol"],
             "exchange": s["exchange"],
             "timeframe": s["timeframe"],
             "label": s["name"] or f"{s['symbol']} {s['timeframe']} ({s['exchange']})",
+
             "buys": len(buys_s),
             "sells": len(sells_s),
 
-            # numeric
             "weekly_pnl_eur": round(pnl_s, 2),
-            "avg_buy_price": avg_buy,
-            "avg_sell_price": avg_sell,
-            "avg_sell_return_pct": avg_ret_s_f,
 
-            # formatted
-            "avg_buy_price_str": avg_buy_str,
-            "avg_sell_price_str": avg_sell_str,
+            "avg_buy_price": round(avg_buy, 6),
+            "avg_sell_price": round(avg_sell, 6),
+
+            "avg_buy_price_str": format_price_dynamic(avg_buy),
+            "avg_sell_price_str": format_price_dynamic(avg_sell),
+
+            "avg_sell_return_pct": avg_ret_s_f,
         })
-        
+
     # --------------------------------------------------------
-    # HIGHLIGHTS
+    # HIGHLIGHTS BLOCK
     # --------------------------------------------------------
 
     if sell_records:
@@ -715,7 +651,7 @@ def generate_weekly_report() -> Dict[str, Any]:
             "pnl": round(best["pnl"], 2),
             "return_pct": round(best["return_pct"], 2) if best["return_pct"] is not None else 0.0,
             "price": best["price"],
-            "price_str": format_price_dynamic(best["price"]),
+            "price_str": best["price_str"],
         }
 
         worst_block = {
@@ -725,7 +661,7 @@ def generate_weekly_report() -> Dict[str, Any]:
             "pnl": round(worst["pnl"], 2),
             "return_pct": round(worst["return_pct"], 2) if worst["return_pct"] is not None else 0.0,
             "price": worst["price"],
-            "price_str": format_price_dynamic(worst["price"]),
+            "price_str": worst["price_str"],
         }
 
     else:
@@ -735,7 +671,7 @@ def generate_weekly_report() -> Dict[str, Any]:
             "timeframe": "",
             "pnl": 0.0,
             "return_pct": 0.0,
-            "price": None,
+            "price": 0.0,
             "price_str": "-",
         }
         worst_block = {
@@ -744,17 +680,14 @@ def generate_weekly_report() -> Dict[str, Any]:
             "timeframe": "",
             "pnl": 0.0,
             "return_pct": 0.0,
-            "price": None,
+            "price": 0.0,
             "price_str": "-",
         }
 
-    highlights_block = {
-        "best_trade": best_block,
-        "worst_trade": worst_block,
-    }
+    highlights_block = {"best_trade": best_block, "worst_trade": worst_block}
 
     # --------------------------------------------------------
-    # EXPOSURE
+    # EXPOSURE BLOCK
     # --------------------------------------------------------
 
     snapshots = [compute_strategy_stats(s) for s in strategies]
@@ -763,14 +696,14 @@ def generate_weekly_report() -> Dict[str, Any]:
     crypto_value = sum(s["value"] for s in snapshots)
     cash_value = sum(s["allocated_eur"] for s in snapshots)
 
-    exposure_block: Dict[str, Any] = {
+    exposure_block = {
         "cash_pct": round(cash_value / total_value * 100, 2) if total_value else 0.0,
         "crypto_pct": round(crypto_value / total_value * 100, 2) if total_value else 0.0,
         "by_coin": {},
         "by_exchange": {},
     }
 
-    totals_by_coin: Dict[str, float] = {}
+    totals_by_coin = {}
     for s in snapshots:
         totals_by_coin.setdefault(s["symbol"], 0.0)
         totals_by_coin[s["symbol"]] += s["value"]
@@ -778,8 +711,8 @@ def generate_weekly_report() -> Dict[str, Any]:
     for coin, val in totals_by_coin.items():
         exposure_block["by_coin"][coin] = round(val / total_value * 100, 2) if total_value else 0.0
 
-    totals_by_ex_crypto: Dict[str, float] = {}
-    totals_by_ex_cash: Dict[str, float] = {}
+    totals_by_ex_crypto = {}
+    totals_by_ex_cash = {}
 
     for s in snapshots:
         ex = s["exchange"]
