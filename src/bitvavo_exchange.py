@@ -155,11 +155,13 @@ class BitvavoExchange(ExchangeBase):
         ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
         self._market_tick_cache[market] = ticks
         return ticks
-
+        
     def _normalize_amount(self, market: str, amount: Decimal) -> Decimal:
         """
-        Snap amount down to the nearest valid tick for this market.
-        Never round up, to avoid trying to trade more than allowed.
+        Robust amount normalization for Bitvavo.
+        - Floors to the correct tickSize (quantityDecimals)
+        - Prevents scientific notation
+        - Ensures exact decimal output for all markets including FLOKI
         """
         ticks = self._load_market_ticks(market)
         tick = ticks["amount"]
@@ -167,11 +169,20 @@ class BitvavoExchange(ExchangeBase):
         try:
             if tick <= 0:
                 return amount
+
+            # Floor to tick units
             units = (amount / tick).quantize(Decimal("0"), rounding=ROUND_DOWN)
-            norm = units * tick
-            return norm
-        except Exception:
-            log_event(f"⚠️ Bitvavo amount rounding failed for {market} amount={amount}, tick={tick}")
+            normalized = units * tick
+
+            # Prevent scientific notation but keep correct decimals
+            normalized_str = format(normalized, "f")
+            return Decimal(normalized_str)
+
+        except Exception as e:
+            log_event(
+                f"⚠️ Bitvavo amount rounding failed for {market} "
+                f"amount={amount}, tick={tick}, error={e}"
+            )
             return amount
 
     def _normalize_price(self, market: str, side: str, price: Decimal) -> Decimal:
