@@ -300,7 +300,7 @@ th.numeric { text-align: right; }
           </span>
         </td>
         <td class="numeric">{{ s.price_str }}</td>
-        <td class="numeric">{{ "%.6f"|format(s.balance) }}</td>
+        <td class="numeric">{{ s.balance_str }}</td>
         <td class="numeric">{{ "%.2f"|format(s.value) }}</td>
         <td class="numeric">{{ s.acb_str }}</td>
 
@@ -345,7 +345,7 @@ th.numeric { text-align: right; }
       <td>{{ t.symbol }}</td>
       <td>{{ t.side|upper }}</td>
       <td class="numeric">{{ t.price_str }}</td>
-      <td class="numeric">{{ "%.6f"|format(t.amount) }}</td>
+      <td class="numeric">{{ t.amount_str }}</td>
       <td>{{ t.strategy }}</td>
     </tr>
     {% endfor %}
@@ -592,7 +592,7 @@ function openStrategyDetails(symbol, timeframe, exchange) {
             <td>${t.timestamp.slice(0,16)}</td>
             <td>${t.side.toUpperCase()}</td>
             <td class="numeric">${t.price_str}</td>
-            <td class="numeric">${parseFloat(t.amount).toFixed(6)}</td>
+            <td class="numeric">${t.amount_str}</td>
           </tr>`;
       });
 

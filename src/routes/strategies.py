@@ -190,7 +190,7 @@ def delete_strategy(id: int):
 
 
 # -----------------------------------------------------------
-# GET RECENT TRADES OF A STRATEGY  **(PATCHED)**
+# GET RECENT TRADES OF A STRATEGY
 # -----------------------------------------------------------
 @router.get("/api/strategy/{symbol}/{timeframe}/{exchange}/trades")
 def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
@@ -199,7 +199,7 @@ def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
     INCLUDING dynamic formatted price_str.
     """
 
-    from formatting import format_price_dynamic
+    from formatting import format_price_dynamic, format_amount_dynamic
     from utils import to_decimal
 
     conn = get_db()
@@ -224,6 +224,7 @@ def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
     for r in rows:
         price_dec = to_decimal(r["price"])
         price_str = format_price_dynamic(price_dec)
+        amount_str  = format_amount_dynamic(r["amount"])
 
         output.append({
             "timestamp": r["timestamp"],
@@ -232,6 +233,7 @@ def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
             "price": float(r["price"]),
             "price_str": price_str,          # NEW
             "amount": float(r["amount"]),
+            "amount_str": amount_str,
             "strategy_id": r["strategy_id"],
         })
 

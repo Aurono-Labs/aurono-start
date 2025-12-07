@@ -361,6 +361,8 @@ def get_supported_pairs(exchange: str) -> list[str]:
                 clean = pair.replace("/", "")
                 if clean.startswith("XBT"):
                     clean = clean.replace("XBT", "BTC")
+                if clean.startswith("XDG") or clean.startswith("XXDG"):
+                    clean = clean.replace("XDG", "DOGE").replace("XXDG", "DOGE")
                 pairs.append(clean)
 
         pairs = sorted(pairs)

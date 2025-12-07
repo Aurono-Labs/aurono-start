@@ -20,7 +20,7 @@ from trade_manager import TradeManager
 from kraken_exchange import KrakenExchange
 from bitvavo_exchange import BitvavoExchange
 from exchange_factory import get_exchange
-from formatting import format_price_dynamic
+from formatting import format_price_dynamic, format_amount_dynamic
 
 def get_exchange_backend():
     cfg = current_config()
@@ -167,6 +167,7 @@ def get_portfolio_snapshot():
                 "price": price,
                 "price_str": format_price_dynamic(price),
                 "balance": balance,
+                "balance_str": format_amount_dynamic(balance),
                 "value": value,
                 "acb": acb_f,
                 "acb_str": format_price_dynamic(acb_f) if acb_f else "-",
@@ -236,6 +237,7 @@ def get_recent_trades(limit=15, days=7):
                 "price": r["price"],
                 "price_str": format_price_dynamic(r["price"]),
                 "amount": r["amount"],
+                "amount_str": format_amount_dynamic(r["amount"]),
                 "strategy": strategy_name,
             })
 

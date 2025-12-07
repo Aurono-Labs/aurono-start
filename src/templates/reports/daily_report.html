@@ -97,7 +97,7 @@
           <td>{{ o.side }}</td>
 
           <!-- right-aligned numbers -->
-          <td class="numeric">{{ "%.6f"|format(o.amount) }}</td>
+          <td class="numeric">{{ o.amount_str }}</td>
           <td class="numeric">€{{ o.price_str }}</td>
           <td>{{ o.timestamp }}</td>
           <td class="numeric">€{{ "%.2f"|format(o.pnl) }}</td>

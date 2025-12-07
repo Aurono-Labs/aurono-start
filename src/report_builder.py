@@ -20,7 +20,7 @@ from utils import (
 from trade_manager import TradeManager
 from exchange_factory import get_exchange
 from report_validator import validate_daily_report, validate_weekly_report
-from formatting import format_price_dynamic
+from formatting import format_price_dynamic, format_amount_dynamic
 
 
 # ============================================================
@@ -284,6 +284,7 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
                 "timeframe": s_tf,
                 "side": side,
                 "amount": float(amt_dec),
+                "amount_str": format_amount_dynamic(amt_dec),
 
                 "price": float(price_dec),
                 "price_str": format_price_dynamic(price_dec),
