@@ -53,9 +53,22 @@ class KrakenExchange(ExchangeBase):
 
     # Cache for Kraken tick sizes: {"BTCEUR": Decimal("0.1"), ... }
     _tick_cache: Dict[str, Dict[str, Decimal]] = {}
+    
+    def _to_kraken_pair(self, symbol: str) -> str:
+        symbol = symbol.upper()
+
+        # BTC
+        if symbol == "BTCEUR":
+            return "XBTEUR"
+
+        # DOGE
+        if symbol == "DOGEEUR":
+            return "XDGEUR"
+
+        return symbol
 
     def _load_tick_size(self, symbol: str) -> Dict[str, Decimal]:
-        symbol = symbol.upper()
+        symbol = self._to_kraken_pair(symbol)
 
         if symbol in self._tick_cache:
             return self._tick_cache[symbol]
@@ -211,7 +224,7 @@ class KrakenExchange(ExchangeBase):
     ) -> Dict[str, Any]:
         cfg = current_config()
         live = cfg.get("live_trading", False)
-        pair = symbol.upper()
+        pair = self._to_kraken_pair(symbol)
 
         ticks = self._load_tick_size(symbol)
         tick = ticks["price"]
