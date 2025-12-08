@@ -273,29 +273,32 @@ def get_liquidity_summary():
     Combine:
       - allocated EUR per exchange (DB)
       - available EUR per exchange (live API)
-    And compute:
-      - free EUR (available - allocated)
-    Returns:
-      {
-        "bitvavo": { "allocated": 80.0, "available": 95.12, "free": 15.12 },
-        "kraken":  { "allocated": 25.0, "available": 22.01, "free": -2.99 }
-      }
+      - credential presence signal
     """
     _, allocated = get_allocated_cash_overview()
     available = get_available_eur_overview()
+    missing = detect_missing_credentials()
 
     summary = {}
-    exchanges = sorted(set(allocated.keys()) | set(available.keys()))
+    exchanges = sorted(set(allocated.keys()) | set(available.keys()) | set(missing))
 
     for exch in exchanges:
         a = allocated.get(exch, 0.0)
-        av = available.get(exch, 0.0)
-        f = round(av - a, 2)
+
+        has_creds = exch not in missing
+
+        if has_creds:
+            av = available.get(exch, 0.0)
+            free = round(av - a, 2)
+        else:
+            av = None          # Signal: no API value
+            free = None
 
         summary[exch] = {
             "allocated": round(a, 2),
-            "available": round(av, 2),
-            "free": f,
+            "available": av,
+            "free": free,
+            "has_creds": has_creds
         }
 
     return summary

@@ -277,15 +277,23 @@ th.numeric { text-align: right; }
           <tr>
             <td style="padding:4px 0;">{{ exch | capitalize }}</td>
             <td style="text-align:right;">{{ "%.2f"|format(vals.allocated) }}</td>
-            <td style="text-align:right;">{{ "%.2f"|format(vals.available) }}</td>
-
-            {% set f = vals.free %}
-            {% if f < 0 %}
-              <td style="text-align:right; color:#ef4444;">{{ "%.2f"|format(f) }}</td>
-            {% elif f > 0 %}
-              <td style="text-align:right; color:#22c55e;">{{ "%.2f"|format(f) }}</td>
+            {% if vals.has_creds %}
+                <td style="text-align:right;">{{ "%.2f"|format(vals.available) }}</td>
             {% else %}
-              <td style="text-align:right; color:var(--text);">{{ "%.2f"|format(f) }}</td>
+                <td style="text-align:right; color:#ef4444;">No API creds</td>
+            {% endif %}
+
+            {% if not vals.has_creds %}
+                <td style="text-align:right; color:#ef4444;">–</td>
+            {% else %}
+                {% set f = vals.free %}
+                {% if f < 0 %}
+                    <td style="text-align:right; color:#ef4444;">{{ "%.2f"|format(f) }}</td>
+                {% elif f > 0 %}
+                    <td style="text-align:right; color:#22c55e;">{{ "%.2f"|format(f) }}</td>
+                {% else %}
+                    <td style="text-align:right; color:var(--text);">{{ "%.2f"|format(f) }}</td>
+                {% endif %}
             {% endif %}
           </tr>
           {% endfor %}
