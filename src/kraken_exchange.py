@@ -215,17 +215,15 @@ class KrakenExchange(ExchangeBase):
     # ----------------------------------------
     # Get available EUR balance
     # ----------------------------------------
+    
     def get_available_eur(self) -> float:
         """
         Return the available EUR balance from Kraken.
-
-        Kraken's /Balance endpoint returns a dict:
-          { "ZEUR": "123.45", "XXBT": "0.0031", ... }
-
-        We use 'ZEUR' for EUR wallet.
+        Uses private endpoint /Balance
         """
         try:
-            data = self._private_request("Balance", {})
+            # MUST START WITH A SLASH
+            data = self._private_request("/Balance", {})
 
             if not isinstance(data, dict) or "result" not in data:
                 log_event(f"⚠️ Kraken get_available_eur: unexpected response {data}")
@@ -236,7 +234,7 @@ class KrakenExchange(ExchangeBase):
             if "ZEUR" in result:
                 return float(result["ZEUR"])
 
-            # Some rare Kraken setups use "EUR" instead of "ZEUR"
+            # Rare alternative
             if "EUR" in result:
                 return float(result["EUR"])
 
