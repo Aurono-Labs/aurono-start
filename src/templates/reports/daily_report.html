@@ -54,7 +54,7 @@
   {% else %}
     <p>Total value: €{{ "%.2f"|format(report.portfolio.total_value_eur) }}</p>
     <p>Crypto value: €{{ "%.2f"|format(report.portfolio.crypto_value_eur) }}</p>
-    <p>Cash value: €{{ "%.2f"|format(report.portfolio.cash_value_eur) }}</p>
+    <p>Allocated cash value: €{{ "%.2f"|format(report.portfolio.cash_value_eur) }}</p>
     <p>Unrealized P/L: €{{ "%.2f"|format(report.portfolio.unrealized_pnl_eur) }}</p>
     <p>Change since yesterday: {{ "%.2f"|format(report.portfolio.change_since_yesterday_pct) }}%</p>
   {% endif %}

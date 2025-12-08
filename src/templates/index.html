@@ -218,10 +218,16 @@ th.numeric { text-align: right; }
   <h2>Portfolio Overview</h2>
 
   <p><b>Crypto Value:</b> €{{ "%.2f"|format(snapshot.crypto_value) }}</p>
-  <p><b>Available Cash:</b> €{{ "%.2f"|format(snapshot.available_cash) }}</p>
+  <p><b>Total Allocated Cash: </b> €{{ "%.2f"|format(allocated_total) }}</p>
+  <h4>By Exchange</h4>
+  <ul>
+    {% for exch, amount in allocated_per_exchange.items() %}
+      <li>{{ exch | capitalize }}: €{{ "%.2f"|format(amount) }}</li>
+    {% endfor %}
+  </ul>
+  
   <hr style="border-color:var(--border); margin: 12px 0;">
   <p><b>Total Portfolio Value:</b> €{{ "%.2f"|format(snapshot.total_value) }}</p>
-
 
   <!-- FILTERS -->
   <form class="filters">

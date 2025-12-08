@@ -197,6 +197,40 @@ def get_portfolio_snapshot():
         "available_cash": available_cash,
         "total_value": total_portfolio_value
     }
+    
+def get_allocated_cash_overview():
+    """
+    Return:
+      - total allocated EUR across all enabled strategies
+      - allocated EUR per exchange (bitvavo, kraken, future exchanges)
+    """
+    try:
+        conn = _open_db()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        # Per-exchange allocated cash
+        rows = cur.execute("""
+            SELECT exchange, SUM(allocated_eur) AS allocated
+            FROM strategies
+            WHERE enabled = 1
+            GROUP BY exchange
+        """).fetchall()
+
+        per_exchange = {}
+        for r in rows:
+            exch = r["exchange"] or "unknown"
+            per_exchange[exch] = float(r["allocated"] or 0.0)
+
+        # Total allocated
+        total = sum(per_exchange.values())
+
+        conn.close()
+        return total, per_exchange
+
+    except Exception as e:
+        log_event(f"⚠️ Allocation overview error: {e}")
+        return 0.0, {}
 
 def get_recent_trades(limit=15, days=7):
     """Return last N trades (default 7 days) including strategy names."""
@@ -252,6 +286,9 @@ async def dashboard(request: Request):
     running, _ = get_running_processes()
     snapshot = get_portfolio_snapshot()
     recent = get_recent_trades()
+    # New: allocation totals (global + per exchange)
+    allocated_total, allocated_per_exchange = get_allocated_cash_overview()
+
 
     import re
     from datetime import datetime
@@ -383,6 +420,10 @@ async def dashboard(request: Request):
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "snapshot": snapshot,
         "recent_trades": recent,
+        
+        # New data for dashboard summary
+        "allocated_total": allocated_total,
+        "allocated_per_exchange": allocated_per_exchange,
     })
 
 @app.get("/start_trader")
