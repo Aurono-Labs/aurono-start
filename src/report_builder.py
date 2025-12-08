@@ -16,12 +16,13 @@ from utils import (
     current_config,
     to_decimal,
     root_path,
+    detect_missing_credentials,
+    log_event,
 )
 from trade_manager import TradeManager
 from exchange_factory import get_exchange
 from report_validator import validate_daily_report, validate_weekly_report
 from formatting import format_price_dynamic, format_amount_dynamic
-
 
 # ============================================================
 # Helpers: load strategies from DB
@@ -330,22 +331,72 @@ def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
 
 
 # ============================================================
-# DAILY: capital block
+# DAILY: liquidity summary
 # ============================================================
+    
+def get_liquidity_summary_for_report():
+    """
+    Returns a clean liquidity summary used in daily/weekly reports.
+    Format:
+    [
+      { "exchange": "bitvavo", "allocated": 120.0, "available": 133.94, "free": 13.94, "has_creds": True },
+      { "exchange": "kraken",  "allocated": 50.0,  "available": None,   "free": None,   "has_creds": False }
+    ]
+    """
+    result = []
 
-def _compute_capital_block(strategies: List[sqlite3.Row]) -> Dict[str, Any]:
-    reserved_list = [{
-        "strategy_id": s["id"],
-        "symbol": s["symbol"],
-        "exchange": s["exchange"],
-        "amount_eur": float(s["allocated_eur"] or 0.0),
-    } for s in strategies]
+    # --- Allocated EUR from strategies table ---
+    try:
+        conn = _open_db()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
 
-    exchanges = _collect_exchanges_from_strategies(strategies)
-    available = {ex: 0.0 for ex in exchanges}
+        allocated_rows = cur.execute("""
+            SELECT exchange, SUM(allocated_eur) AS allocated
+            FROM strategies
+            WHERE enabled = 1
+            GROUP BY exchange
+        """).fetchall()
 
-    return {"reserved": reserved_list, "available": available}
+        allocated = {row["exchange"]: float(row["allocated"] or 0.0) for row in allocated_rows}
 
+        # Determine exchanges in use
+        exchanges = list(allocated.keys())
+
+        conn.close()
+    except Exception as e:
+        log_event(f"⚠️ Daily report liquidity read error: {e}")
+        return []
+
+    # --- Detect missing credentials ---
+    missing = detect_missing_credentials() or []
+
+    # --- Fetch available EUR per exchange ---
+    for exch in exchanges:
+        has_creds = exch not in missing
+        alloc = allocated.get(exch, 0.0)
+
+        if has_creds:
+            try:
+                backend = get_exchange(exch)
+                avail = backend.get_available_eur()
+                free = round(avail - alloc, 2)
+            except Exception:
+                avail = None
+                free = None
+        else:
+            avail = None
+            free = None
+
+        result.append({
+            "exchange": exch,
+            "allocated": alloc,
+            "available": avail,
+            "free": free,
+            "has_creds": has_creds
+        })
+
+    return result
 
 # ============================================================
 # DAILY: alerts block
@@ -416,9 +467,9 @@ def generate_daily_report() -> Dict[str, Any]:
         "date": now.isoformat(),
         "system": system_block,
         "filled_orders": _get_filled_trades_since(since),
-        "capital": _compute_capital_block(strategies),
         "portfolio": _compute_portfolio_block(strategies),
         "alerts": _get_recent_alerts(hours=24),
+        "liquidity": get_liquidity_summary_for_report(),
     }
 
     validate_daily_report(report)
@@ -758,6 +809,9 @@ def generate_weekly_report() -> Dict[str, Any]:
         "strategies": strategies_block,
         "highlights": highlights_block,
         "exposure": exposure_block,
+        "liquidity": get_liquidity_summary_for_report(),
+        
+        # Legacy blocks (kept for compatibility)
         "capital_efficiency": cap_eff,
         "system_reliability": reliability_block,
         "strategy_changes": changes_block,
