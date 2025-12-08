@@ -64,6 +64,8 @@ class BitvavoExchange(ExchangeBase):
     # Cache: stores price & amount ticks per market
     _market_tick_cache: Dict[str, Dict[str, Decimal]] = {}
     
+    
+    
     def _load_market_ticks(self, market: str) -> Dict[str, Decimal]:
         """
         Load correct price & amount ticks based on Bitvavo /markets.
@@ -129,11 +131,14 @@ class BitvavoExchange(ExchangeBase):
                     price_prec = 2
                 price_tick = Decimal("1") / (Decimal("10") ** price_prec)
                 log_event(f"ℹ️ Bitvavo {market}: fallback pricePrecision={price_prec} → tick={price_tick}")
+                
+            # =====================================================
+            # AMOUNT TICK: Use quantityDecimals (0 must be respected!)
+            # =====================================================
+            qty_prec = info.get("quantityDecimals")
+            if qty_prec is None:
+                qty_prec = info.get("quantityPrecision")
 
-            # =====================================================
-            # AMOUNT TICK: Use quantityDecimals
-            # =====================================================
-            qty_prec = info.get("quantityDecimals") or info.get("quantityPrecision")
             try:
                 qty_prec = int(qty_prec) if qty_prec is not None else 4
             except Exception:
@@ -161,7 +166,7 @@ class BitvavoExchange(ExchangeBase):
         Robust amount normalization for Bitvavo.
         - Floors to the correct tickSize (quantityDecimals)
         - Prevents scientific notation
-        - Ensures exact decimal output for all markets including FLOKI
+        - Ensures exact decimal output
         """
         ticks = self._load_market_ticks(market)
         tick = ticks["amount"]
@@ -174,8 +179,9 @@ class BitvavoExchange(ExchangeBase):
             units = (amount / tick).quantize(Decimal("0"), rounding=ROUND_DOWN)
             normalized = units * tick
 
-            # Prevent scientific notation but keep correct decimals
+            # Prevent scientific notation and hidden precision
             normalized_str = format(normalized, "f")
+
             return Decimal(normalized_str)
 
         except Exception as e:
@@ -414,8 +420,8 @@ class BitvavoExchange(ExchangeBase):
             "market": market,
             "side": side,
             "orderType": "limit",
-            "price": str(price),
-            "amount": str(volume),
+            "price": format(price, "f"),
+            "amount": format(volume, "f"),
             "operatorId": 1,
         }
 
