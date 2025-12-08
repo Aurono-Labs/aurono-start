@@ -299,6 +299,41 @@ def get_liquidity_summary():
         }
 
     return summary
+    
+def detect_missing_credentials():
+    """
+    Detect exchanges used in strategies that have no API credentials stored.
+    Returns a list, e.g. ['bitvavo', 'kraken'].
+    """
+    from utils import get_credentials_for_exchange
+
+    missing = []
+
+    try:
+        conn = _open_db()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        rows = cur.execute("""
+            SELECT DISTINCT exchange
+            FROM strategies
+            WHERE enabled = 1
+        """).fetchall()
+
+        conn.close()
+
+        used_exchanges = {r["exchange"] for r in rows}
+
+    except Exception:
+        return []
+
+    for exch in used_exchanges:
+        key, secret = get_credentials_for_exchange(exch)
+        if not key or not secret:
+            missing.append(exch)
+
+    return missing
+
 
 def get_recent_trades(limit=15, days=7):
     """Return last N trades (default 7 days) including strategy names."""
@@ -354,10 +389,10 @@ async def dashboard(request: Request):
     running, _ = get_running_processes()
     snapshot = get_portfolio_snapshot()
     recent = get_recent_trades()
-    # New: allocation totals (global + per exchange)
     allocated_total, allocated_per_exchange = get_allocated_cash_overview()
     available_eur_per_exchange = get_available_eur_overview()
     liquidity_summary = get_liquidity_summary()
+    missing_credentials = detect_missing_credentials()
 
     import re
     from datetime import datetime
@@ -495,6 +530,7 @@ async def dashboard(request: Request):
         "allocated_per_exchange": allocated_per_exchange,
         "available_eur_per_exchange": available_eur_per_exchange,
         "liquidity_summary": liquidity_summary,
+        "missing_credentials": missing_credentials,
     })
 
 @app.get("/start_trader")

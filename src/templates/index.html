@@ -214,6 +214,26 @@ th.numeric { text-align: right; }
 
 <!-- PAGE TITLE -->
 <h1>Dashboard</h1>
+{% if missing_credentials and missing_credentials|length > 0 %}
+<div style="
+  background: rgba(239,68,68,0.15);
+  border: 1px solid rgba(239,68,68,0.4);
+  color: #ef4444;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font-size: 14px;
+">
+  Missing API credentials for:
+  <b>{{ missing_credentials | join(', ') }}</b>.
+  Please add them in the
+  <a href="/settings" style="color:#fbbf24; text-decoration:underline;">
+    Settings
+  </a>
+  page.
+</div>
+{% endif %}
+
 <button class="btn" onclick="openAddStrategyModal()"
         style="padding:8px 14px; border-radius:10px; background:rgba(255,255,255,0.05);
                border:1px solid var(--border); color:var(--gold-soft); margin-bottom:16px;">
