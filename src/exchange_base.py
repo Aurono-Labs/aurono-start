@@ -18,18 +18,12 @@ class ExchangeBase(ABC):
 
     @abstractmethod
     def get_ticker(self, symbol: str) -> Decimal:
-        """
-        Return latest trade price for given symbol (e.g. 'BTCEUR') as Decimal.
-        """
+        """Return latest trade price for given symbol (e.g. 'BTCEUR') as Decimal."""
         raise NotImplementedError
 
     @abstractmethod
     def get_ohlc(self, symbol: str, timeframe: str) -> List[list]:
-        """
-        Return OHLC candles for given symbol & timeframe.
-        Each candle must be a sequence where:
-          [_, open, _, _, close, ...]
-        """
+        """Return OHLC candles where [_, open, _, _, close, ...]."""
         raise NotImplementedError
 
     @abstractmethod
@@ -43,15 +37,18 @@ class ExchangeBase(ABC):
     ) -> Dict[str, Any]:
         """
         Place a limit order on the exchange.
-
-        Responsibilities:
-        - respect config['live_trading'] (simulate vs real)
-        - send order to the exchange
-        - store order id / txid in 'trades.txid' when trade_id is given
-        - optionally poll final fill and update price/amount in DB
-        - write descriptive log_event entries
-
-        Returns a raw dict response.
+        Must handle simulation mode and log events.
         """
         raise NotImplementedError
 
+    # ─────────────────────────────────────────────────────────
+    # NEW: required method for EUR balance (Dashboard feature)
+    # ─────────────────────────────────────────────────────────
+    @abstractmethod
+    def get_available_eur(self) -> float:
+        """
+        Return the available EUR balance on the exchange.
+
+        Must return the EUR amount that can actually be used for new trades.
+        """
+        raise NotImplementedError

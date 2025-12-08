@@ -211,8 +211,44 @@ class KrakenExchange(ExchangeBase):
                 "descr": descr,
             }
         return None
+        
+    # ----------------------------------------
+    # Get available EUR balance
+    # ----------------------------------------
+    def get_available_eur(self) -> float:
+        """
+        Return the available EUR balance from Kraken.
 
-    # -------------------- Place limit order --------------------
+        Kraken's /Balance endpoint returns a dict:
+          { "ZEUR": "123.45", "XXBT": "0.0031", ... }
+
+        We use 'ZEUR' for EUR wallet.
+        """
+        try:
+            data = self._private_request("Balance", {})
+
+            if not isinstance(data, dict) or "result" not in data:
+                log_event(f"⚠️ Kraken get_available_eur: unexpected response {data}")
+                return 0.0
+
+            result = data["result"]
+
+            if "ZEUR" in result:
+                return float(result["ZEUR"])
+
+            # Some rare Kraken setups use "EUR" instead of "ZEUR"
+            if "EUR" in result:
+                return float(result["EUR"])
+
+            return 0.0
+
+        except Exception as e:
+            log_event(f"⚠️ Kraken EUR balance error: {e}")
+            return 0.0
+
+    # ----------------------------------------
+    # Place limit order
+    # ----------------------------------------
 
     def place_limit_order(
         self,

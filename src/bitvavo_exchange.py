@@ -389,6 +389,34 @@ class BitvavoExchange(ExchangeBase):
                     pass
 
         return {"status": status, "vol_exec": vol_exec, "price": price}
+        
+    # ----------------------------------------
+    # Get available EUR balance
+    # ----------------------------------------
+        
+    def get_available_eur(self) -> float:
+        """
+        Return the available EUR balance from Bitvavo.
+        Uses the private /balance endpoint.
+        """
+        try:
+            result = self._private_request("GET", "balance")
+
+            if not isinstance(result, list):
+                log_event(f"⚠️ Bitvavo get_available_eur: unexpected response {result}")
+                return 0.0
+
+            for item in result:
+                if item.get("symbol") == "EUR":
+                    # Bitvavo returns strings → convert to float
+                    return float(item.get("available", "0"))
+
+            return 0.0
+
+        except Exception as e:
+            log_event(f"⚠️ Bitvavo EUR balance error: {e}")
+            return 0.0
+
 
     # ----------------------------------------
     # Place limit order

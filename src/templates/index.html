@@ -101,6 +101,18 @@ h1 {
   font-size: 20px;
   margin-bottom: 10px;
 }
+    
+.metrics-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.metrics-col {
+  flex: 1;
+  min-width: 220px;
+}
 
 /* FILTERS ───────────────────────────────────────────────────── */
 .filters {
@@ -216,15 +228,52 @@ th.numeric { text-align: right; }
 <!-- PORTFOLIO CARD -->
 <div class="card">
   <h2>Portfolio Overview</h2>
+  
+  <div class="metrics-grid">
 
-  <p><b>Crypto Value:</b> €{{ "%.2f"|format(snapshot.crypto_value) }}</p>
-  <p><b>Total Allocated Cash: </b> €{{ "%.2f"|format(allocated_total) }}</p>
-  <h4>By Exchange</h4>
-  <ul>
-    {% for exch, amount in allocated_per_exchange.items() %}
-      <li>{{ exch | capitalize }}: €{{ "%.2f"|format(amount) }}</li>
-    {% endfor %}
-  </ul>
+    <!-- LEFT COLUMN: Global totals -->
+    <div class="metrics-col">
+      <h3 style="margin:0 0 10px 0; color:var(--gold);">Totals Summary</h3>
+      <p><b>Crypto Value:</b> €{{ "%.2f"|format(snapshot.crypto_value) }}</p>
+      <p><b>Total Allocated Cash:</b> €{{ "%.2f"|format(allocated_total) }}</p>
+    </div>
+    
+    
+    <!-- RIGHT COLUMN: Per exchange metrics -->
+    <div class="metrics-col">
+      <h3 style="margin:0 0 10px 0; color:var(--gold);">Liquidity Summary</h3>
+
+      <table style="width:100%; border-collapse:collapse; font-size:14px;">
+        <thead>
+          <tr style="color:var(--muted);">
+            <th style="text-align:left; padding:4px 0;">Exchange</th>
+            <th style="text-align:right; padding:4px 0;">Allocated (€)</th>
+            <th style="text-align:right; padding:4px 0;">Available (€)</th>
+            <th style="text-align:right; padding:4px 0;">Free (€)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for exch, vals in liquidity_summary.items() %}
+          <tr>
+            <td style="padding:4px 0;">{{ exch | capitalize }}</td>
+            <td style="text-align:right;">{{ "%.2f"|format(vals.allocated) }}</td>
+            <td style="text-align:right;">{{ "%.2f"|format(vals.available) }}</td>
+
+            {% set f = vals.free %}
+            {% if f < 0 %}
+              <td style="text-align:right; color:#ef4444;">{{ "%.2f"|format(f) }}</td>
+            {% elif f > 0 %}
+              <td style="text-align:right; color:#22c55e;">{{ "%.2f"|format(f) }}</td>
+            {% else %}
+              <td style="text-align:right; color:var(--text);">{{ "%.2f"|format(f) }}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
   
   <hr style="border-color:var(--border); margin: 12px 0;">
   <p><b>Total Portfolio Value:</b> €{{ "%.2f"|format(snapshot.total_value) }}</p>

@@ -231,6 +231,74 @@ def get_allocated_cash_overview():
     except Exception as e:
         log_event(f"⚠️ Allocation overview error: {e}")
         return 0.0, {}
+        
+def get_available_eur_overview():
+    """
+    Return live available EUR per exchange using each exchange backend.
+    Example output:
+      { "bitvavo": 124.31, "kraken": 47.88 }
+    """
+    try:
+        conn = _open_db()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        # Determine which exchanges are in use
+        rows = cur.execute("""
+            SELECT DISTINCT exchange
+            FROM strategies
+            WHERE enabled = 1
+        """).fetchall()
+
+        exchanges = {r["exchange"] for r in rows}
+        conn.close()
+
+    except Exception:
+        exchanges = set()
+
+    results = {}
+    for exch in exchanges:
+        try:
+            backend = get_exchange(exch)
+            eur = backend.get_available_eur()
+            results[exch] = eur
+        except Exception as e:
+            log_event(f"⚠️ EUR balance fetch failed for {exch}: {e}")
+            results[exch] = 0.0
+
+    return results
+    
+def get_liquidity_summary():
+    """
+    Combine:
+      - allocated EUR per exchange (DB)
+      - available EUR per exchange (live API)
+    And compute:
+      - free EUR (available - allocated)
+    Returns:
+      {
+        "bitvavo": { "allocated": 80.0, "available": 95.12, "free": 15.12 },
+        "kraken":  { "allocated": 25.0, "available": 22.01, "free": -2.99 }
+      }
+    """
+    _, allocated = get_allocated_cash_overview()
+    available = get_available_eur_overview()
+
+    summary = {}
+    exchanges = sorted(set(allocated.keys()) | set(available.keys()))
+
+    for exch in exchanges:
+        a = allocated.get(exch, 0.0)
+        av = available.get(exch, 0.0)
+        f = round(av - a, 2)
+
+        summary[exch] = {
+            "allocated": round(a, 2),
+            "available": round(av, 2),
+            "free": f,
+        }
+
+    return summary
 
 def get_recent_trades(limit=15, days=7):
     """Return last N trades (default 7 days) including strategy names."""
@@ -288,7 +356,8 @@ async def dashboard(request: Request):
     recent = get_recent_trades()
     # New: allocation totals (global + per exchange)
     allocated_total, allocated_per_exchange = get_allocated_cash_overview()
-
+    available_eur_per_exchange = get_available_eur_overview()
+    liquidity_summary = get_liquidity_summary()
 
     import re
     from datetime import datetime
@@ -424,6 +493,8 @@ async def dashboard(request: Request):
         # New data for dashboard summary
         "allocated_total": allocated_total,
         "allocated_per_exchange": allocated_per_exchange,
+        "available_eur_per_exchange": available_eur_per_exchange,
+        "liquidity_summary": liquidity_summary,
     })
 
 @app.get("/start_trader")
