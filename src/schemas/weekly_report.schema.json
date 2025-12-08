@@ -1,6 +1,7 @@
 {
   "$id": "aurono.weekly.report.schema.v1",
   "type": "object",
+
   "required": [
     "week_start",
     "week_end",
@@ -8,6 +9,7 @@
     "strategies",
     "highlights",
     "exposure",
+    "liquidity",
     "capital_efficiency",
     "system_reliability",
     "strategy_changes"
@@ -24,7 +26,10 @@
         "weekly_pnl_eur": { "type": "number" },
         "buys": { "type": "integer" },
         "sells": { "type": "integer" },
-        "sell_win_rate": { "type": "number" }
+        "sell_win_rate": { "type": "number" },
+        "average_sell_return_pct": { "type": "number" },
+        "best_sell_return_pct": { "type": "number" },
+        "worst_sell_return_pct": { "type": "number" }
       }
     },
 
@@ -52,7 +57,10 @@
           "sells": { "type": "integer" },
           "weekly_pnl_eur": { "type": "number" },
           "avg_buy_price": { "type": "number" },
-          "avg_sell_price": { "type": "number" }
+          "avg_sell_price": { "type": "number" },
+          "avg_buy_price_str": { "type": "string" },
+          "avg_sell_price_str": { "type": "string" },
+          "avg_sell_return_pct": { "type": "number" }
         }
       }
     },
@@ -67,7 +75,10 @@
             "symbol": { "type": "string" },
             "exchange": { "type": "string" },
             "timeframe": { "type": "string" },
-            "pnl": { "type": "number" }
+            "pnl": { "type": "number" },
+            "return_pct": { "type": "number" },
+            "price": { "type": "number" },
+            "price_str": { "type": "string" }
           }
         },
         "worst_trade": {
@@ -76,7 +87,10 @@
             "symbol": { "type": "string" },
             "exchange": { "type": "string" },
             "timeframe": { "type": "string" },
-            "pnl": { "type": "number" }
+            "pnl": { "type": "number" },
+            "return_pct": { "type": "number" },
+            "price": { "type": "number" },
+            "price_str": { "type": "string" }
           }
         }
       }
@@ -90,15 +104,26 @@
         "crypto_pct": { "type": "number" },
         "by_coin": {
           "type": "object",
-          "patternProperties": {
-            ".*": { "type": "number" }
-          }
+          "patternProperties": { ".*": { "type": "number" } }
         },
         "by_exchange": {
           "type": "object",
-          "patternProperties": {
-            ".*": { "type": "number" }
-          }
+          "patternProperties": { ".*": { "type": "number" } }
+        }
+      }
+    },
+
+    "liquidity": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["exchange", "allocated", "has_creds"],
+        "properties": {
+          "exchange": { "type": "string" },
+          "allocated": { "type": "number" },
+          "available": { "type": ["number", "null"] },
+          "free": { "type": ["number", "null"] },
+          "has_creds": { "type": "boolean" }
         }
       }
     },

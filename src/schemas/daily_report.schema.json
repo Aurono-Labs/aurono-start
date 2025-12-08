@@ -1,7 +1,7 @@
 {
   "$id": "aurono.daily.report.schema.v1",
   "type": "object",
-  "required": ["date", "system", "filled_orders", "capital", "portfolio", "alerts"],
+  "required": ["date", "system", "filled_orders", "portfolio", "alerts", "liquidity"],
   "properties": {
     "date": {
       "type": "string",
@@ -61,33 +61,22 @@
         }
       }
     },
-
-    "capital": {
-      "type": "object",
-      "required": ["reserved", "available"],
-      "properties": {
-        "reserved": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["strategy_id", "symbol", "exchange", "amount_eur"],
-            "properties": {
-              "strategy_id": { "type": "integer" },
-              "symbol": { "type": "string" },
-              "exchange": { "type": "string" },
-              "amount_eur": { "type": "number" }
-            }
-          }
-        },
-        "available": {
-          "type": "object",
-          "patternProperties": {
-            ".*": { "type": "number" }
-          }
+    
+    "liquidity": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["exchange", "allocated", "has_creds"],
+        "properties": {
+          "exchange": { "type": "string" },
+          "allocated": { "type": "number" },
+          "available": { "type": ["number", "null"] },
+          "free": { "type": ["number", "null"] },
+          "has_creds": { "type": "boolean" }
         }
       }
     },
-
+    
     "portfolio": {
       "type": "object",
       "required": ["total_value_eur", "crypto_value_eur", "cash_value_eur", "unrealized_pnl_eur", "change_since_yesterday_pct"],
