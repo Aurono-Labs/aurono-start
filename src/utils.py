@@ -298,6 +298,39 @@ def delete_credentials_by_id(cred_id: int) -> None:
     finally:
         conn.close()
 
+def detect_missing_credentials():
+    """
+    Detect exchanges used in strategies that have no API credentials stored.
+    Returns a list, e.g. ['bitvavo', 'kraken'].
+    """
+    from utils import get_credentials_for_exchange
+
+    missing = []
+
+    try:
+        conn = _open_db()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        rows = cur.execute("""
+            SELECT DISTINCT exchange
+            FROM strategies
+            WHERE enabled = 1
+        """).fetchall()
+
+        conn.close()
+
+        used_exchanges = {r["exchange"] for r in rows}
+
+    except Exception:
+        return []
+
+    for exch in used_exchanges:
+        key, secret = get_credentials_for_exchange(exch)
+        if not key or not secret:
+            missing.append(exch)
+
+    return missing
 
 # ============================================================
 # 🔑 Backwards-compatible API for exchange classes

@@ -14,7 +14,7 @@ print("DEBUG sys.path:", sys.path[:3])  # optional: shows top 3 entries
 import importlib
 settings = importlib.import_module("routes.settings")
 
-from utils import current_config, save_config, log_event, root_path, to_decimal, load_api_keys, get_db_path
+from utils import current_config, save_config, log_event, root_path, to_decimal, load_api_keys, get_db_path, detect_missing_credentials
 from utils import _open_db
 from trade_manager import TradeManager
 from kraken_exchange import KrakenExchange
@@ -302,41 +302,6 @@ def get_liquidity_summary():
         }
 
     return summary
-    
-def detect_missing_credentials():
-    """
-    Detect exchanges used in strategies that have no API credentials stored.
-    Returns a list, e.g. ['bitvavo', 'kraken'].
-    """
-    from utils import get_credentials_for_exchange
-
-    missing = []
-
-    try:
-        conn = _open_db()
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-
-        rows = cur.execute("""
-            SELECT DISTINCT exchange
-            FROM strategies
-            WHERE enabled = 1
-        """).fetchall()
-
-        conn.close()
-
-        used_exchanges = {r["exchange"] for r in rows}
-
-    except Exception:
-        return []
-
-    for exch in used_exchanges:
-        key, secret = get_credentials_for_exchange(exch)
-        if not key or not secret:
-            missing.append(exch)
-
-    return missing
-
 
 def get_recent_trades(limit=15, days=7):
     """Return last N trades (default 7 days) including strategy names."""
