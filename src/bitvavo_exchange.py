@@ -272,6 +272,21 @@ class BitvavoExchange(ExchangeBase):
                 return []
 
             data.reverse()
+            
+            # --- Debug: show candle timestamps + whether ms→s conversion is needed ---
+            try:
+                from datetime import datetime, timezone
+                sample = data[-3:] if len(data) >= 3 else data
+                dbg = []
+                for c in sample:
+                    ts = int(c[0])
+                    ts_s = ts / 1000 if ts > 10**12 else ts
+                    dt = datetime.fromtimestamp(ts_s, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    dbg.append(f"{dt} UTC (open={c[1]}, close={c[4]})")
+
+                log_event(f"🕯 Bitvavo OHLC debug {symbol} {timeframe}: last candles → " + " | ".join(dbg))
+            except Exception as e:
+                log_event(f"⚠️ Bitvavo OHLC debug failed: {e}")
 
             try:
                 import datetime
@@ -281,17 +296,13 @@ class BitvavoExchange(ExchangeBase):
 
                 last = data[-1]
                 prev = data[-2]
-
-                print("📌 Active candle (ignored):")
-                print(f"  timestamp = {fmt(last[0])}")
-                print(f"  open={last[1]}, close={last[4]}")
-
-                print("📌 Previous closed candle (USED):")
-                print(f"  timestamp = {fmt(prev[0])}")
-                print(f"  open={prev[1]}, close={prev[4]}")
+                
+                log_event("📌 Bitvavo OHLC inspection:")
+                log_event(f"  Last candle timestamp = {fmt(last[0])}, open={last[1]}, close={last[4]}")
+                log_event(f"  Prev candle timestamp = {fmt(prev[0])}, open={prev[1]}, close={prev[4]}")
 
             except Exception as e:
-                print("DEBUG ERROR (cannot print candles):", e)
+                log_event(f"⚠️ Bitvavo OHLC debug failed: {e}")
 
             return data
 

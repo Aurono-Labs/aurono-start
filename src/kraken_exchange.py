@@ -142,6 +142,21 @@ class KrakenExchange(ExchangeBase):
                 timeout=10
             ).json()
             result = list(r["result"].values())[0]
+            
+            # --- Debug: show candle timestamps ---
+            try:
+                from datetime import datetime, timezone
+                sample = result[-3:] if len(result) >= 3 else result
+                dbg = []
+                for c in sample:
+                    ts = int(c[0])      # Kraken already gives seconds
+                    dt = datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    dbg.append(f"{dt} UTC (open={c[1]}, close={c[4]})")
+
+                log_event(f"🕯 Kraken OHLC debug {pair} {timeframe}: last candles → " + " | ".join(dbg))
+            except Exception as e:
+                log_event(f"⚠️ Kraken OHLC debug failed: {e}")
+
             return result[-730:]
         except Exception as e:
             log_event(f"⚠️ Kraken OHLC error for {pair} ({timeframe}): {e}")

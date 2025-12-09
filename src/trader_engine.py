@@ -46,6 +46,65 @@ class TraderEngine:
 
     def cfg(self):
         return current_config()
+        
+    # -------------------- Define based on timestamps of candle data which candle to take for trade trigger -----------
+        
+    def _select_closed_candle(self, ohlc: list) -> list:
+        """
+        Return the most recent *closed* candle from a chronological OHLC list.
+
+        Logic:
+          - Use the last two candles.
+          - Infer the interval from their timestamps.
+          - If the last candle started less than ~half an interval ago, treat it as
+            'still forming' and use the previous one.
+          - Otherwise, use the last one.
+        """
+        import time as _t
+
+        if not ohlc:
+            raise ValueError("Empty OHLC data")
+        if len(ohlc) == 1:
+            return ohlc[-1]
+
+        last = ohlc[-1]
+        prev = ohlc[-2]
+
+        def ts_seconds(candle) -> float:
+            # Bitvavo: ms → seconds, Kraken: seconds → already fine
+            try:
+                ts = int(candle[0])
+            except Exception:
+                return 0.0
+            if ts > 10**12:  # detect ms timestamps
+                ts = ts / 1000.0
+            return float(ts)
+
+        last_ts = ts_seconds(last)
+        prev_ts = ts_seconds(prev)
+        now_ts = _t.time()
+
+        # Infer interval; fallback to 1 sec minimal
+        interval = max(1.0, last_ts - prev_ts)
+
+        # If the newest candle is very fresh, treat it as "active"
+        if interval > 0 and (now_ts - last_ts) < interval * 0.5:
+            chosen = prev
+            idx = -2
+        else:
+            chosen = last
+            idx = -1
+
+        # Optional debug log
+        try:
+            from datetime import datetime, timezone as _tz
+            ct = datetime.fromtimestamp(ts_seconds(chosen), _tz.utc).strftime("%Y-%m-%d %H:%M:%S")
+            log_event(f"ℹ️ Using OHLC candle index {idx} (start={ct} UTC)")
+        except Exception:
+            pass
+
+        return chosen
+
 
     # -------------------- One-shot execution --------------------
 
@@ -113,10 +172,12 @@ class TraderEngine:
                     f"⚠️ Not enough OHLC for {symbol} ({s_timeframe}) on {exchange.name} → skip."
                 )
                 continue
+                
+            # Dynamically select last closed candle
+            candle = self._select_closed_candle(ohlc)
 
-            # previous closed candle (index -2)
-            open_price = to_decimal(ohlc[-2][1])
-            close_price = to_decimal(ohlc[-2][4])
+            open_price = to_decimal(candle[1])
+            close_price = to_decimal(candle[4])
             pct_change = (close_price - open_price) / open_price * to_decimal("100")
 
             log_event(
