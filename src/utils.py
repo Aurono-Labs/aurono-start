@@ -445,32 +445,12 @@ def get_supported_pairs(exchange: str) -> list[str]:
         pairs = sorted(pairs)
         _pair_cache["bitvavo"] = {"pairs": pairs, "timestamp": now}
         return pairs
-
+        
     # --------------------------------------------------------
-    # Coinbase
+    # Coinbase (no direct support here — must be called via CoinbaseExchange)
     # --------------------------------------------------------
     if exchange == "coinbase":
-        url = "https://api.coinbase.com/api/v3/brokerage/products"
-        try:
-            resp = requests.get(url, timeout=10)
-            data = resp.json()
-        except Exception:
-            return []
-
-        products = data.get("products", [])
-        pairs = []
-
-        for p in products:
-            # Coinbase product_id looks like "BTC-EUR"
-            pid = p.get("product_id")
-            quote = p.get("quote_currency_id")
-            if pid and quote == "EUR":
-                # Convert BTC-EUR → BTCEUR
-                base = pid.split("-")[0]
-                pairs.append(f"{base}EUR")
-
-        pairs = sorted(set(pairs))
-        _pair_cache["coinbase"] = {"pairs": pairs, "timestamp": now}
-        return pairs
+        log_event("⚠️ utils.get_supported_pairs(): Coinbase pairs require authentication. Returning empty list.")
+        return []
 
     return []

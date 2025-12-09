@@ -226,51 +226,96 @@ class CoinbaseExchange(ExchangeBase):
             ])
 
         return result
+        
+        
+    # ============================================================
+    # Coinbase needs own get supported pairs method
+    # ============================================================
+    def get_supported_pairs(self) -> List[str]:
+        """
+        Authenticated fetch of all EUR trading pairs on Coinbase.
+
+        Endpoint:
+            GET /products  (auth required)
+
+        Output:
+            ["BTCEUR", "SOLEUR", "ETHEUR", ...]
+        """
+        path = "/products"
+
+        result = self._private_request("GET", path)
+
+        # Coinbase returns:
+        #  { "products": [ ... ] }
+        products = None
+        if isinstance(result, dict):
+            products = result.get("products")
+        if not isinstance(products, list):
+            log_event(f"⚠️ Coinbase get_supported_pairs: unexpected response {result}")
+            return []
+
+        pairs = []
+
+        for p in products:
+            try:
+                pid = p.get("product_id")       # e.g. "BTC-EUR"
+                quote = p.get("quote_currency_id")  # e.g. "EUR"
+
+                if pid and quote == "EUR":
+                    base = pid.split("-")[0]
+                    pairs.append(f"{base}EUR")
+
+            except Exception as e:
+                log_event(f"⚠️ Coinbase get_supported_pairs failed on product: {p}, err={e}")
+
+        pairs = sorted(set(pairs))
+        return pairs
+
 
     # ============================================================
     # Ticks: price & amount increments
     # ============================================================
-
     def _load_product_ticks(self, product_id: str) -> Dict[str, Decimal]:
         """
-        Load correct price & amount ticks based on Coinbase /products.
+        Authenticated request to fetch Coinbase product tick sizes.
 
-        Coinbase fields:
-          - base_increment  → size/amount increment
-          - quote_increment → price increment
+        Endpoint:
+            GET /products/{product_id}
+
+        Fields we map:
+            base_increment  → amount tick
+            quote_increment → price tick
         """
         product_id = product_id.upper()
+
+        # Cached?
         if product_id in self._product_tick_cache:
             return self._product_tick_cache[product_id]
 
-        try:
-            # /products endpoint lists all, but for simplicity we fetch the single product
-            url = f"{COINBASE_API_BASE}{COINBASE_API_PREFIX}/products/{product_id}"
-            resp = requests.get(url, timeout=10)
-            data = resp.json()
-        except Exception as e:
-            log_event(f"⚠️ Coinbase tick fetch failed for {product_id}: {e}")
-            ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
-            self._product_tick_cache[product_id] = ticks
-            return ticks
+        path = f"/products/{product_id}"
 
-        if not isinstance(data, dict):
-            log_event(f"⚠️ Coinbase /products/{product_id} unexpected JSON: {data}")
+        # Use authenticated request
+        res = self._private_request("GET", path)
+
+        if not isinstance(res, dict):
+            log_event(f"⚠️ Coinbase ticks: unexpected JSON for {product_id}: {res}")
             ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
             self._product_tick_cache[product_id] = ticks
             return ticks
 
         try:
-            base_inc = data.get("base_increment", "0.0001")
-            quote_inc = data.get("quote_increment", "0.01")
+            base_inc = res.get("base_increment", "0.0001")
+            quote_inc = res.get("quote_increment", "0.01")
 
             amount_tick = Decimal(str(base_inc))
-            price_tick = Decimal(str(quote_inc))
+            price_tick  = Decimal(str(quote_inc))
 
             ticks = {"price": price_tick, "amount": amount_tick}
+
             self._product_tick_cache[product_id] = ticks
             log_event(f"ℹ️ Coinbase ticks for {product_id}: {ticks}")
             return ticks
+
         except Exception as e:
             log_event(f"⚠️ Coinbase: invalid tick info for {product_id}: {e}")
             ticks = {"price": Decimal("0.01"), "amount": Decimal("0.0001")}
@@ -441,24 +486,37 @@ class CoinbaseExchange(ExchangeBase):
             return {"error": str(e)}
 
     # ============================================================
-    # Public API: ticker, OHLC (1h, 4h, 6h, 1d, 1w)
+    # ticker, OHLC (1h, 4h, 6h, 1d, 1w)
     # ============================================================
-
+    
     def get_ticker(self, symbol: str) -> Decimal:
+        """
+        Authenticated Coinbase ticker fetch.
+        Coinbase response:
+            { "price": "12345.67", ... }
+        """
         product_id = self._product_id(symbol)
-        url = f"{COINBASE_API_BASE}{COINBASE_API_PREFIX}/products/{product_id}/ticker"
+
         try:
-            r = requests.get(url, timeout=10).json()
-            # Coinbase ticker typically returns: {"price": "12345.67", ...}
-            price = r.get("price")
-            if price is None:
-                log_event(f"⚠️ Coinbase ticker missing price for {product_id}: {r}")
+            path = f"/products/{product_id}/ticker"
+            data = self._private_request("GET", path)
+
+            if not isinstance(data, dict):
+                log_event(f"⚠️ Coinbase ticker non-dict for {product_id}: {data}")
                 return Decimal("0")
+
+            price = data.get("price")
+
+            if price is None:
+                log_event(f"⚠️ Coinbase ticker missing price for {product_id}: {data}")
+                return Decimal("0")
+
             return to_decimal(price)
+
         except Exception as e:
             log_event(f"⚠️ Coinbase ticker error for {product_id}: {e}")
             return Decimal("0")
-
+            
     def _fetch_raw_candles(
         self,
         product_id: str,
@@ -466,13 +524,18 @@ class CoinbaseExchange(ExchangeBase):
         limit: int,
     ) -> List[List[Any]]:
         """
-        Fetch raw Coinbase candles for a given granularity (in seconds).
-        Coinbase returns oldest → newest or newest → oldest depending on impl;
-        we normalize to oldest → newest and to:
+        Authenticated Coinbase candle fetch.
+
+        Coinbase endpoint (AUTH REQUIRED):
+            GET /products/{product_id}/candles?start=...&end=...&granularity=...
+
+        Candle format (array form):
+            [ start_time, low, high, open, close, volume ]
+
+        Output normalized to Aurono standard:
             [ts_ms, open, high, low, close, volume]
         """
         now_s = int(time.time())
-        # Rough window: limit * granularity seconds
         duration_s = limit * granularity
         start_s = now_s - duration_s
 
@@ -482,67 +545,77 @@ class CoinbaseExchange(ExchangeBase):
             "granularity": granularity,
         }
 
-        url = f"{COINBASE_API_BASE}{COINBASE_API_PREFIX}/products/{product_id}/candles"
-        try:
-            resp = requests.get(url, params=params, timeout=15)
+        # Proper Coinbase brokerage path WITHOUT prefix (prefix added in _private_request)
+        path = f"/products/{product_id}/candles"
+
+        # Call authenticated request
+        result = self._private_request(
+            method="GET",
+            path=path,
+            body=None  # GET query params are inside the path
+        )
+
+        # result *may* look like:
+        #   { "candles": [...] }
+        # or directly:
+        #   [ [...], [...], ... ]
+        # depending on Coinbase version
+        data = None
+
+        if isinstance(result, list):
+            data = result
+
+        elif isinstance(result, dict):
+            # Some versions use: { "candles": [ ... ] }
+            data = result.get("candles") or result.get("data")
+
+        if not isinstance(data, list) or len(data) == 0:
+            log_event(f"⚠️ Coinbase OHLC returned nothing for {product_id}: {result}")
+            return []
+
+        normalized: List[List[Any]] = []
+
+        for c in data:
             try:
-                data = resp.json()
-            except ValueError:
-                raw = resp.text.strip()
-                log_event(f"⚠️ Coinbase OHLC non-JSON for {product_id}: {raw[:200]}...")
-                return []
+                # Coinbase native array format:
+                # [ start_time, low, high, open, close, volume ]
+                if isinstance(c, list) and len(c) >= 6:
+                    start_s = int(c[0])
+                    low = Decimal(str(c[1]))
+                    high = Decimal(str(c[2]))
+                    open_ = Decimal(str(c[3]))
+                    close = Decimal(str(c[4]))
+                    volume = Decimal(str(c[5]))
 
-            if not isinstance(data, list):
-                log_event(f"⚠️ Coinbase OHLC unexpected JSON for {product_id}: {data}")
-                return []
-
-            if len(data) == 0:
-                log_event(f"⚠️ Coinbase OHLC returned empty list for {product_id}")
-                return []
-
-            normalized: List[List[Any]] = []
-
-            # Coinbase candles may be list or dict; common list format:
-            # [ start, low, high, open, close, volume ]
-            for c in data:
-                try:
-                    if isinstance(c, list) and len(c) >= 6:
-                        start_s = int(c[0])
-                        low = Decimal(str(c[1]))
-                        high = Decimal(str(c[2]))
-                        open_ = Decimal(str(c[3]))
-                        close = Decimal(str(c[4]))
-                        volume = Decimal(str(c[5]))
-                    elif isinstance(c, dict):
-                        start_s = int(c.get("start", 0))
-                        open_ = Decimal(str(c.get("open", "0")))
-                        high = Decimal(str(c.get("high", "0")))
-                        low = Decimal(str(c.get("low", "0")))
-                        close = Decimal(str(c.get("close", "0")))
-                        volume = Decimal(str(c.get("volume", "0")))
-                    else:
-                        continue
-
-                    ts_ms = start_s * 1000
-                    normalized.append([
-                        ts_ms,
-                        float(open_),
-                        float(high),
-                        float(low),
-                        float(close),
-                        float(volume),
-                    ])
-                except Exception as e:
-                    log_event(f"⚠️ Coinbase normalize candle failed for {product_id}: {c}, err={e}")
+                # Some environments return dict format:
+                elif isinstance(c, dict):
+                    start_s = int(c.get("start", 0))
+                    open_ = Decimal(str(c.get("open", "0")))
+                    high = Decimal(str(c.get("high", "0")))
+                    low = Decimal(str(c.get("low", "0")))
+                    close = Decimal(str(c.get("close", "0")))
+                    volume = Decimal(str(c.get("volume", "0")))
+                else:
                     continue
 
-            # Ensure oldest → newest
-            normalized.sort(key=lambda x: x[0])
-            return normalized
+                ts_ms = start_s * 1000
 
-        except Exception as e:
-            log_event(f"⚠️ Coinbase OHLC request failed for {product_id}: {e}")
-            return []
+                normalized.append([
+                    ts_ms,
+                    float(open_),
+                    float(high),
+                    float(low),
+                    float(close),
+                    float(volume),
+                ])
+
+            except Exception as e:
+                log_event(f"⚠️ Coinbase normalize candle failed for {product_id}: {c}, err={e}")
+                continue
+
+        # Ensure oldest → newest
+        normalized.sort(key=lambda x: x[0])
+        return normalized
 
     def get_ohlc(self, symbol: str, timeframe: str, limit: int = 730) -> List[list]:
         """

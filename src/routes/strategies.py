@@ -37,8 +37,25 @@ def list_strategies(request: Request, exchange: Optional[str] = None):
     rows = db.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
     db.close()
 
-    current_exchange = (exchange or "bitvavo").lower()
-    symbols = get_supported_pairs(current_exchange)
+    enabled = detect_enabled_exchanges()
+
+    if exchange:
+        current_exchange = exchange.lower()
+    elif "bitvavo" in enabled:
+        current_exchange = "bitvavo"
+    elif len(enabled) > 0:
+        current_exchange = enabled[0]      # fallback to first enabled exchange
+    else:
+        current_exchange = "bitvavo"       # no credentials yet
+
+    from coinbase_exchange import CoinbaseExchange
+
+    if current_exchange == "coinbase":
+        ex = CoinbaseExchange()
+        symbols = ex.get_supported_pairs()
+    else:
+        symbols = get_supported_pairs(current_exchange)
+
 
     return templates.TemplateResponse("strategies.html", {
         "request": request,
@@ -54,8 +71,13 @@ def list_strategies(request: Request, exchange: Optional[str] = None):
 @router.get("/symbols/{exchange}")
 def ajax_symbols(exchange: str):
     exchange = exchange.lower()
-    return get_supported_pairs(exchange)
 
+    if exchange == "coinbase":
+        from coinbase_exchange import CoinbaseExchange
+        ex = CoinbaseExchange()
+        return ex.get_supported_pairs()
+
+    return get_supported_pairs(exchange)
 
 # -----------------------------------------------------------
 # ADD STRATEGY
