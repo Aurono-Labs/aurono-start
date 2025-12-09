@@ -150,7 +150,13 @@
           <td>{{ s.label }}</td>
           <td class="numeric">{{ s.buys }}</td>
           <td class="numeric">{{ s.sells }}</td>
-          <td class="numeric">€{{ "%.2f"|format(s.weekly_pnl_eur) }}</td>
+          <td>
+            {% if s.sells == 0 %}
+              -
+            {% else %}
+              €{{ "%.2f"|format(s.weekly_pnl) }}
+            {% endif %}
+          </td>
           <td class="numeric">{{ s.avg_buy_price_str }}</td>
           <td class="numeric">{{ s.avg_sell_price_str }}</td>
           <td class="numeric">{{ "%.2f"|format(s.avg_sell_return_pct) }}%</td>

@@ -5,7 +5,16 @@ from fastapi.templating import Jinja2Templates
 import sqlite3
 from typing import Optional
 
-from utils import root_path, _open_db, get_supported_pairs, log_event
+from utils import root_path, _open_db, get_supported_pairs, log_event, get_credentials_for_exchange
+
+def detect_enabled_exchanges():
+    enabled = []
+    for exch in ["kraken", "bitvavo", "coinbase"]:
+        key, secret = get_credentials_for_exchange(exch)
+        if key and secret:
+            enabled.append(exch)
+    return enabled
+
 
 templates = Jinja2Templates(directory=str(root_path("src", "templates")))
 templates.env.globals["abs"] = abs
@@ -35,9 +44,9 @@ def list_strategies(request: Request, exchange: Optional[str] = None):
         "request": request,
         "strategies": rows,
         "symbols": symbols,
-        "current_exchange": current_exchange
+        "current_exchange": current_exchange,
+        "enabled_exchanges": detect_enabled_exchanges(),
     })
-
 
 # -----------------------------------------------------------
 # AJAX: GET EUR SYMBOLS FOR SELECTED EXCHANGE

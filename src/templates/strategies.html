@@ -177,14 +177,25 @@
       <div class="card-sub">Select exchange, symbol, timeframe and thresholds.</div>
 
       <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
-
         <div class="field">
           <label>Exchange</label>
-          <select id="exchangeSelect" name="exchange" required>
-            <option value="bitvavo" {% if current_exchange=='bitvavo' %}selected{% endif %}>Bitvavo</option>
-            <option value="kraken" {% if current_exchange=='kraken' %}selected{% endif %}>Kraken</option>
+          <select name="exchange" id="exchange-select" required>
+            <option value="">Choose…</option>
+
+            {% if "kraken" in enabled_exchanges %}
+              <option value="kraken">Kraken</option>
+            {% endif %}
+
+            {% if "bitvavo" in enabled_exchanges %}
+              <option value="bitvavo">Bitvavo</option>
+            {% endif %}
+
+            {% if "coinbase" in enabled_exchanges %}
+              <option value="coinbase">Coinbase</option>
+            {% endif %}
           </select>
         </div>
+
 
         <div class="field">
           <label>Symbol</label>
@@ -340,11 +351,23 @@
 
                     <div class="field">
                       <label>Exchange</label>
-                      <select name="exchange">
-                        <option value="bitvavo" {% if s.exchange=='bitvavo' %}selected{% endif %}>Bitvavo</option>
-                        <option value="kraken" {% if s.exchange=='kraken' %}selected{% endif %}>Kraken</option>
+                      <select name="exchange" required>
+
+                        {% if "kraken" in enabled_exchanges %}
+                          <option value="kraken" {% if s.exchange=='kraken' %}selected{% endif %}>Kraken</option>
+                        {% endif %}
+
+                        {% if "bitvavo" in enabled_exchanges %}
+                          <option value="bitvavo" {% if s.exchange=='bitvavo' %}selected{% endif %}>Bitvavo</option>
+                        {% endif %}
+
+                        {% if "coinbase" in enabled_exchanges %}
+                          <option value="coinbase" {% if s.exchange=='coinbase' %}selected{% endif %}>Coinbase</option>
+                        {% endif %}
+
                       </select>
                     </div>
+                    
 
                     <div class="field">
                       <label>Drop %</label>

@@ -100,6 +100,83 @@ def delete_credentials(cred_id: int):
 
     return RedirectResponse(url="/settings", status_code=HTTP_303_SEE_OTHER)
 
+# --------------------------------------------------------------
+# Save Coinbase (Beta) Credentials
+# --------------------------------------------------------------
+@router.post("/coinbase/save")
+def save_coinbase_credentials(
+    request: Request,
+    auth_method: str = Form(...),
+    hmac_key: str = Form(""),
+    hmac_secret: str = Form(""),
+    jwt_key_name: str = Form(""),
+    jwt_private_key: str = Form(""),
+):
+    """
+    Stores all Coinbase credentials inside api_secret as a JSON object.
+    api_key is stored as a static marker "coinbase-beta" to distinguish it.
+    """
+
+    payload = {
+        "auth_method": auth_method,
+        "hmac_key": hmac_key.strip(),
+        "hmac_secret": hmac_secret.strip(),
+        "jwt_key_name": jwt_key_name.strip(),
+        "jwt_private_key": jwt_private_key.strip(),
+    }
+
+    try:
+        upsert_credentials(
+            "coinbase",
+            "coinbase-beta",  # placeholder marker
+            json.dumps(payload),
+        )
+        log_event("🔐 Saved Coinbase beta credentials.")
+        return RedirectResponse(url="/settings?msg=Coinbase+saved&message_type=success",
+                               status_code=HTTP_303_SEE_OTHER)
+
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/settings?msg=Coinbase+save+failed:+{e}&message_type=error",
+            status_code=HTTP_303_SEE_OTHER
+        )
+
+# --------------------------------------------------------------
+# Test Coinbase (Beta) Credentials
+# --------------------------------------------------------------
+@router.post("/coinbase/test")
+def test_coinbase_credentials(request: Request):
+    api_key, api_secret_json = get_credentials_for_exchange("coinbase")
+
+    if not api_secret_json:
+        return show_settings(request, "❌ No Coinbase credentials saved.", "error")
+
+    try:
+        data = json.loads(api_secret_json)
+    except Exception:
+        return show_settings(request, "❌ Coinbase credentials corrupted.", "error")
+
+    try:
+        # Construct CoinbaseExchange using beta JSON layout
+        client = CoinbaseExchange(
+            api_key=None,
+            api_secret=None,
+            auth_method=data.get("auth_method"),
+            api_key_name=data.get("jwt_key_name"),
+            ec_private_key_pem=data.get("jwt_private_key"),
+        )
+
+        # Try simple request
+        bal = client.get_available_eur()
+        tick = client.get_ticker("BTCEUR")
+
+        if tick > 0:
+            return show_settings(request, "✅ Coinbase credentials valid.", "success")
+        else:
+            return show_settings(request, "⚠️ Coinbase test returned no price.", "error")
+
+    except Exception as e:
+        return show_settings(request, f"❌ Coinbase test failed: {e}", "error")
 
 # --------------------------------------------------------------
 # Update Email Settings

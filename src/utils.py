@@ -184,11 +184,26 @@ def upsert_credentials(exchange: str, api_key: str, api_secret: str) -> None:
     finally:
         conn.close()
 
-
 def get_credentials_for_exchange(exchange: str) -> tuple[Optional[str], Optional[str]]:
     """
     Decrypt and return (api_key, api_secret) for the given exchange.
-    Returns (None, None) if not found.
+
+    For Kraken/Bitvavo:
+        api_key = string
+        api_secret = string
+
+    For Coinbase (beta):
+        api_key = "coinbase-beta" (placeholder)
+        api_secret = JSON string containing:
+            {
+              "auth_method": "...",
+              "hmac_key": "...",
+              "hmac_secret": "...",
+              "jwt_key_name": "...",
+              "jwt_private_key": "..."
+            }
+
+    CoinbaseExchange is responsible for parsing this JSON.
     """
     exchange = (exchange or "").lower().strip()
     if not exchange:
@@ -208,10 +223,19 @@ def get_credentials_for_exchange(exchange: str) -> tuple[Optional[str], Optional
             return None, None
 
         api_key_enc, api_secret_enc = row
-        return _decrypt_secret(api_key_enc), _decrypt_secret(api_secret_enc)
+        api_key = _decrypt_secret(api_key_enc)
+        api_secret = _decrypt_secret(api_secret_enc)
+
+        # Coinbase Beta uses JSON with multiple auth fields → MUST NOT be parsed here
+        if exchange == "coinbase":
+            # do NOT modify the values, CoinbaseExchange will parse JSON
+            return api_key, api_secret
+
+        # Kraken & Bitvavo remain unchanged
+        return api_key, api_secret
+
     finally:
         conn.close()
-
 
 def get_credentials_plain_by_id(cred_id: int) -> Optional[Dict]:
     """
@@ -359,6 +383,7 @@ import time
 _pair_cache = {
     "kraken": {"pairs": [], "timestamp": 0},
     "bitvavo": {"pairs": [], "timestamp": 0},
+    "coinbase": {"pairs": [], "timestamp": 0},
 }
 
 CACHE_TTL = 3600  # 1 hour
@@ -419,6 +444,33 @@ def get_supported_pairs(exchange: str) -> list[str]:
 
         pairs = sorted(pairs)
         _pair_cache["bitvavo"] = {"pairs": pairs, "timestamp": now}
+        return pairs
+
+    # --------------------------------------------------------
+    # Coinbase
+    # --------------------------------------------------------
+    if exchange == "coinbase":
+        url = "https://api.coinbase.com/api/v3/brokerage/products"
+        try:
+            resp = requests.get(url, timeout=10)
+            data = resp.json()
+        except Exception:
+            return []
+
+        products = data.get("products", [])
+        pairs = []
+
+        for p in products:
+            # Coinbase product_id looks like "BTC-EUR"
+            pid = p.get("product_id")
+            quote = p.get("quote_currency_id")
+            if pid and quote == "EUR":
+                # Convert BTC-EUR → BTCEUR
+                base = pid.split("-")[0]
+                pairs.append(f"{base}EUR")
+
+        pairs = sorted(set(pairs))
+        _pair_cache["coinbase"] = {"pairs": pairs, "timestamp": now}
         return pairs
 
     return []

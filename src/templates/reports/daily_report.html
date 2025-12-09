@@ -159,8 +159,14 @@
 
           <!-- Display only YYYY-MM-DD HH:MM -->
           <td>{{ o.timestamp[:16] }}</td>
+          <td>
+            {% if o.side == "buy" %}
+              -
+            {% else %}
+              €{{ "%.2f"|format(o.pnl) }}
+            {% endif %}
+          </td>
 
-          <td class="numeric">€{{ "%.2f"|format(o.pnl) }}</td>
         </tr>
       {% endfor %}
 
