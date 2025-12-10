@@ -314,7 +314,7 @@ def get_recent_trades(limit=15, days=7):
         cur.execute(
             """
             SELECT t.timestamp, t.symbol, t.side, t.price, t.amount,
-                   s.timeframe, s.symbol AS s_symbol, s.exchange
+                   s.timeframe, s.symbol AS s_symbol, s.exchange, s.archived
             FROM trades t
             LEFT JOIN strategies s ON t.strategy_id = s.id
             WHERE julianday('now') - julianday(t.timestamp) <= ?
@@ -331,7 +331,8 @@ def get_recent_trades(limit=15, days=7):
             # Fallback: if strategy is gone, show "-"
             if r["s_symbol"] and r["timeframe"]:
                 exch = r["exchange"] or "bitvavo"
-                strategy_name = f"{r['s_symbol']} {r['timeframe']} ({exch})"
+                archived_flag = " (archived)" if r["archived"] == 1 else ""
+                strategy_name = f"{r['s_symbol']} {r['timeframe']} ({exch}){archived_flag}"
             else:
                 strategy_name = "-"
 
