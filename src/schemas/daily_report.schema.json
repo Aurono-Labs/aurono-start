@@ -51,7 +51,7 @@
         "properties": {
           "symbol": { "type": "string" },
           "exchange": { "type": "string" },
-          "timeframe": { "type": "string", "enum": ["1h", "4h", "1d"] },
+          "timeframe": { "type": "string", "enum": ["1h", "4h", "1d", "1w"] },
           "side": { "type": "string", "enum": ["buy", "sell"] },
           "amount": { "type": "number" },
           "price": { "type": "number" },
