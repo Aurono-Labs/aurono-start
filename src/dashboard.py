@@ -107,7 +107,7 @@ def get_portfolio_snapshot():
 
         # --- Fetch all active strategies ---
         strategies = cur.execute(
-            "SELECT id, symbol, timeframe, allocated_eur, exchange FROM strategies WHERE enabled=1 ORDER BY symbol, timeframe"
+            "SELECT id, symbol, timeframe, allocated_eur, exchange FROM strategies WHERE enabled=1 AND archived = 0 ORDER BY symbol, timeframe"
         ).fetchall()
 
         for s in strategies:
@@ -176,9 +176,9 @@ def get_portfolio_snapshot():
             })
 
         # totals
-        cur.execute("SELECT SUM(allocated_eur) FROM strategies WHERE enabled=1")
+        cur.execute("SELECT SUM(allocated_eur) FROM strategies WHERE enabled=1 AND archived=0")
         allocated_total = cur.fetchone()[0] or 0.0
-        cur.execute("SELECT SUM(allocated_eur) FROM strategies WHERE enabled=1 AND allocated_eur>0")
+        cur.execute("SELECT SUM(allocated_eur) FROM strategies WHERE enabled=1 AND archived=0 AND allocated_eur>0")
         available_cash = cur.fetchone()[0] or 0.0
         conn.close()
 
@@ -201,7 +201,7 @@ def get_portfolio_snapshot():
 def get_allocated_cash_overview():
     """
     Return:
-      - total allocated EUR across all enabled strategies
+      - total allocated EUR across all enabled and not-archived strategies
       - allocated EUR per exchange (bitvavo, kraken, future exchanges)
     """
     try:
@@ -213,7 +213,7 @@ def get_allocated_cash_overview():
         rows = cur.execute("""
             SELECT exchange, SUM(allocated_eur) AS allocated
             FROM strategies
-            WHERE enabled = 1
+            WHERE enabled = 1 AND archived=0
             GROUP BY exchange
         """).fetchall()
 
@@ -247,7 +247,7 @@ def get_available_eur_overview():
         rows = cur.execute("""
             SELECT DISTINCT exchange
             FROM strategies
-            WHERE enabled = 1
+            WHERE enabled = 1 AND archived=0
         """).fetchall()
 
         exchanges = {r["exchange"] for r in rows}

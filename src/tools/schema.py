@@ -38,7 +38,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             exchange TEXT DEFAULT 'bitvavo',
             buy_amount_eur REAL DEFAULT 0,
-            sell_amount_eur REAL DEFAULT 0
+            sell_amount_eur REAL DEFAULT 0,
+            archived INTEGER NOT NULL DEFAULT 0
         );
         """
     )

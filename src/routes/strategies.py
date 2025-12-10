@@ -5,8 +5,13 @@ from fastapi.templating import Jinja2Templates
 import sqlite3
 from typing import Optional
 
-from utils import root_path, _open_db, get_supported_pairs, log_event, get_credentials_for_exchange
+from utils import (
+    root_path, _open_db, get_supported_pairs, log_event, get_credentials_for_exchange
+)
 
+# -----------------------------------------------------------
+# DETECT ENABLED EXCHANGES
+# -----------------------------------------------------------
 def detect_enabled_exchanges():
     enabled = []
     for exch in ["kraken", "bitvavo", "coinbase"]:
@@ -29,12 +34,16 @@ def get_db():
 
 
 # -----------------------------------------------------------
-# LIST STRATEGIES (DEFAULT: BITVAVO)
+# LIST STRATEGIES (ARCHIVED LAST)
 # -----------------------------------------------------------
 @router.get("/")
 def list_strategies(request: Request, exchange: Optional[str] = None):
     db = get_db()
-    rows = db.execute("SELECT * FROM strategies ORDER BY id DESC").fetchall()
+    rows = db.execute("""
+        SELECT *
+        FROM strategies
+        ORDER BY archived ASC, enabled DESC, id DESC
+    """).fetchall()
     db.close()
 
     enabled = detect_enabled_exchanges()
@@ -44,9 +53,9 @@ def list_strategies(request: Request, exchange: Optional[str] = None):
     elif "bitvavo" in enabled:
         current_exchange = "bitvavo"
     elif len(enabled) > 0:
-        current_exchange = enabled[0]      # fallback to first enabled exchange
+        current_exchange = enabled[0]
     else:
-        current_exchange = "bitvavo"       # no credentials yet
+        current_exchange = "bitvavo"
 
     from coinbase_exchange import CoinbaseExchange
 
@@ -56,17 +65,17 @@ def list_strategies(request: Request, exchange: Optional[str] = None):
     else:
         symbols = get_supported_pairs(current_exchange)
 
-
     return templates.TemplateResponse("strategies.html", {
         "request": request,
         "strategies": rows,
         "symbols": symbols,
         "current_exchange": current_exchange,
-        "enabled_exchanges": detect_enabled_exchanges(),
+        "enabled_exchanges": enabled,
     })
 
+
 # -----------------------------------------------------------
-# AJAX: GET EUR SYMBOLS FOR SELECTED EXCHANGE
+# AJAX SYMBOL FETCH
 # -----------------------------------------------------------
 @router.get("/symbols/{exchange}")
 def ajax_symbols(exchange: str):
@@ -78,6 +87,7 @@ def ajax_symbols(exchange: str):
         return ex.get_supported_pairs()
 
     return get_supported_pairs(exchange)
+
 
 # -----------------------------------------------------------
 # ADD STRATEGY
@@ -114,8 +124,9 @@ def add_strategy(
     cur.execute("""
         INSERT INTO strategies
         (name, symbol, timeframe, drop_trigger, rise_trigger,
-         buy_amount_eur, sell_amount_eur, allocated_eur, exchange)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         buy_amount_eur, sell_amount_eur, allocated_eur,
+         exchange, enabled, archived)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
     """, (
         f"{symbol}_{timeframe}",
         symbol,
@@ -131,6 +142,7 @@ def add_strategy(
     conn.commit()
     conn.close()
 
+    # Optional import existing coins
     if import_existing and existing_amount_val > 0 and existing_acb_val > 0:
         from trade_manager import TradeManager
         from decimal import Decimal
@@ -150,14 +162,15 @@ def add_strategy(
             log_event(f"⚠️ Import existing position failed: {e}")
 
     log_event(f"🧩 Added strategy {symbol} {timeframe} on {exchange}")
-    
+
     if return_to == "index":
         return RedirectResponse("/", status_code=303)
     else:
         return RedirectResponse("/strategies", status_code=303)
 
+
 # -----------------------------------------------------------
-# UPDATE STRATEGY  (IMMUTABLE exchange, symbol, timeframe)
+# UPDATE STRATEGY (IMMUTABLE EXCHANGE/SYMBOL/TIMEFRAME)
 # -----------------------------------------------------------
 @router.post("/update/{id}")
 def update_strategy(
@@ -170,11 +183,16 @@ def update_strategy(
     enabled: str = Form("0")
 ):
 
-    is_enabled = 1 if enabled == "1" else 0
-
     db = get_db()
 
-    # Immutable fields (symbol, timeframe, exchange) are not touched
+    # Check if archived (cannot update archived)
+    row = db.execute("SELECT archived FROM strategies WHERE id=?", (id,)).fetchone()
+    if row and row["archived"]:
+        db.close()
+        log_event(f"⚠️ Attempted update of archived strategy {id}")
+        return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
+
+    is_enabled = 1 if enabled == "1" else 0
 
     db.execute("""
         UPDATE strategies
@@ -198,21 +216,103 @@ def update_strategy(
     db.commit()
     db.close()
 
-    log_event(f"📝 Updated strategy {id} (immutable fields retained)")
+    log_event(f"📝 Updated strategy {id}")
 
     return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
 
+
 # -----------------------------------------------------------
-# DELETE STRATEGY
+# ENABLE / DISABLE STRATEGY
+# -----------------------------------------------------------
+@router.post("/toggle_enabled/{id}")
+def toggle_enabled(id: int):
+    db = get_db()
+
+    row = db.execute("""
+        SELECT enabled, archived FROM strategies WHERE id=?
+    """, (id,)).fetchone()
+
+    if not row:
+        db.close()
+        return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
+
+    if row["archived"]:
+        db.close()
+        return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
+
+    new_state = 0 if row["enabled"] else 1
+
+    db.execute("""
+        UPDATE strategies SET enabled=? WHERE id=?
+    """, (new_state, id))
+
+    db.commit()
+    db.close()
+
+    log_event(f"🔁 Strategy {id} {'enabled' if new_state else 'disabled'}")
+
+    return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
+
+
+# -----------------------------------------------------------
+# ARCHIVE STRATEGY  (SOFT DELETE)
+# -----------------------------------------------------------
+@router.post("/archive/{id}")
+def archive_strategy(id: int):
+    db = get_db()
+
+    db.execute("""
+        UPDATE strategies
+        SET archived=1, enabled=0
+        WHERE id=?
+    """, (id,))
+
+    db.commit()
+    db.close()
+
+    log_event(f"📦 Archived strategy {id}")
+
+    return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
+
+
+# -----------------------------------------------------------
+# UNARCHIVE STRATEGY
+# -----------------------------------------------------------
+@router.post("/unarchive/{id}")
+def unarchive_strategy(id: int):
+    db = get_db()
+
+    db.execute("""
+        UPDATE strategies
+        SET archived=0, enabled=0
+        WHERE id=?
+    """, (id,))
+
+    db.commit()
+    db.close()
+
+    log_event(f"📦 Unarchived strategy {id}")
+
+    return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
+
+
+# -----------------------------------------------------------
+# LEGACY DELETE → NOW ARCHIVE INSTEAD
 # -----------------------------------------------------------
 @router.post("/delete/{id}")
 def delete_strategy(id: int):
     db = get_db()
-    db.execute("DELETE FROM strategies WHERE id=?", (id,))
+
+    db.execute("""
+        UPDATE strategies
+        SET archived=1, enabled=0
+        WHERE id=?
+    """, (id,))
+
     db.commit()
     db.close()
 
-    log_event(f"🗑 Deleted strategy {id}")
+    log_event(f"📦 Legacy /delete → archived strategy {id}")
 
     return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
 
@@ -222,11 +322,6 @@ def delete_strategy(id: int):
 # -----------------------------------------------------------
 @router.get("/api/strategy/{symbol}/{timeframe}/{exchange}/trades")
 def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
-    """
-    Returns last 10 trades for the strategy,
-    INCLUDING dynamic formatted price_str.
-    """
-
     from formatting import format_price_dynamic, format_amount_dynamic
     from utils import to_decimal
 
@@ -252,14 +347,14 @@ def api_strategy_trades(symbol: str, timeframe: str, exchange: str):
     for r in rows:
         price_dec = to_decimal(r["price"])
         price_str = format_price_dynamic(price_dec)
-        amount_str  = format_amount_dynamic(r["amount"])
+        amount_str = format_amount_dynamic(r["amount"])
 
         output.append({
             "timestamp": r["timestamp"],
             "symbol": r["symbol"],
             "side": r["side"],
             "price": float(r["price"]),
-            "price_str": price_str,          # NEW
+            "price_str": price_str,
             "amount": float(r["amount"]),
             "amount_str": amount_str,
             "strategy_id": r["strategy_id"],

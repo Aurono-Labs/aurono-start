@@ -286,10 +286,11 @@ class TraderEngine:
           - 1h @ xx:01 UTC
           - 4h @ 00:03, 04:03, 08:03, 12:03, 16:03, 20:03 UTC
           - 1d @ 00:05 UTC
+          - 1w @ 00:008 UTC on every Monday
         """
         log_event(
             f"Aurono Trader started in LIVE mode on {self.exchange.name} "
-            "(UTC scheduler: 1h@xx:01, 4h@xx:03 (0/4/8/12/16/20), 1d@00:05)."
+            "(UTC scheduler: 1h@xx:01, 4h@xx:03 (0/4/8/12/16/20), 1d@00:05), 1w@00:08 on Mondays."
         )
 
         def utcnow_floor_sec():

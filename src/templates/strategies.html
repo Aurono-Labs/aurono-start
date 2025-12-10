@@ -72,22 +72,16 @@
     .card-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
     .card-sub { font-size: 13px; color: var(--aurono-muted); margin-bottom: 14px; }
 
-    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-
     th {
       text-align: left; padding: 8px;
-      text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px;
-      color: var(--aurono-muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      font-size: 11px; color: var(--aurono-muted);
       border-bottom: 1px solid var(--aurono-border);
     }
-
     td {
-      padding: 8px;
-      border-bottom: 1px solid var(--aurono-border);
+      padding: 8px; border-bottom: 1px solid var(--aurono-border);
     }
-    tr:last-child td { border-bottom: none; }
 
     .btn {
       padding: 6px 12px;
@@ -98,33 +92,20 @@
       font-size: 12px; cursor: pointer; transition: .15s ease;
     }
     .btn:hover { background: rgba(255,255,255,0.08); }
-
-    .btn-primary {
-      border-color: rgba(250,204,21,0.9);
-      color: var(--aurono-gold-soft);
-      background: rgba(250,204,21,0.15);
-    }
-
-    .btn-danger {
-      border-color: rgba(239,68,68,0.8);
-      color: #fecaca;
-      background: rgba(127,29,29,0.4);
-    }
-
+    .btn-primary { border-color: rgba(250,204,21,0.9); color: var(--aurono-gold-soft); background: rgba(250,204,21,0.15); }
+    .btn-danger { border-color: rgba(239,68,68,0.8); color: #fecaca; background: rgba(127,29,29,0.4); }
     .btn-small { padding: 4px 8px; font-size: 11px; }
 
-    .field { display: flex; flex-direction: column; margin-bottom: 12px; }
-    .field label { font-size: 12px; color: var(--aurono-muted); margin-bottom: 4px; }
-
-    .field input, .field select {
-      padding: 8px; border-radius: 10px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--aurono-border);
-      color: var(--aurono-text);
-      font-size: 14px; outline: none;
-    }
-
     .edit-row { display: none; background: rgba(255,255,255,0.04); }
+
+    /* New badges */
+    .badge {
+      display:inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size:10px; letter-spacing:0.04em; text-transform:uppercase;
+    }
+    .badge-active { background:rgba(34,197,94,0.15); color:#86efac; border:1px solid #22c55e55; }
+    .badge-disabled { background:rgba(148,163,184,0.15); color:#cbd5e1; border:1px solid #94a3b855; }
+    .badge-archived { background:rgba(250,204,21,0.15); color:#facc15; border:1px solid #facc1555; }
   </style>
 
   <script>
@@ -151,6 +132,7 @@
       }
     }
   </script>
+
 </head>
 
 <body>
@@ -167,235 +149,259 @@
   </div>
 
   <h1>Strategies</h1>
-  <div class="subtitle">Configure and manage automated trading strategies.</div>
+  <div class="subtitle">Exchange, symbol and timeframe are fixed once a strategy is created.</div>
 
   <div class="grid-main">
 
     <!-- CREATE STRATEGY -->
     <div class="card">
-      <div class="card-title">Create New Strategy</div>
-      <div class="card-sub">Select exchange, symbol, timeframe and thresholds.</div>
+        <div class="card-title">Create New Strategy</div>
+        <div class="card-sub">Select exchange, symbol, timeframe and thresholds.</div>
 
-      <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
-        <div class="field">
-          <label>Exchange</label>
-          <select name="exchange" id="exchange-select" required>
-            <option value="">Choose…</option>
+        <form method="post" action="/strategies/add" onsubmit="validateForm(event)">
+          <div class="field">
+            <label>Exchange</label>
+            <select name="exchange" id="exchange-select" required>
+              <option value="">Choose…</option>
 
-            {% if "kraken" in enabled_exchanges %}
-              <option value="kraken">Kraken</option>
-            {% endif %}
+              {% if "kraken" in enabled_exchanges %}
+                <option value="kraken">Kraken</option>
+              {% endif %}
 
-            {% if "bitvavo" in enabled_exchanges %}
-              <option value="bitvavo">Bitvavo</option>
-            {% endif %}
+              {% if "bitvavo" in enabled_exchanges %}
+                <option value="bitvavo">Bitvavo</option>
+              {% endif %}
 
-            {% if "coinbase" in enabled_exchanges %}
-              <option value="coinbase">Coinbase</option>
-            {% endif %}
-          </select>
-        </div>
+              {% if "coinbase" in enabled_exchanges %}
+                <option value="coinbase">Coinbase</option>
+              {% endif %}
+            </select>
+          </div>
 
+          <div class="field">
+            <label>Symbol</label>
+            <select id="symbol" name="symbol" required>
+              {% for sym in symbols %}
+              <option value="{{ sym }}">{{ sym[:-3] }}/EUR</option>
+              {% endfor %}
+            </select>
+          </div>
 
-        <div class="field">
-          <label>Symbol</label>
-          <select id="symbol" name="symbol" required>
-            {% for sym in symbols %}
-            <option value="{{ sym }}">{{ sym[:-3] }}/EUR</option>
-            {% endfor %}
-          </select>
-        </div>
+          <script>
+          document.getElementById("exchange-select").addEventListener("change", function () {
+              const exchange = this.value;
+              fetch(`/strategies/symbols/${exchange}`)
+                .then(r => r.json())
+                .then(symbols => {
+                    const sel = document.getElementById("symbol");
+                    sel.innerHTML = "";
+                    symbols.forEach(sym => {
+                        const opt = document.createElement("option");
+                        opt.value = sym;
+                        opt.textContent = sym.slice(0, -3) + "/EUR";
+                        sel.appendChild(opt);
+                    });
+                });
+          });
+          </script>
 
-        <script>
-        document.getElementById("exchangeSelect").addEventListener("change", function () {
-            const exchange = this.value;
-            fetch(`/strategies/symbols/${exchange}`)
-              .then(r => r.json())
-              .then(symbols => {
-                  const sel = document.getElementById("symbol");
-                  sel.innerHTML = "";
-                  symbols.forEach(sym => {
-                      const opt = document.createElement("option");
-                      opt.value = sym;
-                      opt.textContent = sym.slice(0, -3) + "/EUR";
-                      sel.appendChild(opt);
-                  });
-              });
-        });
-        </script>
+          <div class="field">
+            <label>Timeframe</label>
+            <select id="timeframe" name="timeframe">
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+              <option value="1d">1d</option>
+              <option value="1w">1w</option>
+            </select>
+          </div>
 
-        <div class="field">
-          <label>Timeframe</label>
-          <select id="timeframe" name="timeframe">
-            <option value="1h">1h</option>
-            <option value="4h">4h</option>
-            <option value="1d">1d</option>
-            <option value="1w">1w</option>
-          </select>
-        </div>
+          <div class="field"><label>Drop %</label>
+            <input type="number" id="drop_pct" name="drop_pct" min="0" value="2.5" step="any" required>
+          </div>
 
-        <div class="field"><label>Drop %</label>
-          <input type="number" id="drop_pct" name="drop_pct" min="0" value="2.5" step="any" required>
-        </div>
+          <div class="field"><label>Rise %</label>
+            <input type="number" id="rise_pct" name="rise_pct" min="0" value="2.1" step="any" required>
+          </div>
 
-        <div class="field"><label>Rise %</label>
-          <input type="number" id="rise_pct" name="rise_pct" min="0" value="2.1" step="any" required>
-        </div>
+          <div class="field"><label>Buy amount (€)</label>
+            <input type="number" id="buy_amount_eur" name="buy_amount_eur" value="20" step="any" required>
+          </div>
 
-        <div class="field"><label>Buy amount (€)</label>
-          <input type="number" id="buy_amount_eur" name="buy_amount_eur" value="20" step="any" required>
-        </div>
+          <div class="field"><label>Sell amount (€)</label>
+            <input type="number" id="sell_amount_eur" name="sell_amount_eur" value="20" step="any" required>
+          </div>
 
-        <div class="field"><label>Sell amount (€)</label>
-          <input type="number" id="sell_amount_eur" name="sell_amount_eur" value="20" step="any" required>
-        </div>
+          <div class="field"><label>Allocated capital (€)</label>
+            <input type="number" id="allocated_eur" name="allocated_eur" value="100" step="any" required>
+          </div>
 
-        <div class="field"><label>Allocated capital (€)</label>
-          <input type="number" id="allocated_eur" name="allocated_eur" value="100" step="any" required>
-        </div>
+          <input type="hidden" name="return_to" value="strategies">
 
-        <input type="hidden" name="return_to" value="strategies">
+          <div class="field">
+            <label>
+              <input type="checkbox" id="import_existing" name="import_existing" onchange="toggleExistingFields()">
+              I already own this coin
+            </label>
+          </div>
 
-        <div class="field">
-          <label>
-            <input type="checkbox" id="import_existing" name="import_existing" onchange="toggleExistingFields()">
-            I already own this coin
-          </label>
-        </div>
+          <div id="existing_fields" style="display:none;">
+            <div class="grid-main" style="grid-template-columns: 1fr 1fr;">
+              <div class="field">
+                <label>Current amount</label>
+                <input type="number" id="existing_amount" name="existing_amount" step="any">
+              </div>
 
-        <div id="existing_fields" style="display:none;">
-          <div class="grid-main" style="grid-template-columns: 1fr 1fr;">
-            <div class="field">
-              <label>Current amount</label>
-              <input type="number" id="existing_amount" name="existing_amount" step="any">
-            </div>
-
-            <div class="field">
-              <label>Average cost (€)</label>
-              <input type="number" id="existing_acb" name="existing_acb" step="any">
+              <div class="field">
+                <label>Average cost (€)</label>
+                <input type="number" id="existing_acb" name="existing_acb" step="any">
+              </div>
             </div>
           </div>
-        </div>
 
-        <button class="btn btn-primary" type="submit" style="margin-top:12px;">Add Strategy</button>
-      </form>
-    </div>
-
-    <!-- EXISTING STRATEGIES -->
-    <div class="card" style="grid-column: 1 / -1;">
-      <div class="card-title">Existing Strategies</div>
-      <div class="card-sub">Edit thresholds and amounts. Exchange, symbol and timeframe are fixed once a strategy is created.</div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Strategy</th>
-              <th>Drop %</th>
-              <th>Rise %</th>
-              <th>Buy (€)</th>
-              <th>Sell (€)</th>
-              <th>Allocated (€)</th>
-              <th>Enabled</th>
-              <th></th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {% for s in strategies %}
-            <tr>
-              <td>{{ s.symbol[:-3] }}/EUR – {{ s.timeframe }} ({{ s.exchange }})</td>
-              <td>{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
-              <td>{{ "%.2f"|format(s.rise_trigger) }}</td>
-              <td>{{ "%.2f"|format(s.buy_amount_eur) }}</td>
-              <td>{{ "%.2f"|format(s.sell_amount_eur) }}</td>
-              <td>{{ "%.2f"|format(s.allocated_eur) }}</td>
-              <td>{% if s.enabled %}✅{% else %}❌{% endif %}</td>
-
-              <td>
-                <button class="btn btn-small" onclick="toggleEdit({{ s.id }})">Edit</button>
-              </td>
-            </tr>
-
-            <!-- EDIT ROW -->
-            <tr id="edit-{{ s.id }}" class="edit-row">
-              <td colspan="8">
-
-                <!-- UPDATE FORM -->
-                <form method="post" action="/strategies/update/{{ s.id }}" style="padding:12px;">
-
-                  <div class="grid-main" style="grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:16px;">
-                      
-                      <div class="field">
-                        <label>Strategy</label>
-                        <input type="text" value="{{ s.symbol[:-3] }}/EUR – {{ s.timeframe }} ({{ s.exchange }})"
-                               readonly style="opacity:0.6;">
-                      </div>
-
-                      <!-- Hidden fields preserve form structure; backend ignores them -->
-                      <input type="hidden" name="symbol" value="{{ s.symbol }}">
-                      <input type="hidden" name="timeframe" value="{{ s.timeframe }}">
-                      <input type="hidden" name="exchange" value="{{ s.exchange }}">
-
-                    <div class="field">
-                      <label>Drop %</label>
-                      <input type="number" name="drop_trigger" step="any" value="{{ abs(s.drop_trigger) }}">
-                    </div>
-
-                    <div class="field">
-                      <label>Rise %</label>
-                      <input type="number" name="rise_trigger" step="any" value="{{ s.rise_trigger }}">
-                    </div>
-
-                    <div class="field">
-                      <label>Buy (€)</label>
-                      <input type="number" name="buy_amount_eur" step="any" value="{{ s.buy_amount_eur }}">
-                    </div>
-
-                    <div class="field">
-                      <label>Sell (€)</label>
-                      <input type="number" name="sell_amount_eur" step="any" value="{{ s.sell_amount_eur }}">
-                    </div>
-
-                    <div class="field">
-                      <label>Allocated (€)</label>
-                      <input type="number" name="allocated_eur" step="any" value="{{ s.allocated_eur }}">
-                    </div>
-
-                    <div class="field">
-                      <label>
-                        <input type="checkbox" name="enabled" value="1" {% if s.enabled %}checked{% endif %}>
-                        Enabled
-                      </label>
-                    </div>
-
-                  </div>
-
-                  <!-- Save + Cancel -->
-                  <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
-                    <button class="btn btn-primary btn-small" type="submit">Save</button>
-                    <button class="btn btn-small" type="button" onclick="toggleEdit({{ s.id }})">Cancel</button>
-                  </div>
-
-                </form> <!-- END UPDATE FORM -->
-
-                <!-- DELETE FORM (OUTSIDE) -->
-                <form method="post" action="/strategies/delete/{{ s.id }}"
-                      style="display:inline-block; margin-top:10px;"
-                      onsubmit="return confirm('Delete strategy {{ s.symbol }} {{ s.timeframe }}?');">
-                  <button class="btn btn-small btn-danger" type="submit">Delete</button>
-                </form>
-
-              </td>
-            </tr>
-
-            {% endfor %}
-          </tbody>
-        </table>
+          <button class="btn btn-primary" type="submit" style="margin-top:12px;">Add Strategy</button>
+        </form>
       </div>
-    </div>
 
-  </div>
-</body>
-</html>
+      <!-- EXISTING STRATEGIES TABLE -->
+      <div class="card" style="grid-column: 1 / -1;">
+        <div class="card-title">Existing Strategies</div>
+        <div class="card-sub">Edit thresholds and capital. Enable/disable or archive strategies.</div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Strategy</th>
+                <th>Drop %</th>
+                <th>Rise %</th>
+                <th>Buy (€)</th>
+                <th>Sell (€)</th>
+                <th>Allocated (€)</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for s in strategies %}
+              <tr>
+                <td>{{ s.symbol[:-3] }}/EUR – {{ s.timeframe }} ({{ s.exchange }})</td>
+                <td>{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
+                <td>{{ "%.2f"|format(s.rise_trigger) }}</td>
+                <td>{{ "%.2f"|format(s.buy_amount_eur) }}</td>
+                <td>{{ "%.2f"|format(s.sell_amount_eur) }}</td>
+                <td>{{ "%.2f"|format(s.allocated_eur) }}</td>
+
+                <td>
+                  {% if s.archived %}
+                    <span class="badge badge-archived">Archived</span>
+                  {% elif s.enabled %}
+                    <span class="badge badge-active">Active</span>
+                  {% else %}
+                    <span class="badge badge-disabled">Disabled</span>
+                  {% endif %}
+                </td>
+
+                <td style="text-align:right; white-space:nowrap;">
+                  
+                  {% if not s.archived %}
+                    <button class="btn btn-small" onclick="toggleEdit({{ s.id }})">Edit</button>
+
+                    <form method="post" action="/strategies/toggle_enabled/{{ s.id }}" style="display:inline-block; margin-left:6px;">
+                      <button class="btn btn-small" type="submit">
+                        {% if s.enabled %}Disable{% else %}Enable{% endif %}
+                      </button>
+                    </form>
+
+                    <form method="post" action="/strategies/archive/{{ s.id }}"
+                          style="display:inline-block; margin-left:6px;"
+                          onsubmit="return confirm('Archive strategy {{ s.symbol }} {{ s.timeframe }}?');">
+                      <button class="btn btn-small btn-danger" type="submit">Archive</button>
+                    </form>
+
+                  {% else %}
+                    <form method="post" action="/strategies/unarchive/{{ s.id }}"
+                          style="display:inline-block;">
+                      <button class="btn btn-small" type="submit">Unarchive</button>
+                    </form>
+                  {% endif %}
+
+                </td>
+              </tr>
+
+              {% if not s.archived %}
+              <!-- EDIT ROW -->
+              <tr id="edit-{{ s.id }}" class="edit-row">
+                <td colspan="8">
+
+                  <!-- UPDATE FORM -->
+                  <form method="post" action="/strategies/update/{{ s.id }}" style="padding:12px;">
+
+                    <div class="grid-main" style="grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:16px;">
+                        
+                        <div class="field">
+                          <label>Strategy</label>
+                          <input type="text" value="{{ s.symbol[:-3] }}/EUR – {{ s.timeframe }} ({{ s.exchange }})"
+                                 readonly style="opacity:0.6;">
+                        </div>
+
+                        <!-- Hidden immutable fields -->
+                        <input type="hidden" name="symbol" value="{{ s.symbol }}">
+                        <input type="hidden" name="timeframe" value="{{ s.timeframe }}">
+                        <input type="hidden" name="exchange" value="{{ s.exchange }}">
+
+                        <div class="field">
+                          <label>Drop %</label>
+                          <input type="number" name="drop_trigger" step="any" value="{{ abs(s.drop_trigger) }}">
+                        </div>
+
+                        <div class="field">
+                          <label>Rise %</label>
+                          <input type="number" name="rise_trigger" step="any" value="{{ s.rise_trigger }}">
+                        </div>
+
+                        <div class="field">
+                          <label>Buy (€)</label>
+                          <input type="number" name="buy_amount_eur" step="any" value="{{ s.buy_amount_eur }}">
+                        </div>
+
+                        <div class="field">
+                          <label>Sell (€)</label>
+                          <input type="number" name="sell_amount_eur" step="any" value="{{ s.sell_amount_eur }}">
+                        </div>
+
+                        <div class="field">
+                          <label>Allocated (€)</label>
+                          <input type="number" name="allocated_eur" step="any" value="{{ s.allocated_eur }}">
+                        </div>
+
+                        <div class="field">
+                          <label>
+                            <input type="checkbox" name="enabled" value="1" {% if s.enabled %}checked{% endif %}>
+                            Enabled
+                          </label>
+                        </div>
+
+                    </div>
+
+                    <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+                      <button class="btn btn-primary btn-small" type="submit">Save</button>
+                      <button class="btn btn-small" type="button" onclick="toggleEdit({{ s.id }})">Cancel</button>
+                    </div>
+
+                  </form>
+
+                </td>
+              </tr>
+              {% endif %}
+
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </body>
+  </html>
 
