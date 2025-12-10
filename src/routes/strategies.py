@@ -156,16 +156,12 @@ def add_strategy(
     else:
         return RedirectResponse("/strategies", status_code=303)
 
-
 # -----------------------------------------------------------
-# UPDATE STRATEGY
+# UPDATE STRATEGY  (IMMUTABLE exchange, symbol, timeframe)
 # -----------------------------------------------------------
 @router.post("/update/{id}")
 def update_strategy(
     id: int,
-    symbol: str = Form(...),
-    timeframe: str = Form(...),
-    exchange: str = Form(...),
     drop_trigger: float = Form(...),
     rise_trigger: float = Form(...),
     buy_amount_eur: float = Form(...),
@@ -174,21 +170,22 @@ def update_strategy(
     enabled: str = Form("0")
 ):
 
-    exchange = exchange.lower()
     is_enabled = 1 if enabled == "1" else 0
 
     db = get_db()
+
+    # Immutable fields (symbol, timeframe, exchange) are not touched
+
     db.execute("""
         UPDATE strategies
-        SET symbol=?, timeframe=?, exchange=?,
-            drop_trigger=?, rise_trigger=?,
-            buy_amount_eur=?, sell_amount_eur=?,
-            allocated_eur=?, enabled=?
+        SET drop_trigger=?,
+            rise_trigger=?,
+            buy_amount_eur=?,
+            sell_amount_eur=?,
+            allocated_eur=?,
+            enabled=?
         WHERE id=?
     """, (
-        symbol,
-        timeframe,
-        exchange,
         -abs(drop_trigger),
         abs(rise_trigger),
         buy_amount_eur,
@@ -197,13 +194,13 @@ def update_strategy(
         is_enabled,
         id
     ))
+
     db.commit()
     db.close()
 
-    log_event(f"📝 Updated strategy {id}: exchange={exchange}")
+    log_event(f"📝 Updated strategy {id} (immutable fields retained)")
 
     return RedirectResponse("/strategies", status_code=HTTP_303_SEE_OTHER)
-
 
 # -----------------------------------------------------------
 # DELETE STRATEGY

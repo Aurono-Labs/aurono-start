@@ -284,7 +284,7 @@
     <!-- EXISTING STRATEGIES -->
     <div class="card" style="grid-column: 1 / -1;">
       <div class="card-title">Existing Strategies</div>
-      <div class="card-sub">Edit thresholds, amounts or exchange per strategy.</div>
+      <div class="card-sub">Edit thresholds and amounts. Exchange, symbol and timeframe are fixed once a strategy is created.</div>
 
       <div class="table-wrap">
         <table>
@@ -325,47 +325,17 @@
                 <form method="post" action="/strategies/update/{{ s.id }}" style="padding:12px;">
 
                   <div class="grid-main" style="grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:16px;">
+                      
+                      <div class="field">
+                        <label>Strategy</label>
+                        <input type="text" value="{{ s.symbol[:-3] }}/EUR – {{ s.timeframe }} ({{ s.exchange }})"
+                               readonly style="opacity:0.6;">
+                      </div>
 
-                    <div class="field">
-                      <label>Symbol</label>
-                      <select name="symbol">
-                        {% for sym in symbols %}
-                        <option value="{{ sym }}" {% if s.symbol == sym %}selected{% endif %}>
-                          {{ sym[:-3] }}/EUR
-                        </option>
-                        {% endfor %}
-                      </select>
-                    </div>
-
-                    <div class="field">
-                      <label>Timeframe</label>
-                      <select name="timeframe">
-                        <option value="1h" {% if s.timeframe=='1h' %}selected{% endif %}>1h</option>
-                        <option value="4h" {% if s.timeframe=='4h' %}selected{% endif %}>4h</option>
-                        <option value="1d" {% if s.timeframe=='1d' %}selected{% endif %}>1d</option>
-                        <option value="1w" {% if s.timeframe=='1w' %}selected{% endif %}>1w</option>
-                      </select>
-                    </div>
-
-                    <div class="field">
-                      <label>Exchange</label>
-                      <select name="exchange" required>
-
-                        {% if "kraken" in enabled_exchanges %}
-                          <option value="kraken" {% if s.exchange=='kraken' %}selected{% endif %}>Kraken</option>
-                        {% endif %}
-
-                        {% if "bitvavo" in enabled_exchanges %}
-                          <option value="bitvavo" {% if s.exchange=='bitvavo' %}selected{% endif %}>Bitvavo</option>
-                        {% endif %}
-
-                        {% if "coinbase" in enabled_exchanges %}
-                          <option value="coinbase" {% if s.exchange=='coinbase' %}selected{% endif %}>Coinbase</option>
-                        {% endif %}
-
-                      </select>
-                    </div>
-                    
+                      <!-- Hidden fields preserve form structure; backend ignores them -->
+                      <input type="hidden" name="symbol" value="{{ s.symbol }}">
+                      <input type="hidden" name="timeframe" value="{{ s.timeframe }}">
+                      <input type="hidden" name="exchange" value="{{ s.exchange }}">
 
                     <div class="field">
                       <label>Drop %</label>
