@@ -33,14 +33,27 @@ def load_strategies_from_db() -> List[sqlite3.Row]:
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         """
-        SELECT id, name, symbol, timeframe, exchange, allocated_eur
+        SELECT id, name, symbol, timeframe, exchange, allocated_eur, enabled, archived
         FROM strategies
-        WHERE enabled = 1
         """
     ).fetchall()
     conn.close()
     return rows
+    
+def classify_strategies(strategies):
+    active = []
+    disabled = []
+    archived = []
 
+    for s in strategies:
+        if s["archived"] == 1:
+            archived.append(s)
+        elif s["enabled"] == 1:
+            active.append(s)
+        else:
+            disabled.append(s)
+
+    return active, disabled, archived
 
 # ============================================================
 # Helpers: compute ACB, balance, value per strategy
@@ -220,7 +233,9 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
             s.name,
             s.symbol AS s_symbol,
             s.timeframe AS s_timeframe,
-            s.exchange AS s_exchange
+            s.exchange AS s_exchange,
+            s.enabled AS s_enabled,
+            s.archived AS s_archived
         FROM trades t
         LEFT JOIN strategies s ON t.strategy_id = s.id
         ORDER BY t.timestamp ASC
@@ -230,7 +245,7 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
 
     from collections import defaultdict
 
-    VALID_TF = {"1h", "4h", "1d"}
+    VALID_TF = {"1h", "4h", "1d", "1w"}
 
     filled = []
     inv_qty = defaultdict(lambda: Decimal("0"))
@@ -249,6 +264,13 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
         side = r["side"]
         price_dec = to_decimal(r["price"])
         amt_dec = to_decimal(r["amount"])
+        
+        status = (
+            "archived" if r["s_archived"] == 1 else
+            "disabled" if r["s_enabled"] == 0 else
+            "active"
+        )
+
 
         pnl_dec = Decimal("0")
 
@@ -292,6 +314,7 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
 
                 "timestamp": ts_iso,
                 "strategy_label": label,
+                "strategy_status": status,
                 "pnl": float(round(pnl_dec, 2)),
             })
 
@@ -303,8 +326,9 @@ def _get_filled_trades_since(since: datetime) -> List[Dict[str, Any]]:
 # ============================================================
 
 def _compute_portfolio_block(strategies: List[sqlite3.Row]) -> Dict[str, float]:
-    snapshots = [compute_strategy_stats(s) for s in strategies]
-
+    active, disabled, archived = classify_strategies(strategies)
+    snapshots = [compute_strategy_stats(s) for s in active]
+	
     crypto_value = sum(s["value"] for s in snapshots)
     cash_value = sum(s["allocated_eur"] for s in snapshots)
     total_value = crypto_value + cash_value
@@ -354,7 +378,7 @@ def get_liquidity_summary_for_report():
         allocated_rows = cur.execute("""
             SELECT exchange, SUM(allocated_eur) AS allocated
             FROM strategies
-            WHERE enabled = 1
+            WHERE enabled = 1 AND archived = 0
             GROUP BY exchange
         """).fetchall()
 
@@ -506,7 +530,9 @@ def generate_weekly_report() -> Dict[str, Any]:
             t.amount,
             t.timestamp,
             s.timeframe AS s_timeframe,
-            s.exchange  AS s_exchange
+            s.exchange  AS s_exchange,
+            s.enabled AS s_enabled,
+            s.archived AS s_archived
         FROM trades t
         LEFT JOIN strategies s ON t.strategy_id = s.id
         ORDER BY t.timestamp ASC
@@ -673,6 +699,12 @@ def generate_weekly_report() -> Dict[str, Any]:
             "exchange": s["exchange"],
             "timeframe": s["timeframe"],
             "label": s["name"] or f"{s['symbol']} {s['timeframe']} ({s['exchange']})",
+            
+            "status": (
+                "archived" if s["archived"] == 1 else
+                "disabled" if s["enabled"] == 0 else
+                "active"
+            ),
 
             "buys": len(buys_s),
             "sells": len(sells_s),
@@ -742,7 +774,9 @@ def generate_weekly_report() -> Dict[str, Any]:
     # EXPOSURE BLOCK
     # --------------------------------------------------------
 
-    snapshots = [compute_strategy_stats(s) for s in strategies]
+    active, disabled, archived = classify_strategies(strategies)
+    snapshots = [compute_strategy_stats(s) for s in active]
+
 
     total_value = sum(s["value"] + s["allocated_eur"] for s in snapshots)
     crypto_value = sum(s["value"] for s in snapshots)

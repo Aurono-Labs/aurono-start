@@ -147,14 +147,21 @@
       <tbody>
       {% for s in report.strategies %}
         <tr>
-          <td>{{ s.label }}</td>
+          <td>
+              {{ s.label }}
+              {% if s.status == "disabled" %}
+                  (disabled)
+              {% elif s.status == "archived" %}
+                  (archived)
+              {% endif %}
+          </td>
           <td class="numeric">{{ s.buys }}</td>
           <td class="numeric">{{ s.sells }}</td>
           <td>
             {% if s.sells == 0 %}
               -
             {% else %}
-              €{{ "%.2f"|format(s.weekly_pnl) }}
+              €{{ "%.2f"|format(s.weekly_pnl_eur) }}
             {% endif %}
           </td>
           <td class="numeric">{{ s.avg_buy_price_str }}</td>

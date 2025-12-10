@@ -135,9 +135,7 @@
     <table>
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th>Exchange</th>
-          <th>TF</th>
+          <th>Strategy</th>
           <th>Side</th>
           <th class="numeric">Amount</th>
           <th class="numeric">Price</th>
@@ -149,9 +147,14 @@
 
       {% for o in report.filled_orders %}
         <tr>
-          <td>{{ o.symbol }}</td>
-          <td>{{ o.exchange }}</td>
-          <td>{{ o.timeframe }}</td>
+          <td>
+              {{ o.strategy_label }}
+              {% if o.strategy_status == "disabled" %}
+                  (disabled)
+              {% elif o.strategy_status == "archived" %}
+                  (archived)
+              {% endif %}
+          </td>
           <td>{{ o.side }}</td>
 
           <td class="numeric">{{ o.amount_str }}</td>
