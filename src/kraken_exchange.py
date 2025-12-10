@@ -133,7 +133,7 @@ class KrakenExchange(ExchangeBase):
 
     def get_ohlc(self, symbol: str, timeframe: str) -> List[list]:
         pair = symbol.upper()
-        interval_map = {"1h": 60, "4h": 240, "6h": 360, "1d": 1440, "1w": 10080}
+        interval_map = {"1h": 60, "4h": 240, "1d": 1440, "1w": 10080}
         interval = interval_map.get(timeframe, 1440)
 
         try:

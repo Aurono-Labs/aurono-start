@@ -239,7 +239,7 @@ class BitvavoExchange(ExchangeBase):
         Data is returned newest → oldest, so we reverse it to oldest → newest.
         """
         market = self._market(symbol)
-        interval_map = {"1h": "1h", "4h": "4h", "6h": "6h", "1d": "1d", "1w": "1w"}
+        interval_map = {"1h": "1h", "4h": "4h", "1d": "1d", "1w": "1w"}
         interval = interval_map.get(timeframe, "1d")
 
         end_timestamp = int(time.time() * 1000)

@@ -330,15 +330,28 @@ class TraderEngine:
             if now >= candidate:
                 candidate += timedelta(days=1)
             return candidate
+            
+        def next_weekly(now):
+            # Weekly run at Monday 00:08 UTC
+            # (week starts Monday according to ISO)
+            next_monday = now + timedelta(days=(7 - now.weekday()) % 7)
+            candidate = datetime(
+                next_monday.year, next_monday.month, next_monday.day,
+                0, 8, 0, tzinfo=timezone.utc
+            )
+            if candidate <= now:
+                candidate += timedelta(days=7)
+            return candidate
 
-        last_fired = {"1h": None, "4h": None, "1d": None}
+        last_fired = {"1h": None, "4h": None, "1d": None, "1w": None}
 
         while True:
             now = utcnow_floor_sec()
             n1h = next_hourly(now)
             n4h = next_4h(now)
             n1d = next_daily(now)
-            next_evt = min(n1h, n4h, n1d)
+            n1w = next_weekly(now)
+            next_evt = min(n1h, n4h, n1d, n1w)
 
             sleep_s = max(1, int((next_evt - now).total_seconds()))
             log_event(
@@ -374,6 +387,14 @@ class TraderEngine:
                     last_fired["1d"] = key_time
                     log_event("⏱ Trigger 1D batch")
                     self.run_strategy_once("1d")
+                    
+            # ----- 1W @ Monday 00:08 UTC -----
+            if fired_now.minute == 8 and fired_now.hour == 0 and fired_now.weekday() == 0:
+                key_time = fired_now.replace(minute=8, second=0)
+                if last_fired["1w"] != key_time:
+                    last_fired["1w"] = key_time
+                    log_event("⏱ Trigger 1W batch")
+                    self.run_strategy_once("1w")
 
     def run_dev(self):
         cfg = self.cfg()
