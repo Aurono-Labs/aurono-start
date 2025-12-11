@@ -1,13 +1,19 @@
 [Unit]
 Description=Aurono Dashboard Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-User=pi
-WorkingDirectory=/home/pi/aurono-poc
-ExecStart=/home/pi/aurono-poc/venv/bin/python3 /home/pi/aurono-poc/src/dashboard.py
+User=__AURONO_USER__
+Group=__AURONO_GROUP__
+WorkingDirectory=__AURONO_APP_ROOT__
+ExecStart=__AURONO_APP_ROOT__/venv/bin/python __AURONO_APP_ROOT__/src/dashboard.py
 Restart=always
 RestartSec=10
+
+# Makes stdout/stderr visible in `journalctl -u aurono-dashboard`
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
