@@ -18,3 +18,4 @@ data/trades_backup_*.db
 **/.DS_Store
 *checkpoint.py
 
+.ipynb_checkpoints/
