@@ -1,18 +1,14 @@
 [Unit]
-Description=Aurono Trader Service
-After=network-online.target
-Wants=network-online.target
+Description=Aurono Trader Engine
+After=network.target
 
 [Service]
 User=__AURONO_USER__
 Group=__AURONO_GROUP__
 WorkingDirectory=__AURONO_APP_ROOT__
 ExecStart=__AURONO_APP_ROOT__/venv/bin/python __AURONO_APP_ROOT__/src/trader_main.py
-Restart=always
-RestartSec=10
-
-StandardOutput=journal
-StandardError=journal
+Restart=no
 
 [Install]
 WantedBy=multi-user.target
+
