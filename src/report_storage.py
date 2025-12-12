@@ -3,12 +3,11 @@
 import os
 import json
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
 
 from fastapi.templating import Jinja2Templates
 from utils import root_path
-
 
 # ============================================================
 # Directory structure for persistent reports
@@ -111,3 +110,25 @@ def render_daily_report_html(report):
 def render_weekly_report_html(report):
     return templates.get_template("weekly_report.html").render(report=report)
 
+# ============================================================
+# Cleanup old reports of more than 90 days old
+# ============================================================
+
+def cleanup_old_reports(base_dir: str, days: int = 90):
+    """
+    Remove report files older than <days> from the given directory.
+    """
+    cutoff = datetime.now() - timedelta(days=days)
+    base = Path(base_dir)
+
+    if not base.exists():
+        return
+
+    for f in base.iterdir():
+        if f.is_file():
+            ts = datetime.fromtimestamp(f.stat().st_mtime)
+            if ts < cutoff:
+                try:
+                    f.unlink()
+                except Exception:
+                    pass

@@ -107,10 +107,13 @@ APP_ROOT="$(pwd)"
 RUN_USER="$(id -un)"
 RUN_GROUP="$(id -gn)"
 
-# ------------------------------------------------------------
-# Ensure base folder structure
-# ------------------------------------------------------------
-mkdir -p data data/reports/daily data/reports/weekly data/reports/html systemd
+# Ensure required directories exist
+mkdir -p config
+mkdir -p data
+mkdir -p data/reports/daily
+mkdir -p data/reports/weekly
+mkdir -p data/reports/html
+mkdir -p systemd
 
 # ------------------------------------------------------------
 # Setup config.yaml default if missing
@@ -178,8 +181,8 @@ echo ""
 echo "⏰ Installing cron jobs for reports..."
 
 CRON_PY="${APP_ROOT}/venv/bin/python"
-CRON_DAILY="0 7 * * * $CRON_PY $APP_ROOT/src/run_daily_report.py"
-CRON_WEEKLY="0 9 * * SUN $CRON_PY $APP_ROOT/src/run_weekly_report.py"
+CRON_DAILY="0 7 * * * cd $APP_ROOT && ./venv/bin/python src/run_daily_report.py"
+CRON_WEEKLY="0 9 * * SUN cd $APP_ROOT && ./venv/bin/python src/run_weekly_report.py"
 
 if [[ "$OS" == "Linux" ]]; then
   CRONTAB=$(crontab -l 2>/dev/null || true)
