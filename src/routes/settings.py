@@ -14,12 +14,14 @@ from utils import (
     delete_credentials_by_id,
     current_config,
     get_config_path,
+    get_credentials_for_exchange,
 )
 
 from kraken_exchange import KrakenExchange
     # noqa: needed for credentials test
 from bitvavo_exchange import BitvavoExchange
     # noqa: needed for credentials test
+from coinbase_exchange import CoinbaseExchange
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -158,25 +160,35 @@ def test_coinbase_credentials(request: Request):
         return show_settings(request, "❌ Coinbase credentials corrupted.", "error")
 
     try:
-        # Construct CoinbaseExchange using beta JSON layout
-        client = CoinbaseExchange(
-            api_key=None,
-            api_secret=None,
-            auth_method=data.get("auth_method"),
-            api_key_name=data.get("jwt_key_name"),
-            ec_private_key_pem=data.get("jwt_private_key"),
-        )
+        auth_method = data.get("auth_method", "hmac")
 
-        # Try simple request
-        bal = client.get_available_eur()
-        tick = client.get_ticker("BTCEUR")
-
-        if tick > 0:
-            return show_settings(request, "✅ Coinbase credentials valid.", "success")
+        if auth_method == "jwt":
+            client = CoinbaseExchange(
+                auth_method="jwt",
+                api_key_name=data.get("jwt_key_name"),
+                ec_private_key_pem=data.get("jwt_private_key"),
+            )
         else:
-            return show_settings(request, "⚠️ Coinbase test returned no price.", "error")
+            client = CoinbaseExchange(
+                api_key=data.get("hmac_key"),
+                api_secret=data.get("hmac_secret"),
+                auth_method="hmac",
+            )
+
+        eur = client.get_available_eur()
+        price = client.get_ticker("BTCEUR")
+
+        if price > 0:
+            return show_settings(
+                request,
+                f"✅ Coinbase credentials valid. EUR available: €{eur:.2f}",
+                "success",
+            )
+
+        return show_settings(request, "⚠️ Coinbase test returned no price.", "error")
 
     except Exception as e:
+        log_event(f"❌ Coinbase test failed: {e}")
         return show_settings(request, f"❌ Coinbase test failed: {e}", "error")
 
 # --------------------------------------------------------------

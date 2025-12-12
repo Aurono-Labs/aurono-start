@@ -322,9 +322,11 @@
 
                   <td>
                     <div class="actions">
+                      {% if c.exchange != "coinbase" %}
                       <form action="/settings/test/{{ c.id }}" method="post">
                         <button class="btn btn-small" type="submit">Test</button>
                       </form>
+                      {% endif %}
 
                       <button class="btn btn-small" onclick="toggleEdit({{ c.id }})">Edit</button>
 
