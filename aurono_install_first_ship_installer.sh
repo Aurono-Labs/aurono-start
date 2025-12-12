@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================
 #  Aurono Start – Universal Installer (macOS + Linux/RPi)
-#  Version: v4.10 — dynamic systemd placeholders + OTA + cron
+#  Version: v4.15 — dynamic systemd + OTA + cron + venv refresh
 #  Author: Aurono Labs
 # ============================================================
 
 set -euo pipefail
 
-INSTALL_VERSION="4.10"
-REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v4.10.zip"
+INSTALL_VERSION="4.15"
+REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v4.15.zip"
 APP_DIR="aurono-poc"
 
 echo ""
@@ -17,6 +17,12 @@ echo "     Aurono Start — Universal Installer       "
 echo "                v${INSTALL_VERSION}           "
 echo "=============================================="
 echo ""
+
+# ------------------------------------------------------------
+# Determine runtime user/group early
+# ------------------------------------------------------------
+RUN_USER="$(id -un)"
+RUN_GROUP="$(id -gn)"
 
 # ------------------------------------------------------------
 # Detect OS
@@ -31,16 +37,14 @@ echo "Detected OS: $OS"
 echo ""
 
 # ------------------------------------------------------------
-# Stop any running processes first
+# Stop any running Aurono processes
 # ------------------------------------------------------------
 echo "🛑 Stopping any running Aurono processes..."
 
-if [[ "$OS" == "Linux" ]]; then
-  if grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-    sudo systemctl stop aurono-dashboard.service 2>/dev/null || true
-    sudo systemctl stop aurono-trader.service 2>/dev/null || true
-    sudo systemctl stop aurono-update.service 2>/dev/null || true
-  fi
+if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
+  sudo systemctl stop aurono-dashboard.service 2>/dev/null || true
+  sudo systemctl stop aurono-trader.service 2>/dev/null || true
+  sudo systemctl stop aurono-update.service 2>/dev/null || true
 fi
 
 pkill -f "dashboard.py" 2>/dev/null || true
@@ -52,7 +56,7 @@ echo ""
 # ------------------------------------------------------------
 # Backup existing installation
 # ------------------------------------------------------------
-if [ -d "$APP_DIR" ]; then
+if [[ -d "$APP_DIR" ]]; then
   TS=$(date +"%Y%m%d_%H%M%S")
   BACKUP_DIR="${APP_DIR}_backup_${TS}"
   echo "📁 Existing installation detected → creating backup: $BACKUP_DIR"
@@ -73,7 +77,7 @@ rm aurono-latest.zip
 
 EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "aurono-start-*" | head -n 1)
 if [[ -z "$EXTRACTED_DIR" ]]; then
-  echo "❌ ERROR: GitHub zip extracted incorrectly"
+  echo "❌ ERROR: Extracted folder not found"
   exit 1
 fi
 
@@ -86,16 +90,20 @@ echo ""
 echo "♻️ Updating Aurono code (config + data preserved)..."
 
 mkdir -p "$APP_DIR"
+# Make sure we own the existing tree (in case old files are root-owned)
+sudo chown -R "$RUN_USER":"$RUN_GROUP" "$APP_DIR" 2>/dev/null || true
 
 TMP_NEW="${APP_DIR}.new"
 rm -rf "$TMP_NEW"
 mv "$EXTRACTED_DIR" "$TMP_NEW"
 
+# Remove everything except config + data
 find "$APP_DIR" -mindepth 1 -maxdepth 1 \
   ! -name "config" \
   ! -name "data" \
   -exec rm -rf {} +
 
+# Copy new code (excluding config/data)
 rsync -a --exclude=config --exclude=data "$TMP_NEW"/ "$APP_DIR"/
 rm -rf "$TMP_NEW"
 
@@ -104,16 +112,16 @@ echo ""
 
 cd "$APP_DIR"
 APP_ROOT="$(pwd)"
-RUN_USER="$(id -un)"
-RUN_GROUP="$(id -gn)"
 
-# Ensure required directories exist
+# ------------------------------------------------------------
+# Prepare directory structure
+# ------------------------------------------------------------
 mkdir -p config
 mkdir -p data
+mkdir -p systemd
 mkdir -p data/reports/daily
 mkdir -p data/reports/weekly
 mkdir -p data/reports/html
-mkdir -p systemd
 
 # ------------------------------------------------------------
 # Setup config.yaml default if missing
@@ -149,13 +157,16 @@ fi
 # ------------------------------------------------------------
 echo ""
 echo "🐍 Preparing Python environment..."
+
 if [[ ! -d "venv" ]]; then
   python3 -m venv venv
 fi
 
+# Use the project venv explicitly
 source venv/bin/activate
 pip install --upgrade pip >/dev/null
 pip install -r requirements.txt >/dev/null
+
 echo "✅ Python ready"
 echo ""
 
@@ -170,112 +181,176 @@ else
 fi
 
 # ------------------------------------------------------------
-# Write VERSION
+# Write VERSION file
 # ------------------------------------------------------------
 echo "${INSTALL_VERSION}" > VERSION
 
 # ------------------------------------------------------------
-# Install Cron for reports
+# Install cron jobs for reports
 # ------------------------------------------------------------
-echo ""
 echo "⏰ Installing cron jobs for reports..."
 
-CRON_PY="${APP_ROOT}/venv/bin/python"
 CRON_DAILY="0 7 * * * cd $APP_ROOT && ./venv/bin/python src/run_daily_report.py"
 CRON_WEEKLY="0 9 * * SUN cd $APP_ROOT && ./venv/bin/python src/run_weekly_report.py"
 
 if [[ "$OS" == "Linux" ]]; then
-  CRONTAB=$(crontab -l 2>/dev/null || true)
-  CLEAN=$(printf "%s\n" "$CRONTAB" | grep -v run_daily_report.py | grep -v run_weekly_report.py || true)
+  EXISTING=$(crontab -l 2>/dev/null || true)
+  CLEAN=$(echo "$EXISTING" | grep -v run_daily_report.py | grep -v run_weekly_report.py || true)
 
-  {
-    printf "%s\n" "$CLEAN"
-    printf "%s\n" "$CRON_DAILY"
-    printf "%s\n" "$CRON_WEEKLY"
-  } | crontab -
-
+  printf "%s\n%s\n%s\n" "$CLEAN" "$CRON_DAILY" "$CRON_WEEKLY" | crontab -
   echo "✅ Cron installed"
   echo ""
 fi
 
 # ------------------------------------------------------------
-# Install systemd services using placeholder templates
+# Install systemd services (Raspberry Pi)
 # ------------------------------------------------------------
 if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-
   echo "🐧 Installing systemd services..."
 
-  SERVICE_DASH_SRC="systemd/aurono-dashboard.service"
-  SERVICE_TRADER_SRC="systemd/aurono-trader.service"
+  sudo cp systemd/aurono-dashboard.service /etc/systemd/system/aurono-dashboard.service
+  sudo cp systemd/aurono-trader.service   /etc/systemd/system/aurono-trader.service
 
-  sudo cp "$SERVICE_DASH_SRC" /etc/systemd/system/aurono-dashboard.service
-  sudo cp "$SERVICE_TRADER_SRC" /etc/systemd/system/aurono-trader.service
-
-  sudo sed -i "s|__AURONO_USER__|$RUN_USER|g" /etc/systemd/system/aurono-dashboard.service
+  sudo sed -i "s|__AURONO_USER__|$RUN_USER|g"   /etc/systemd/system/aurono-dashboard.service
   sudo sed -i "s|__AURONO_GROUP__|$RUN_GROUP|g" /etc/systemd/system/aurono-dashboard.service
   sudo sed -i "s|__AURONO_APP_ROOT__|$APP_ROOT|g" /etc/systemd/system/aurono-dashboard.service
 
-  sudo sed -i "s|__AURONO_USER__|$RUN_USER|g" /etc/systemd/system/aurono-trader.service
+  sudo sed -i "s|__AURONO_USER__|$RUN_USER|g"   /etc/systemd/system/aurono-trader.service
   sudo sed -i "s|__AURONO_GROUP__|$RUN_GROUP|g" /etc/systemd/system/aurono-trader.service
   sudo sed -i "s|__AURONO_APP_ROOT__|$APP_ROOT|g" /etc/systemd/system/aurono-trader.service
 
   sudo systemctl daemon-reload
-  sudo systemctl enable aurono-dashboard.service
-  sudo systemctl enable aurono-trader.service
-  sudo systemctl restart aurono-dashboard.service
-  sudo systemctl restart aurono-trader.service
+  sudo systemctl enable aurono-dashboard.service aurono-trader.service
+  sudo systemctl restart aurono-dashboard.service aurono-trader.service
 
   echo "▶️ Dashboard + Trader started"
   echo ""
 fi
 
 # ------------------------------------------------------------
-# Install OTA updater using dynamic paths
+# Install OTA updater (with venv refresh)
 # ------------------------------------------------------------
 if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-
   echo "📡 Installing OTA updater..."
 
   sudo mkdir -p /usr/local/bin
 
-  sudo bash -c "cat > /usr/local/bin/aurono-update" << EOF
+  sudo bash -c "cat > /usr/local/bin/aurono-update" << 'EOF'
 #!/usr/bin/env python3
-# OTA updater (unchanged logic, dynamic INSTALL_DIR)
-import os, re, shutil, subprocess, urllib.request, json, zipfile
+import os, re, shutil, subprocess, urllib.request, json, zipfile, pwd, grp
 
 OWNER = "Aurono-Labs"
 REPO = "aurono-start"
 API_URL = f"https://api.github.com/repos/{OWNER}/{REPO}/releases/latest"
 
-INSTALL_DIR = "${APP_ROOT}"
+INSTALL_DIR = os.path.expanduser("~/aurono-poc")
 PARENT_DIR = os.path.dirname(INSTALL_DIR)
 WORK_DIR = os.path.join(PARENT_DIR, "aurono-update")
 VERSION_FILE = os.path.join(INSTALL_DIR, "VERSION")
 BACKUP_DIR = os.path.join(PARENT_DIR, "aurono-poc_backup")
-
 SERVICES = ["aurono-dashboard", "aurono-trader"]
 
 def log(msg): print(f"[aurono-update] {msg}")
 
-def parse_version(v):
-    parts = re.split(r"[.]", v.lstrip("vV").strip())
-    return tuple(int(p) if p.isdigit() else 0 for p in parts)
+def parse_version(v: str):
+    parts = v.strip().lstrip("vV").split(".")
+    out = []
+    for p in parts:
+        try:
+            out.append(int(p))
+        except ValueError:
+            out.append(0)
+    return tuple(out)
 
-def newer(remote, local): return parse_version(remote) > parse_version(local)
+def newer(remote: str, local: str) -> bool:
+    return parse_version(remote) > parse_version(local)
 
-def read_local_version():
+def read_local_version() -> str:
     if not os.path.exists(VERSION_FILE):
         return "0.0"
     return open(VERSION_FILE).read().strip()
 
 def get_latest_release():
     req = urllib.request.Request(API_URL, headers={"User-Agent": "aurono-update"})
-    data = urllib.request.urlopen(req).read()
+    data = urllib.request.urlopen(req, timeout=30).read()
     rel = json.loads(data.decode())
     if rel.get("draft") or rel.get("prerelease"):
-        raise RuntimeError("Release not final")
-    tag = rel.get("tag_name", "").lstrip("v")
-    return tag, rel
+        raise RuntimeError("Latest release is draft/prerelease")
+    tag = rel.get("tag_name", "").strip()
+    version = tag.lstrip("vV")
+    return version, rel
+
+def find_asset(rel: dict, version: str):
+    pattern = re.compile(rf"{REPO}-v?{re.escape(version)}\.zip$")
+    for asset in rel.get("assets", []):
+        name = asset.get("name", "")
+        if pattern.match(name):
+            return asset["browser_download_url"], name
+    raise RuntimeError(f"No matching asset found for version {version}")
+
+def download_asset(url: str, target: str):
+    req = urllib.request.Request(url, headers={"User-Agent": "aurono-update"})
+    with urllib.request.urlopen(req, timeout=120) as r, open(target, "wb") as f:
+        shutil.copyfileobj(r, f)
+
+def extract_zip(zip_path: str, target_dir: str) -> str:
+    if os.path.exists(target_dir):
+        shutil.rmtree(target_dir)
+    os.makedirs(target_dir, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(target_dir)
+        names = z.namelist()
+    top = {n.split("/")[0] for n in names if "/" in n}
+    if len(top) == 1:
+        return os.path.join(target_dir, next(iter(top)))
+    return target_dir
+
+def copy_persistent(old_dir: str, new_dir: str):
+    for folder in ("config", "data"):
+        src = os.path.join(old_dir, folder)
+        dst = os.path.join(new_dir, folder)
+        if os.path.exists(src):
+            log(f"Copying persistent directory: {folder}/")
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+
+def fix_ownership(path: str):
+    user = os.environ.get("SUDO_USER") or os.environ.get("USER") or "aurono"
+    pw = pwd.getpwnam(user)
+    uid = pw.pw_uid
+    try:
+        gid = grp.getgrnam(user).gr_gid
+    except Exception:
+        gid = pw.pw_gid
+
+    for root, dirs, files in os.walk(path):
+        os.chown(root, uid, gid)
+        for d in dirs:
+            os.chown(os.path.join(root, d), uid, gid)
+        for f in files:
+            os.chown(os.path.join(root, f), uid, gid)
+    log(f"Ownership corrected for {path} (user={user}, uid={uid}, gid={gid})")
+
+def refresh_venv():
+    venv_dir = os.path.join(INSTALL_DIR, "venv")
+    venv_python = os.path.join(venv_dir, "bin", "python")
+
+    if not os.path.exists(venv_python):
+        log("venv not found → creating virtualenv...")
+        subprocess.run(["python3", "-m", "venv", venv_dir], check=True)
+
+    req = os.path.join(INSTALL_DIR, "requirements.txt")
+    if os.path.exists(req):
+        log("Installing requirements into venv...")
+        subprocess.run([venv_python, "-m", "pip", "install", "--upgrade", "pip"], check=False)
+        subprocess.run([venv_python, "-m", "pip", "install", "-r", req], check=True)
+
+def stop_services():
+    for s in SERVICES:
+        subprocess.run(["sudo", "systemctl", "stop", f"{s}.service"], check=False)
+
+def start_services():
+    for s in SERVICES:
+        subprocess.run(["sudo", "systemctl", "start", f"{s}.service"], check=False)
 
 def main():
     local = read_local_version()
@@ -284,14 +359,63 @@ def main():
     try:
         latest, meta = get_latest_release()
     except Exception as e:
-        log(f"GitHub error: {e}"); return
+        log(f"GitHub error: {e}")
+        return
 
     log(f"Remote: {latest}")
 
     if not newer(latest, local):
-        log("No update needed."); return
+        log("No update needed.")
+        return
 
-    # updater logic unchanged — omitted for brevity
+    try:
+        url, name = find_asset(meta, latest)
+    except Exception as e:
+        log(f"Asset error: {e}")
+        return
+
+    log(f"Found asset: {name}")
+
+    os.makedirs(WORK_DIR, exist_ok=True)
+    zip_path = os.path.join(WORK_DIR, "aurono-update.zip")
+
+    try:
+        log("Downloading asset...")
+        download_asset(url, zip_path)
+    except Exception as e:
+        log(f"Download failed: {e}")
+        return
+
+    try:
+        new_root = extract_zip(zip_path, os.path.join(WORK_DIR, "new"))
+        log(f"Extracted to: {new_root}")
+    except Exception as e:
+        log(f"Extraction error: {e}")
+        return
+
+    copy_persistent(INSTALL_DIR, new_root)
+
+    try:
+        stop_services()
+
+        if os.path.exists(BACKUP_DIR):
+            shutil.rmtree(BACKUP_DIR)
+        if os.path.exists(INSTALL_DIR):
+            shutil.move(INSTALL_DIR, BACKUP_DIR)
+
+        shutil.move(new_root, INSTALL_DIR)
+        fix_ownership(INSTALL_DIR)
+        refresh_venv()
+
+        with open(os.path.join(INSTALL_DIR, "VERSION"), "w") as f:
+            f.write(latest)
+
+        start_services()
+        log(f"Update successful → v{latest}")
+
+    except Exception as e:
+        log(f"Swap failed: {e}")
+        log(f"Backup preserved at {BACKUP_DIR}")
 
 if __name__ == "__main__":
     main()
@@ -299,14 +423,15 @@ EOF
 
   sudo chmod +x /usr/local/bin/aurono-update
 
+  # systemd timer + service for OTA
   sudo bash -c "cat > /etc/systemd/system/aurono-update.timer" << 'EOF'
 [Unit]
 Description=Aurono OTA Update Check
 
 [Timer]
 OnCalendar=daily
-Persistent=true
 RandomizedDelaySec=1800
+Persistent=true
 
 [Install]
 WantedBy=timers.target
