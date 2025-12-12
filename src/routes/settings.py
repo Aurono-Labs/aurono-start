@@ -4,6 +4,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_303_SEE_OTHER
 import yaml
+import json
 
 from utils import (
     log_event,
