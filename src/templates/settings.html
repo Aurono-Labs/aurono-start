@@ -327,8 +327,10 @@
                         <button class="btn btn-small" type="submit">Test</button>
                       </form>
                       {% endif %}
-
+                      
+                      {% if c.exchange != "coinbase" %}
                       <button class="btn btn-small" onclick="toggleEdit({{ c.id }})">Edit</button>
+                      {% endif %}
 
                       <form action="/settings/delete/{{ c.id }}" method="post"
                             onsubmit="return confirm('Delete credentials for {{ c.exchange }}?');">
