@@ -436,7 +436,7 @@ EOF
 Description=Aurono OTA Update Check
 
 [Timer]
-OnCalendar=daily
+OnCalendar=*-*-* 00:15:00
 RandomizedDelaySec=1800
 Persistent=true
 
