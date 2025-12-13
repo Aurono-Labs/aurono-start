@@ -1,8 +1,8 @@
 # Aurono — Local Crypto Trading Automation
 Aurono Start / PoC (macOS · Linux · Raspberry Pi)
-Author: Aurono Labs — Eppo Edzes
+Author: Aurono Labs
 
-Aurono is a local, plug-and-play crypto trading automation system that runs entirely on your own machine (Mac or Raspberry Pi).
+Aurono is a local, plug-and-play trading automation system that runs entirely on your own machine (Mac or Raspberry Pi).
 It connects to trusted exchanges (Bitvavo, Kraken, Coinbase), executes rule-based strategies, and reports transparently — while funds always remain on your exchange.
 
 Instant kill switch: unplug the device.
@@ -37,16 +37,15 @@ Instant kill switch: unplug the device.
 - Sell on rises (profit-taking)
 - Timeframes: 1h, 4h, 1d, 1w
 - Multiple strategies per symbol
-- Independent budgets per strategy
+- Independent capital allocations (budget) per strategy
 
 ### Dashboard
 - Local web UI
-- Runs on http://localhost:8000
-- Portfolio overview
-- Strategy management
-- Exchange balances
-- Trade history and activity log
-- Secure settings panel
+- Runs on http://aurono-beta.local:8000 (Pi) or http://localhost:8000 (Mac)
+- Total Porfolio Overview and Liquidity Summery: exchange balances vs allocated capital
+- Strategies Overview: price, balance, value in EUR, current capital allocation per strategy
+- Recent trades per strategy
+- Last trades
 
 ### Reporting
 - Daily HTML report
@@ -60,16 +59,17 @@ Instant kill switch: unplug the device.
 
 aurono-poc/
 ├── src/
-│   ├── trading_engine/
-│   ├── exchanges/
-│   ├── dashboard/
-│   ├── reports/
-│   └── utils/
+│   ├── main functionality python files (trading engine, exchange classes, report builders)
+│   ├── routes/
+│   ├── schemas/
+│   ├── templates/
+│   └── tools/
 ├── config/
 │   └── config.yaml
 ├── data/
+│   ├── reports/
 │   ├── trades.db
-│   └── logs/
+│   └── 'aurono_log.txt'
 ├── systemd/
 │   ├── aurono-trader.service
 │   ├── aurono-dashboard.service
@@ -77,6 +77,7 @@ aurono-poc/
 ├── aurono-update/
 │   └── updater.sh
 └── aurono_install_first_ship_installer.sh
+└── VERSION
 
 --------------------------------------------------
 
@@ -92,7 +93,7 @@ Installer behavior:
 - Installs system dependencies
 - Creates Python virtual environment
 - Installs Python requirements
-- Preserves config, database and logs
+- Preserves config, database and logs or creates new config, database and log file when clean install
 - Optionally installs systemd services
 - Enables OTA auto-update mechanism
 
@@ -100,11 +101,11 @@ Installer behavior:
 
 ### FIRST RUN
 
-Open the dashboard:
+Open the dashboard on Mac:
 http://localhost:8000
 
 On Raspberry Pi:
-http://aurono-pi.local:8000
+http://aurono-beta.local:8000
 
 Setup steps:
 1. Add exchange API keys
@@ -158,8 +159,8 @@ journalctl -u aurono-dashboard -f
 - Services restarted automatically
 
 ## Manual update:
-cd aurono-update
-bash updater.sh
+sudo systemctl start aurono-update.service
+
 
 --------------------------------------------------
 
