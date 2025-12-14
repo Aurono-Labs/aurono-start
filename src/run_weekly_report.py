@@ -1,3 +1,5 @@
+# run_weekly_report.py
+
 from report_builder import generate_weekly_report
 from report_storage import (
     save_weekly_report_json,
@@ -5,20 +7,38 @@ from report_storage import (
     render_weekly_report_html,
     cleanup_old_reports,
 )
-from emailer import send_email
+from report_dispatcher import dispatch_report
 
-# Generate the report
+
+# --------------------------------------------------
+# Generate report
+# --------------------------------------------------
 report = generate_weekly_report()
-date = report["week_end"]
+week_end = report["week_end"]
 
-# Save JSON output
+
+# --------------------------------------------------
+# Persist report
+# --------------------------------------------------
 save_weekly_report_json(report)
 
-# Render and save HTML
 html = render_weekly_report_html(report)
-save_html_report(html, f"weekly_{date}")
+save_html_report(html, f"weekly_{week_end}")
 
-# Cleanup old weekly JSON and HTML reports (retention 90 days)
+
+# --------------------------------------------------
+# Dispatch report (email, future channels)
+# --------------------------------------------------
+dispatch_report(
+    report_type="weekly",
+    subject=f"Aurono Weekly Report — week ending {week_end}",
+    html_body=html,
+)
+
+
+# --------------------------------------------------
+# Cleanup old weekly JSON and HTML reports
+# --------------------------------------------------
 cleanup_old_reports("data/reports/weekly", 90)
 cleanup_old_reports("data/reports/html", 90)
 
