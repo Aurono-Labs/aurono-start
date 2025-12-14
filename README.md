@@ -69,7 +69,7 @@ aurono-poc/
 ├── data/
 │   ├── reports/
 │   ├── trades.db
-│   └── 'aurono_log.txt'
+│   └── aurono_log.txt
 ├── systemd/
 │   ├── aurono-trader.service
 │   ├── aurono-dashboard.service

@@ -281,8 +281,8 @@ def test_generate_weekly_report(request: Request):
 # --------------------------------------------------------------
 @router.post("/test-email")
 def test_email(request: Request):
-    import asyncio
     from emailer import send_email
+    from utils import current_config
 
     email_cfg = current_config().get("email", {})
 
@@ -295,19 +295,16 @@ def test_email(request: Request):
         <p>This is a test email confirming your SMTP settings.</p>
         """
 
-        asyncio.run(
-            send_email(
-                subject="Aurono Test Email",
-                html_body=html,
-                attachments=[],
-            )
+        send_email(
+            subject="Aurono Test Email",
+            html_body=html,
+            attachments=[],
         )
 
         return show_settings(request, "Test email sent successfully.", "success")
 
     except Exception as e:
         return show_settings(request, f"Email failed: {e}", "error")
-
 
 # --------------------------------------------------------------
 # Mask Key
