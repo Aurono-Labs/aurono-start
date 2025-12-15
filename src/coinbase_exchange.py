@@ -406,25 +406,12 @@ class CoinbaseExchange(ExchangeBase):
         }
         
     def _build_jwt_headers(self, method: str, path: str) -> Dict[str, str]:
-        """
-        Coinbase CDP JWT authentication (ES256, P-256)
-
-        Spec:
-        - iss = "cdp"
-        - sub = API key name
-        - nbf = now
-        - exp = now + 120s
-        - uri = "{METHOD} api.coinbase.com{FULL_PATH}"
-        - header includes kid + nonce
-        """
         if not self.jwt_key_name or not self.jwt_private_pem:
             raise RuntimeError("Coinbase JWT credentials not configured")
 
         now = int(time.time())
 
-        # Coinbase requires the FULL brokerage path including host (no scheme)
-        full_path = f"{COINBASE_API_PREFIX}{path}"
-        uri = f"{method.upper()} api.coinbase.com{full_path}"
+        uri = f"{method.upper()} api.coinbase.com{path}"
 
         payload = {
             "iss": "cdp",
@@ -453,7 +440,7 @@ class CoinbaseExchange(ExchangeBase):
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        
+
     def _private_request(
         self,
         method: str,
