@@ -6,17 +6,19 @@ import time
 import hmac
 import hashlib
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List
+from urllib.parse import urlencode
 
 import requests
-import sqlite3
+import jwt
+import secrets
+from cryptography.hazmat.primitives import serialization
 
 from utils import (
     log_event,
     current_config,
-    load_api_keys,
     to_decimal,
     get_db_path,
     get_credentials_for_exchange,
@@ -402,57 +404,74 @@ class CoinbaseExchange(ExchangeBase):
             "CB-ACCESS-TIMESTAMP": timestamp,
             "Content-Type": "application/json",
         }
-
+        
     def _build_jwt_headers(self, method: str, path: str) -> Dict[str, str]:
         """
-        CDP JWT authentication using EC private key (P-256), via Coinbase jwt_generator.
+        Coinbase CDP JWT authentication (ES256, P-256)
 
-        Requires:
-          self.jwt_key_name
-          self.jwt_private_pem
+        Spec:
+        - iss = "cdp"
+        - sub = API key name
+        - nbf = now
+        - exp = now + 120s
+        - uri = "{METHOD} api.coinbase.com{FULL_PATH}"
+        - header includes kid + nonce
         """
         if not self.jwt_key_name or not self.jwt_private_pem:
             raise RuntimeError("Coinbase JWT credentials not configured")
 
-        try:
-            from coinbase import jwt_generator
-        except ImportError:
-            raise RuntimeError(
-                "coinbase.jwt_generator not available. "
-                "Install official Coinbase Python SDK or switch auth_method to 'hmac'."
-            )
+        now = int(time.time())
 
-        request_path = COINBASE_API_PREFIX + path  # e.g. "/orders"
-        jwt_uri = jwt_generator.format_jwt_uri(method.upper(), request_path)
-        jwt_token = jwt_generator.build_rest_jwt(
-            jwt_uri,
-            self.jwt_key_name,
-            self.jwt_private_pem,
+        # Coinbase requires the FULL brokerage path including host (no scheme)
+        full_path = f"{COINBASE_API_PREFIX}{path}"
+        uri = f"{method.upper()} api.coinbase.com{full_path}"
+
+        payload = {
+            "iss": "cdp",
+            "sub": self.jwt_key_name,
+            "nbf": now,
+            "exp": now + 120,
+            "uri": uri,
+        }
+
+        private_key = serialization.load_pem_private_key(
+            self.jwt_private_pem.encode("utf-8"),
+            password=None,
+        )
+
+        token = jwt.encode(
+            payload,
+            private_key,
+            algorithm="ES256",
+            headers={
+                "kid": self.jwt_key_name,
+                "nonce": secrets.token_hex(),
+            },
         )
 
         return {
-            "Authorization": f"Bearer {jwt_token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-
+        
     def _private_request(
         self,
         method: str,
         path: str,
         body: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Unified private request using either HMAC or JWT auth.
-        path: without API prefix, e.g. "/orders"
-        """
-        if body is None:
-            body_json = ""
-        else:
-            body_json = json.dumps(body, separators=(",", ":"))
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+
+        body_json = "" if body is None else json.dumps(body, separators=(",", ":"))
+
+        # ---- JWT uri must include query string ----
+        path_for_jwt = path
+        if params:
+            path_for_jwt = f"{path}?{urlencode(params)}"
 
         try:
             if self.auth_method == "jwt":
-                headers = self._build_jwt_headers(method, path)
+                headers = self._build_jwt_headers(method, path_for_jwt)
             else:
                 headers = self._build_hmac_headers(method, path, body_json)
         except Exception as e:
@@ -462,28 +481,31 @@ class CoinbaseExchange(ExchangeBase):
         url = COINBASE_API_BASE + COINBASE_API_PREFIX + path
 
         try:
-            if method.upper() == "POST":
+            if method.upper() == "GET":
+                resp = requests.get(url, headers=headers, params=params, timeout=15)
+            elif method.upper() == "POST":
                 resp = requests.post(url, data=body_json, headers=headers, timeout=15)
             elif method.upper() == "DELETE":
                 resp = requests.delete(url, data=body_json, headers=headers, timeout=15)
             else:
-                # For GET with query params in path, keep body empty
-                resp = requests.get(url, headers=headers, timeout=15)
+                raise ValueError(f"Unsupported HTTP method: {method}")
 
             try:
                 result = resp.json()
             except ValueError:
                 raw = resp.text.strip()
-                log_event(f"⚠️ Coinbase private non-JSON response ({path}): {raw[:200]}...")
+                log_event(f"⚠️ Coinbase non-JSON response ({path}): {raw[:200]}...")
                 return {"error": "non-json-response", "raw": raw}
 
             if resp.status_code >= 400:
                 log_event(f"⚠️ Coinbase API error {resp.status_code} on {path}: {result}")
+
             return result
 
         except Exception as e:
             log_event(f"❌ Coinbase private request failed ({method} {path}): {e}")
             return {"error": str(e)}
+
 
     # ============================================================
     # ticker, OHLC (1h, 4h, 6h, 1d, 1w)
@@ -552,7 +574,8 @@ class CoinbaseExchange(ExchangeBase):
         result = self._private_request(
             method="GET",
             path=path,
-            body=None  # GET query params are inside the path
+            body=None,
+            params=params,
         )
 
         # result *may* look like:
