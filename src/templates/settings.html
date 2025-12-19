@@ -444,44 +444,24 @@
     <div class="card" style="margin-top: 20px;">
       <div class="card-title">Coinbase (Beta)</div>
       <div class="card-sub">
-        Hybrid authentication (HMAC or JWT).
+        Coinbase Advanced Trade authentication (JWT only, CDP Secret API Key).
         These credentials are stored separately from production exchanges.
       </div>
 
       <form action="/settings/coinbase/save" method="post">
 
-        <!-- AUTH METHOD SELECT -->
-        <div class="field">
-          <label>Authentication Method</label>
-          <select name="auth_method" required>
-            <option value="hmac">HMAC (Legacy)</option>
-            <option value="jwt">JWT (CDP Key - Recommended)</option>
-          </select>
-        </div>
-
-        <!-- HMAC CREDENTIALS -->
-        <div class="field">
-          <label>HMAC API Key</label>
-          <input type="text" name="hmac_key" placeholder="Only required for HMAC">
-        </div>
-
-        <div class="field">
-          <label>HMAC API Secret</label>
-          <input type="password" name="hmac_secret" placeholder="Only required for HMAC">
-        </div>
-
         <!-- JWT CREDENTIALS -->
         <div class="field">
           <label>JWT Key Name (organizations/...)</label>
-          <input type="text" name="jwt_key_name" placeholder="Only required for JWT">
+          <input type="text" name="jwt_key_name" required
+                 placeholder="organizations/{org_id}/apiKeys/{key_id}">
         </div>
 
         <div class="field">
           <label>JWT Private Key (PEM)</label>
-          <textarea name="jwt_private_key" rows="6"
-            style="width:100%; padding:8px; border-radius:10px; background:rgba(255,255,255,0.05);
-                   border:1px solid var(--aurono-border); color:var(--aurono-text); font-size:13px;"
-            placeholder="-----BEGIN EC PRIVATE KEY-----&#10;...&#10;-----END EC PRIVATE KEY-----">
+          <textarea name="jwt_private_key" rows="6" required
+                    style="..."
+                    placeholder="-----BEGIN EC PRIVATE KEY-----&#10;...&#10;-----END EC PRIVATE KEY-----">
           </textarea>
         </div>
 

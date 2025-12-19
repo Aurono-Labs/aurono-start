@@ -29,7 +29,6 @@ templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent.parent / "templates")
 )
 
-
 # --------------------------------------------------------------
 # Settings Page
 # --------------------------------------------------------------
@@ -104,52 +103,67 @@ def delete_credentials(cred_id: int):
     return RedirectResponse(url="/settings", status_code=HTTP_303_SEE_OTHER)
 
 # --------------------------------------------------------------
-# Save Coinbase (Beta) Credentials
+# Save Coinbase (Beta) Credentials  — JWT ONLY
 # --------------------------------------------------------------
 @router.post("/coinbase/save")
 def save_coinbase_credentials(
     request: Request,
-    auth_method: str = Form(...),
-    hmac_key: str = Form(""),
-    hmac_secret: str = Form(""),
-    jwt_key_name: str = Form(""),
-    jwt_private_key: str = Form(""),
+    jwt_key_name: str = Form(...),
+    jwt_private_key: str = Form(...),
 ):
     """
-    Stores all Coinbase credentials inside api_secret as a JSON object.
-    api_key is stored as a static marker "coinbase-beta" to distinguish it.
+    Stores Coinbase JWT credentials only (CDP Secret API Key).
     """
 
+    jwt_key_name = (jwt_key_name or "").strip()
+    jwt_private_key = (jwt_private_key or "").strip()
+
+    if not jwt_key_name or not jwt_private_key:
+        return RedirectResponse(
+            url="/settings?msg=Missing+JWT+credentials&message_type=error",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+
+    # Optional but recommended: validate PEM immediately so bad keys fail fast
+    try:
+        from cryptography.hazmat.primitives import serialization
+        serialization.load_pem_private_key(jwt_private_key.encode("utf-8"), password=None)
+    except Exception:
+        return RedirectResponse(
+            url="/settings?msg=Invalid+EC+private+key+(PEM)&message_type=error",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+
     payload = {
-        "auth_method": auth_method,
-        "hmac_key": hmac_key.strip(),
-        "hmac_secret": hmac_secret.strip(),
-        "jwt_key_name": jwt_key_name.strip(),
-        "jwt_private_key": jwt_private_key.strip(),
+        "auth_method": "jwt",
+        "jwt_key_name": jwt_key_name,
+        "jwt_private_key": jwt_private_key,
     }
 
     try:
         upsert_credentials(
             "coinbase",
-            "coinbase-beta",  # placeholder marker
+            "coinbase-jwt",  # static marker
             json.dumps(payload),
         )
-        log_event("🔐 Saved Coinbase beta credentials.")
-        return RedirectResponse(url="/settings?msg=Coinbase+saved&message_type=success",
-                               status_code=HTTP_303_SEE_OTHER)
-
-    except Exception as e:
+        log_event("🔐 Saved Coinbase JWT credentials.")
         return RedirectResponse(
-            url=f"/settings?msg=Coinbase+save+failed:+{e}&message_type=error",
-            status_code=HTTP_303_SEE_OTHER
+            url="/settings?msg=Coinbase+JWT+saved&message_type=success",
+            status_code=HTTP_303_SEE_OTHER,
+        )
+    except Exception as e:
+        log_event(f"❌ Coinbase JWT save failed: {e}")
+        return RedirectResponse(
+            url="/settings?msg=Coinbase+save+failed&message_type=error",
+            status_code=HTTP_303_SEE_OTHER,
         )
 
 # --------------------------------------------------------------
-# Test Coinbase (Beta) Credentials
+# Test Coinbase (Beta) Credentials — JWT ONLY
 # --------------------------------------------------------------
 @router.post("/coinbase/test")
 def test_coinbase_credentials(request: Request):
-    api_key, api_secret_json = get_credentials_for_exchange("coinbase")
+    _, api_secret_json = get_credentials_for_exchange("coinbase")
 
     if not api_secret_json:
         return show_settings(request, "❌ No Coinbase credentials saved.", "error")
@@ -159,37 +173,44 @@ def test_coinbase_credentials(request: Request):
     except Exception:
         return show_settings(request, "❌ Coinbase credentials corrupted.", "error")
 
-    try:
-        auth_method = data.get("auth_method", "hmac")
+    # Enforce JWT-only storage format
+    if data.get("auth_method") != "jwt":
+        return show_settings(
+            request,
+            "❌ Coinbase credentials are not JWT-based. Please re-save in the Coinbase section.",
+            "error",
+        )
 
-        if auth_method == "jwt":
-            client = CoinbaseExchange(
-                auth_method="jwt",
-                api_key_name=data.get("jwt_key_name"),
-                ec_private_key_pem=data.get("jwt_private_key"),
-            )
-        else:
-            client = CoinbaseExchange(
-                api_key=data.get("hmac_key"),
-                api_secret=data.get("hmac_secret"),
-                auth_method="hmac",
-            )
+    jwt_key_name = (data.get("jwt_key_name") or "").strip()
+    jwt_private_key = (data.get("jwt_private_key") or "").strip()
+
+    if not jwt_key_name or not jwt_private_key:
+        return show_settings(request, "❌ Coinbase JWT credentials incomplete.", "error")
+
+    try:
+        client = CoinbaseExchange(
+            api_key_name=jwt_key_name,
+            ec_private_key_pem=jwt_private_key,
+        )
 
         eur = client.get_available_eur()
+
+        # Optional extra sanity check: also fetch price
         price = client.get_ticker("BTCEUR")
 
-        if price > 0:
-            return show_settings(
-                request,
-                f"✅ Coinbase credentials valid. EUR available: €{eur:.2f}",
-                "success",
-            )
+        if price <= 0:
+            return show_settings(request, "⚠️ Coinbase test returned no price.", "error")
 
-        return show_settings(request, "⚠️ Coinbase test returned no price.", "error")
+        return show_settings(
+            request,
+            f"✅ Coinbase JWT valid. EUR available: €{eur:.2f}",
+            "success",
+        )
 
     except Exception as e:
-        log_event(f"❌ Coinbase test failed: {e}")
+        log_event(f"❌ Coinbase JWT test failed: {e}")
         return show_settings(request, f"❌ Coinbase test failed: {e}", "error")
+
 
 # --------------------------------------------------------------
 # Update Email Settings
