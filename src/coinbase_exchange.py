@@ -68,10 +68,45 @@ class CoinbaseExchange(ExchangeBase):
     def _product_id(self, symbol: str) -> str:
         s = symbol.replace("/", "").upper()
         return f"{s[:-3]}-EUR" if s.endswith("EUR") else s
+        
+    def _public_request(self, path: str, params: Optional[dict] = None) -> Any:
+        url = COINBASE_API_BASE + COINBASE_API_PREFIX + path
 
-    @staticmethod
-    def _to_iso8601(ts: int) -> str:
-        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if params:
+            url += "?" + urlencode(params, doseq=True)
+
+        resp = requests.get(url, timeout=15)
+
+        if resp.status_code >= 400:
+            log_event(f"⚠️ Coinbase PUBLIC HTTP {resp.status_code}: {resp.text}")
+            return {}
+
+        try:
+            return resp.json()
+        except Exception:
+            return {}
+            
+    def _aggregate_candles(self, candles: List[list], factor: int) -> List[list]:
+        """
+        Aggregate candles into higher timeframe.
+        factor = number of base candles to combine
+        """
+        out = []
+        for i in range(0, len(candles), factor):
+            chunk = candles[i:i + factor]
+            if len(chunk) < factor:
+                continue
+
+            ts = chunk[0][0]
+            open_ = chunk[0][1]
+            high = max(c[2] for c in chunk)
+            low = min(c[3] for c in chunk)
+            close = chunk[-1][4]
+            volume = sum(c[5] for c in chunk)
+
+            out.append([ts, open_, high, low, close, volume])
+
+        return out
 
     # ============================================================
     # Authentication
@@ -91,6 +126,9 @@ class CoinbaseExchange(ExchangeBase):
 
         # IMPORTANT: docs require host included in 'uri' claim
         uri = f"{method.upper()} api.coinbase.com{full_request_path}"
+        
+        # DEBUG: Print what we're signing
+        log_event(f"🔐 Coinbase JWT uri: {uri}")
 
         payload = {
             "sub": self.jwt_key_name,
@@ -137,10 +175,12 @@ class CoinbaseExchange(ExchangeBase):
         # Build full path including Coinbase prefix
         full_path = COINBASE_API_PREFIX + path  # e.g. /api/v3/brokerage/accounts
 
-        # Build query string deterministically (and include it in BOTH URL and JWT uri)
+        # Build query string deterministically with sorted keys (required for JWT)
         query = ""
         if params:
-            query = "?" + urlencode(params, doseq=True)
+            # Sort parameters alphabetically by key for consistent JWT signing
+            sorted_params = sorted(params.items())
+            query = "?" + urlencode(sorted_params, doseq=True)
         full_request_path = full_path + query
         
         try:
@@ -186,31 +226,61 @@ class CoinbaseExchange(ExchangeBase):
         pid = self._product_id(symbol)
         r = self._private_request("GET", f"/products/{pid}")
         return to_decimal(r.get("price", "0"))
-
+        
     def get_ohlc(self, symbol: str, timeframe: str, limit: int = 200) -> List[list]:
         pid = self._product_id(symbol)
-        tf_map = {
+
+        # --------------------------------------------------
+        # Synthetic timeframes (Coinbase does not support)
+        # --------------------------------------------------
+
+        if timeframe == "4h":
+            base = self.get_ohlc(symbol, "1h", limit * 4)
+            return self._aggregate_candles(base, 4)
+
+        if timeframe == "1w":
+            base = self.get_ohlc(symbol, "1d", limit * 7)
+            return self._aggregate_candles(base, 7)
+
+        # --------------------------------------------------
+        # Native Coinbase timeframes
+        # --------------------------------------------------
+
+        TF_SECONDS = {
+            "1m": 60,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
             "1h": 3600,
             "6h": 21600,
             "1d": 86400,
         }
-        gran = tf_map.get(timeframe, 3600)
 
-        now = int(time.time())
-        start = now - gran * limit
+        gran = TF_SECONDS.get(timeframe)
+        if not gran:
+            return []
 
-        r = self._private_request(
-            "GET",
-            f"/products/{pid}/candles",
-            params={
-                "start": self._to_iso8601(start),
-                "end": self._to_iso8601(now),
-                "granularity": gran,
-            },
-        )
+        end = int(time.time())
+        start = end - (limit * gran)
+
+        url = f"https://api.exchange.coinbase.com/products/{pid}/candles"
+        params = {
+            "start": datetime.utcfromtimestamp(start).isoformat(),
+            "end": datetime.utcfromtimestamp(end).isoformat(),
+            "granularity": gran,
+        }
+
+        resp = requests.get(url, params=params, timeout=15)
+        if resp.status_code != 200:
+            log_event(f"⚠️ Coinbase EXCHANGE candles HTTP {resp.status_code}: {resp.text}")
+            return []
+
+        data = resp.json()
 
         candles = []
-        for c in r.get("candles", []):
+        for c in data:
+            # Coinbase Exchange format:
+            # [ time, low, high, open, close, volume ]
             candles.append([
                 int(c[0]) * 1000,
                 float(c[3]),
@@ -219,6 +289,7 @@ class CoinbaseExchange(ExchangeBase):
                 float(c[4]),
                 float(c[5]),
             ])
+
         return sorted(candles, key=lambda x: x[0])
 
     def get_available_eur(self) -> float:
@@ -261,4 +332,3 @@ class CoinbaseExchange(ExchangeBase):
             conn.close()
 
         return res
-
