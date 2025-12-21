@@ -32,6 +32,9 @@ COINBASE_API_PREFIX = "/api/v3/brokerage"
 
 class CoinbaseExchange(ExchangeBase):
     name = "coinbase"
+    # Coinbase: keep candle requests minimal & deterministic
+    COINBASE_REQUIRED_CANDLES = 3
+
 
     _product_tick_cache: Dict[str, Dict[str, Decimal]] = {}
     
@@ -235,16 +238,26 @@ class CoinbaseExchange(ExchangeBase):
         # --------------------------------------------------
 
         if timeframe == "4h":
-            base = self.get_ohlc(symbol, "1h", limit * 4)
+            base = self.get_ohlc(
+                symbol,
+                "1h",
+                self.COINBASE_REQUIRED_CANDLES * 4,   # 12
+            )
             return self._aggregate_candles(base, 4)
 
         if timeframe == "1w":
-            base = self.get_ohlc(symbol, "1d", limit * 7)
+            base = self.get_ohlc(
+                symbol,
+                "1d",
+                self.COINBASE_REQUIRED_CANDLES * 7,   # 21
+            )
             return self._aggregate_candles(base, 7)
 
         # --------------------------------------------------
         # Native Coinbase timeframes
         # --------------------------------------------------
+
+        limit = min(limit, self.COINBASE_REQUIRED_CANDLES)
 
         TF_SECONDS = {
             "1m": 60,
@@ -279,8 +292,6 @@ class CoinbaseExchange(ExchangeBase):
 
         candles = []
         for c in data:
-            # Coinbase Exchange format:
-            # [ time, low, high, open, close, volume ]
             candles.append([
                 int(c[0]) * 1000,
                 float(c[3]),
