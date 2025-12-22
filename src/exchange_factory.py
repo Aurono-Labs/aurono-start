@@ -35,7 +35,6 @@ def get_exchange(name: str):
                 log_event("⚠️ Coinbase requested but no credentials found. Disabled.")
                 return None
 
-            log_event("ℹ️ CoinbaseExchange loaded successfully.")
             return CoinbaseExchange()
 
         except Exception as e:

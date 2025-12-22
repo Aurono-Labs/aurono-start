@@ -61,9 +61,6 @@ class CoinbaseExchange(ExchangeBase):
             self.jwt_key_name = cfg["jwt_key_name"]
             self.jwt_private_pem = cfg["jwt_private_key"]
 
-        log_event("ℹ️ CoinbaseExchange initialized (JWT)")
-
-
     # ============================================================
     # Helpers
     # ============================================================
@@ -129,9 +126,6 @@ class CoinbaseExchange(ExchangeBase):
 
         # IMPORTANT: docs require host included in 'uri' claim
         uri = f"{method.upper()} api.coinbase.com{full_request_path}"
-        
-        # DEBUG: Print what we're signing
-        log_event(f"🔐 Coinbase JWT uri: {uri}")
 
         payload = {
             "sub": self.jwt_key_name,
@@ -236,28 +230,17 @@ class CoinbaseExchange(ExchangeBase):
         # --------------------------------------------------
         # Synthetic timeframes (Coinbase does not support)
         # --------------------------------------------------
-
         if timeframe == "4h":
-            base = self.get_ohlc(
-                symbol,
-                "1h",
-                self.COINBASE_REQUIRED_CANDLES * 4,   # 12
-            )
+            base = self.get_ohlc(symbol, "1h", self.COINBASE_REQUIRED_CANDLES * 4)
             return self._aggregate_candles(base, 4)
 
         if timeframe == "1w":
-            base = self.get_ohlc(
-                symbol,
-                "1d",
-                self.COINBASE_REQUIRED_CANDLES * 7,   # 21
-            )
+            base = self.get_ohlc(symbol, "1d", self.COINBASE_REQUIRED_CANDLES * 7)
             return self._aggregate_candles(base, 7)
 
         # --------------------------------------------------
         # Native Coinbase timeframes
         # --------------------------------------------------
-
-        limit = min(limit, self.COINBASE_REQUIRED_CANDLES)
 
         TF_SECONDS = {
             "1m": 60,
@@ -273,8 +256,12 @@ class CoinbaseExchange(ExchangeBase):
         if not gran:
             return []
 
+        # Request a bit more than we need because Coinbase may omit the forming candle
+        request_candles = max(self.COINBASE_REQUIRED_CANDLES + 2, limit)
+        request_candles = min(request_candles, 300)  # Coinbase Exchange API practical cap
+
         end = int(time.time())
-        start = end - (limit * gran)
+        start = end - (request_candles * gran)
 
         url = f"https://api.exchange.coinbase.com/products/{pid}/candles"
         params = {
@@ -293,16 +280,24 @@ class CoinbaseExchange(ExchangeBase):
         candles = []
         for c in data:
             candles.append([
-                int(c[0]) * 1000,
-                float(c[3]),
-                float(c[2]),
-                float(c[1]),
-                float(c[4]),
-                float(c[5]),
+                int(c[0]) * 1000,   # time
+                float(c[3]),        # open
+                float(c[2]),        # high
+                float(c[1]),        # low
+                float(c[4]),        # close
+                float(c[5]),        # volume
             ])
 
-        return sorted(candles, key=lambda x: x[0])
+        candles = sorted(candles, key=lambda x: x[0])
 
+        # Keep only what the strategy engine expects (minimal deterministic window)
+        if len(candles) < self.COINBASE_REQUIRED_CANDLES:
+            log_event(f"⚠️ Not enough OHLC for {symbol} ({timeframe}) on coinbase → skip.")
+            return []
+
+        return candles[-self.COINBASE_REQUIRED_CANDLES:]
+
+ 
     def get_available_eur(self) -> float:
         r = self._private_request("GET", "/accounts")
         for a in r.get("accounts", []):
