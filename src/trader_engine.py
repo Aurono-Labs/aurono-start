@@ -236,8 +236,9 @@ class TraderEngine:
                         f"rise +{pct_change:.2f}% ≥ {rise_trigger}%, but below ACB €{acb:.2f}"
                     )
                     continue
-                if balance <= to_decimal("0.00005"):
-                    log_event(f"❌ No SELL: balance {balance:.6f} {symbol} too low.")
+                notional_eur = balance * close_price
+                if notional_eur < to_decimal("6.00"):
+                    log_event(f"❌ No SELL: balance {balance:.6f} and therefore notional value of €{notional_eur:.2f} for {symbol} too low.")
                     continue
 
                 fee = exchange.fee_rate

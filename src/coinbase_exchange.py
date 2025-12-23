@@ -86,27 +86,39 @@ class CoinbaseExchange(ExchangeBase):
         except Exception:
             return {}
             
-    def _aggregate_candles(self, candles: List[list], factor: int) -> List[list]:
+    def _last_closed_index(self, candles: List[list], tf_seconds: int) -> int:
         """
-        Aggregate candles into higher timeframe.
-        factor = number of base candles to combine
+        Returns index of last fully closed candle.
         """
-        out = []
-        for i in range(0, len(candles), factor):
-            chunk = candles[i:i + factor]
-            if len(chunk) < factor:
-                continue
+        now_ms = int(time.time() * 1000)
 
-            ts = chunk[0][0]
-            open_ = chunk[0][1]
-            high = max(c[2] for c in chunk)
-            low = min(c[3] for c in chunk)
-            close = chunk[-1][4]
-            volume = sum(c[5] for c in chunk)
+        for i in range(len(candles) - 1, -1, -1):
+            candle_close = candles[i][0] + tf_seconds * 1000
+            if candle_close <= now_ms:
+                return i
 
-            out.append([ts, open_, high, low, close, volume])
+        return -1
+        
+    def _aggregate_from_anchor(self, candles: List[list], anchor_idx: int, count: int) -> Optional[list]:
+        """
+        Aggregate `count` candles ending at anchor_idx.
+        """
+        start = anchor_idx - (count - 1)
+        if start < 0:
+            return None
 
-        return out
+        chunk = candles[start:anchor_idx + 1]
+        if len(chunk) != count:
+            return None
+
+        ts = chunk[0][0]
+        open_ = chunk[0][1]
+        high = max(c[2] for c in chunk)
+        low = min(c[3] for c in chunk)
+        close = chunk[-1][4]
+        volume = sum(c[5] for c in chunk)
+
+        return [ts, open_, high, low, close, volume]
 
     # ============================================================
     # Authentication
@@ -224,19 +236,116 @@ class CoinbaseExchange(ExchangeBase):
         r = self._private_request("GET", f"/products/{pid}")
         return to_decimal(r.get("price", "0"))
         
+        
+    def _get_ohlc_raw(self, symbol: str, timeframe: str, limit: int) -> List[list]:
+        """
+        Fetch raw OHLC candles without trimming to COINBASE_REQUIRED_CANDLES.
+        ONLY for internal synthetic timeframe construction.
+        """
+        pid = self._product_id(symbol)
+
+        TF_SECONDS = {
+            "1m": 60,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
+            "1h": 3600,
+            "6h": 21600,
+            "1d": 86400,
+        }
+
+        gran = TF_SECONDS.get(timeframe)
+        if not gran:
+            return []
+
+        limit = min(limit, 300)
+
+        end = int(time.time())
+        start = end - (limit * gran)
+
+        url = f"https://api.exchange.coinbase.com/products/{pid}/candles"
+        params = {
+            "start": datetime.utcfromtimestamp(start).isoformat(),
+            "end": datetime.utcfromtimestamp(end).isoformat(),
+            "granularity": gran,
+        }
+
+        resp = requests.get(url, params=params, timeout=15)
+        if resp.status_code != 200:
+            log_event(f"⚠️ Coinbase EXCHANGE candles HTTP {resp.status_code}: {resp.text}")
+            return []
+
+        candles = []
+        for c in resp.json():
+            candles.append([
+                int(c[0]) * 1000,
+                float(c[3]),
+                float(c[2]),
+                float(c[1]),
+                float(c[4]),
+                float(c[5]),
+            ])
+
+        return sorted(candles, key=lambda x: x[0])
+
     def get_ohlc(self, symbol: str, timeframe: str, limit: int = 200) -> List[list]:
         pid = self._product_id(symbol)
 
         # --------------------------------------------------
-        # Synthetic timeframes (Coinbase does not support)
+        # Coinbase synthetic timeframes
+        # Anchored to last UTC-closed base candle
         # --------------------------------------------------
+        
         if timeframe == "4h":
-            base = self.get_ohlc(symbol, "1h", self.COINBASE_REQUIRED_CANDLES * 4)
-            return self._aggregate_candles(base, 4)
+            # Need 3x 4h candles => 3 * 4 = 12 hourly candles minimum,
+            # plus extra buffer so we can snap to boundary safely.
+            base = self._get_ohlc_raw(symbol, "1h", limit=24)
 
+            if len(base) < 16:
+                log_event(f"⚠️ Not enough base OHLC for {symbol} (4h) on coinbase → skip.")
+                return []
+
+            idx = self._last_closed_index(base, 3600)
+            if idx < 0:
+                log_event(f"⚠️ No closed base candle for {symbol} (4h) on coinbase → skip.")
+                return []
+
+            # Snap to last UTC 4h boundary candle start (00/04/08/12/16/20)
+            while idx >= 0:
+                hour = (base[idx][0] // 1000) // 3600
+                if hour % 4 == 0:
+                    break
+                idx -= 1
+
+            # We want 3 consecutive 4h candles:
+            # anchors at idx, idx-4, idx-8 (in 1h steps)
+            anchors = [idx - 8, idx - 4, idx]  # chronological order
+            out = []
+
+            for a in anchors:
+                c = self._aggregate_from_anchor(base, a, 4)
+                if not c:
+                    log_event(f"⚠️ Not enough OHLC for {symbol} (4h) on coinbase → skip.")
+                    return []
+                out.append(c)
+
+            return out
+
+            
         if timeframe == "1w":
-            base = self.get_ohlc(symbol, "1d", self.COINBASE_REQUIRED_CANDLES * 7)
-            return self._aggregate_candles(base, 7)
+            base = self._get_ohlc_raw(symbol, "1d", limit=10)
+
+            if len(base) < 7:
+                log_event(f"⚠️ Not enough base OHLC for {symbol} (1w) on coinbase → skip.")
+                return []
+
+            idx = self._last_closed_index(base, 86400)
+            if idx < 0:
+                log_event(f"⚠️ No closed base candle for {symbol} (1w) on coinbase → skip.")
+                return []
+
+            candle = self._aggregate_from_anchor(base, idx, 7)
+            return [candle] if candle else []
 
         # --------------------------------------------------
         # Native Coinbase timeframes
