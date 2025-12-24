@@ -309,11 +309,12 @@ class CoinbaseExchange(ExchangeBase):
             if idx < 0:
                 log_event(f"⚠️ No closed base candle for {symbol} (4h) on coinbase → skip.")
                 return []
-
-            # Snap to last UTC 4h boundary candle start (00/04/08/12/16/20)
+                
+            # Snap to END of 4h block (UTC): last 1h candle in the 4h window
+            # 4h windows are [00-04), [04-08), ... so the last 1h starts at UTC 03,07,11,15,19,23
             while idx >= 0:
                 hour = (base[idx][0] // 1000) // 3600
-                if hour % 4 == 0:
+                if (hour + 1) % 4 == 0:
                     break
                 idx -= 1
 
