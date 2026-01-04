@@ -6,20 +6,18 @@ import time
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from utils import (
     log_event,
     current_config,
     to_decimal,
     get_db_path,
+    _open_db,
 )
 
-from utils import _open_db
 from trade_manager import TradeManager
-from exchange_base import ExchangeBase
 from exchange_factory import get_exchange
-
 
 # ------------------------------------------------------------
 # Cache exchange objects so:
@@ -28,7 +26,7 @@ from exchange_factory import get_exchange
 # - API usage is lower
 # - improved performance + stability
 # ------------------------------------------------------------
-EXCHANGE_CACHE = {}
+EXCHANGE_CACHE: Dict[str, Any] = {}
 
 
 class TraderEngine:
@@ -36,19 +34,39 @@ class TraderEngine:
     Core strategy engine for Aurono.
 
     - Contains ALL generic strategy logic (buy/sell decisions)
-    - Talks to an ExchangeBase instance (Kraken, Bitvavo, ...)
     - Exchange-agnostic
+    - Resolves the exchange PER STRATEGY using exchange_factory.get_exchange()
     """
 
-    def __init__(self, exchange: ExchangeBase) -> None:
-        self.exchange = exchange
+    def __init__(self) -> None:
         self.tm = TradeManager(get_db_path())
 
-    def cfg(self):
+    def cfg(self) -> dict:
         return current_config()
-        
-    # -------------------- Define based on timestamps of candle data which candle to take for trade trigger -----------
-        
+
+    # ------------------------------------------------------------
+    # Exchange resolution (per strategy)
+    # ------------------------------------------------------------
+    def _get_exchange_for_strategy(self, exchange_name: str):
+        name = (exchange_name or "").lower().strip()
+
+        if not name:
+            # TEMP backward-compat fallback; prefer migrating DB so every strategy has exchange
+            fallback = current_config().get("exchange", "bitvavo").lower()
+            log_event(f"⚠️ Strategy has no exchange; falling back to config exchange={fallback}")
+            name = fallback
+
+        if name in EXCHANGE_CACHE and EXCHANGE_CACHE[name] is not None:
+            return EXCHANGE_CACHE[name]
+
+        ex = get_exchange(name)  # may return None (e.g., coinbase creds missing)
+        EXCHANGE_CACHE[name] = ex
+
+        return ex
+
+    # ------------------------------------------------------------
+    # Candle selection
+    # ------------------------------------------------------------
     def _select_closed_candle(self, ohlc: list) -> list:
         """
         Return the most recent *closed* candle from a chronological OHLC list.
@@ -71,7 +89,7 @@ class TraderEngine:
         prev = ohlc[-2]
 
         def ts_seconds(candle) -> float:
-            # Bitvavo: ms → seconds, Kraken: seconds → already fine
+            # Bitvavo: ms → seconds, Kraken/Coinbase: usually seconds
             try:
                 ts = int(candle[0])
             except Exception:
@@ -84,10 +102,8 @@ class TraderEngine:
         prev_ts = ts_seconds(prev)
         now_ts = _t.time()
 
-        # Infer interval; fallback to 1 sec minimal
         interval = max(1.0, last_ts - prev_ts)
 
-        # If the newest candle is very fresh, treat it as "active"
         if interval > 0 and (now_ts - last_ts) < interval * 0.5:
             chosen = prev
             idx = -2
@@ -95,28 +111,26 @@ class TraderEngine:
             chosen = last
             idx = -1
 
-        # Optional debug log
         try:
-            from datetime import datetime, timezone as _tz
-            ct = datetime.fromtimestamp(ts_seconds(chosen), _tz.utc).strftime("%Y-%m-%d %H:%M:%S")
+            ct = datetime.fromtimestamp(ts_seconds(chosen), timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             log_event(f"ℹ️ Using OHLC candle index {idx} (start={ct} UTC)")
         except Exception:
             pass
 
         return chosen
 
-
-    # -------------------- One-shot execution --------------------
-
+    # ------------------------------------------------------------
+    # One-shot execution
+    # ------------------------------------------------------------
     def run_strategy_once(self, timeframe: Optional[str] = None):
         """
         Run one cycle of strategies with detailed decision logging.
-        Exchange-agnostic; uses exchange.get_ticker / get_ohlc / place_limit_order.
+        Resolves exchange per strategy using exchange_factory.get_exchange().
         """
         cfg = self.cfg()
-        mode = cfg.get("mode", "dev")
+        mode = cfg.get("mode", "dev").lower()
         tf_note = f" [{timeframe}]" if timeframe else ""
-        log_event(f"🚀 Strategy cycle started{tf_note} (global engine={self.exchange.name}, mode={mode.upper()})")
+        log_event(f"🚀 Strategy cycle started{tf_note} (mode={mode.upper()})")
 
         conn = _open_db()
         conn.row_factory = sqlite3.Row
@@ -139,159 +153,232 @@ class TraderEngine:
             return
 
         for s in strategies:
-            sid = int(s["id"])
-            symbol = s["symbol"].upper()
-            s_timeframe = s["timeframe"]
-            drop_trigger = to_decimal(s["drop_trigger"])
-            rise_trigger = to_decimal(s["rise_trigger"])
-            buy_eur = to_decimal(s["buy_amount_eur"])
-            sell_eur = to_decimal(s["sell_amount_eur"])
-            allocated = to_decimal(s["allocated_eur"] or 0)
-            exchange_name = s["exchange"] if "exchange" in s.keys() else "bitvavo"
+            try:
+                sid = int(s["id"])
+                symbol = (s["symbol"] or "").upper().strip()
+                s_timeframe = (s["timeframe"] or "").strip()
 
-            # --------------------------------------------------------
-            # Reuse exchange object from cache (important!)
-            # --------------------------------------------------------
-            if exchange_name not in EXCHANGE_CACHE:
-                EXCHANGE_CACHE[exchange_name] = get_exchange(exchange_name)
+                drop_trigger = to_decimal(s["drop_trigger"])
+                rise_trigger = to_decimal(s["rise_trigger"])
+                buy_eur = to_decimal(s["buy_amount_eur"])
+                sell_eur = to_decimal(s["sell_amount_eur"])
+                allocated = to_decimal(s["allocated_eur"] or 0)
 
-            exchange = EXCHANGE_CACHE[exchange_name]
+                exchange_name = (s["exchange"] or "").lower().strip()
+                exchange = self._get_exchange_for_strategy(exchange_name)
 
-            # --- Live ticker ---
-            ticker = exchange.get_ticker(symbol)
-            if ticker <= 0:
-                log_event(f"❌ No ticker for {symbol} on {exchange.name} — skipping.")
-                continue
-
-            log_event(f"📈 Current ticker {symbol} @ {exchange.name}: €{ticker}")
-
-            # --- OHLC for timeframe ---
-            ohlc = exchange.get_ohlc(symbol, s_timeframe)
-            if len(ohlc) < 3:
-                log_event(
-                    f"⚠️ Not enough OHLC for {symbol} ({s_timeframe}) on {exchange.name} → skip."
-                )
-                continue
-                
-            # Dynamically select last closed candle
-            candle = self._select_closed_candle(ohlc)
-
-            open_price = to_decimal(candle[1])
-            close_price = to_decimal(candle[4])
-            pct_change = (close_price - open_price) / open_price * to_decimal("100")
-
-            log_event(
-                f"{symbol} change {pct_change:+.3f}% (open={open_price}, close={close_price}) "
-                f"on {exchange.name}"
-            )
-
-            acb = self.tm.get_average_cost_for_strategy(sid)
-            balance = self.tm.get_balance_for_strategy(sid)
-
-            # =======================
-            # 1️⃣ BUY LOGIC
-            # =======================
-            if pct_change <= drop_trigger:
-                if allocated < buy_eur:
+                if exchange is None:
                     log_event(
-                        f"❌ No BUY for {symbol} ({s_timeframe}) on {exchange.name}: "
-                        f"price dropped {pct_change:.2f}% ≤ {drop_trigger}%, "
-                        f"but insufficient capital (€{allocated:.2f} < €{buy_eur:.2f})"
+                        f"⚠️ Skipping strategy id={sid} {symbol} {s_timeframe}: "
+                        f"exchange '{exchange_name}' unavailable (no creds or failed init)."
+                    )
+                    continue
+
+                log_event(f"▶ Strategy id={sid} {symbol} {s_timeframe} (exchange={exchange.name})")
+
+                # --- Live ticker ---
+                try:
+                    ticker = exchange.get_ticker(symbol)
+                except Exception as e:
+                    log_event(f"❌ Ticker error for {symbol} on {exchange.name}: {e}")
+                    continue
+
+                if ticker <= 0:
+                    log_event(f"❌ No ticker for {symbol} on {exchange.name} — skipping.")
+                    continue
+
+                log_event(f"📈 Current ticker {symbol} @ {exchange.name}: €{ticker}")
+
+                # --- OHLC for timeframe ---
+                try:
+                    ohlc = exchange.get_ohlc(symbol, s_timeframe)
+                except Exception as e:
+                    log_event(f"❌ OHLC error for {symbol} ({s_timeframe}) on {exchange.name}: {e}")
+                    continue
+
+                if not ohlc or len(ohlc) < 3:
+                    log_event(
+                        f"⚠️ Not enough OHLC for {symbol} ({s_timeframe}) on {exchange.name} → skip."
+                    )
+                    continue
+
+                candle = self._select_closed_candle(ohlc)
+
+                open_price = to_decimal(candle[1])
+                close_price = to_decimal(candle[4])
+
+                if open_price <= 0:
+                    log_event(f"❌ Invalid open price for {symbol} on {exchange.name} — skip.")
+                    continue
+
+                pct_change = (close_price - open_price) / open_price * to_decimal("100")
+
+                log_event(
+                    f"{symbol} change {pct_change:+.3f}% (open={open_price}, close={close_price}) on {exchange.name}"
+                )
+
+                acb = self.tm.get_average_cost_for_strategy(sid)
+                balance = self.tm.get_balance_for_strategy(sid)
+
+                # =======================
+                # BUY LOGIC
+                # =======================
+                if pct_change <= drop_trigger:
+                    if allocated < buy_eur:
+                        log_event(
+                            f"❌ No BUY for {symbol} ({s_timeframe}) on {exchange.name}: "
+                            f"drop {pct_change:.2f}% ≤ {drop_trigger}%, "
+                            f"but insufficient capital (€{allocated:.2f} < €{buy_eur:.2f})"
+                        )
+                        continue
+
+                    fee = to_decimal(getattr(exchange, "fee_rate", 0) or 0)
+                    limit_price = open_price * (Decimal("1") + drop_trigger / Decimal("100"))
+
+                    # Conservative quantize; exchange may later re-quantize to its lot-size rules
+                    vol = (buy_eur / (to_decimal(ticker) * (Decimal("1") + fee))).quantize(Decimal("0.00000001"))
+
+                    if vol <= 0:
+                        log_event(f"❌ No BUY: computed volume is 0 for {symbol} on {exchange.name}.")
+                        continue
+
+                    log_event(f"BUY calc → spend={buy_eur}, price={ticker}, fee={fee}, limit={limit_price}, volume={vol}")
+
+                    # Record-then-place can create phantom trades if placement fails.
+                    # Mitigation: place order and if placement fails, do NOT keep DB changes (no alloc update, delete trade row).
+                    trade_id = None
+                    try:
+                        trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
+                        res = exchange.place_limit_order(symbol, "buy", limit_price, vol, trade_id)
+
+                        # Only update allocated after successful order submission (no exception)
+                        eur_spent = limit_price * vol
+                        new_alloc = float(allocated - eur_spent)
+                        with _open_db() as c:
+                            c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
+                            c.commit()
+
+                        log_event(f"✅ BUY order submitted on {exchange.name} (trade_id={trade_id}, result={res})")
+
+                    except Exception as e:
+                        log_event(f"❌ BUY order failed on {exchange.name} for {symbol}: {e}")
+
+                        # Cleanup: remove trade row to avoid phantom "executed" trades
+                        if trade_id is not None:
+                            try:
+                                with _open_db() as c:
+                                    c.execute("DELETE FROM trades WHERE id=?", (trade_id,))
+                                    c.commit()
+                                log_event(f"🧹 Removed phantom BUY trade_id={trade_id} after failed order.")
+                            except Exception as e2:
+                                log_event(f"⚠️ Failed to delete phantom trade_id={trade_id}: {e2}")
+
+                    continue  # Skip SELL evaluation
+
+                # =======================
+                # SELL LOGIC
+                # =======================
+                if pct_change >= rise_trigger:
+                    if acb is None:
+                        log_event(
+                            f"❌ No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
+                            f"rise +{pct_change:.2f}% ≥ {rise_trigger}%, but no ACB."
+                        )
+                        continue
+
+                    if close_price <= acb:
+                        log_event(
+                            f"❌ No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
+                            f"rise +{pct_change:.2f}% ≥ {rise_trigger}%, but below ACB €{acb:.2f}"
+                        )
+                        continue
+
+                    notional_eur = balance * close_price
+                    if notional_eur < to_decimal("6.00"):
+                        log_event(
+                            f"❌ No SELL: balance {balance:.6f} → notional €{notional_eur:.2f} for {symbol} too low."
+                        )
+                        continue
+
+                    fee = to_decimal(getattr(exchange, "fee_rate", 0) or 0)
+                    limit_price = open_price * (Decimal("1") + rise_trigger / Decimal("100"))
+                    vol = (sell_eur / (to_decimal(ticker) * (Decimal("1") - fee))).quantize(Decimal("0.00000001"))
+
+                    # cap at available coin balance
+                    vol = min(vol, balance)
+
+                    if vol <= 0:
+                        log_event(f"❌ No SELL: computed volume is 0 for {symbol} on {exchange.name}.")
+                        continue
+
+                    log_event(
+                        f"SELL calc → target={sell_eur}, price={ticker}, fee={fee}, limit={limit_price}, volume={vol}, balance={balance}"
+                    )
+
+                    trade_id = None
+                    try:
+                        trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
+                        res = exchange.place_limit_order(symbol, "sell", limit_price, vol, trade_id)
+
+                        # Only update allocated after successful order submission (no exception)
+                        eur_gained = limit_price * vol
+                        new_alloc = float(allocated + eur_gained)
+                        with _open_db() as c:
+                            c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
+                            c.commit()
+
+                        log_event(f"✅ SELL order submitted on {exchange.name} (trade_id={trade_id}, result={res})")
+
+                    except Exception as e:
+                        log_event(f"❌ SELL order failed on {exchange.name} for {symbol}: {e}")
+
+                        # Cleanup: remove trade row to avoid phantom "executed" trades
+                        if trade_id is not None:
+                            try:
+                                with _open_db() as c:
+                                    c.execute("DELETE FROM trades WHERE id=?", (trade_id,))
+                                    c.commit()
+                                log_event(f"🧹 Removed phantom SELL trade_id={trade_id} after failed order.")
+                            except Exception as e2:
+                                log_event(f"⚠️ Failed to delete phantom trade_id={trade_id}: {e2}")
+
+                    continue
+
+                # =======================
+                # IDLE CASE
+                # =======================
+                if pct_change < 0:
+                    log_event(
+                        f"💤 No BUY for {symbol} ({s_timeframe}) on {exchange.name}: "
+                        f"drop {pct_change:.2f}% smaller than {drop_trigger}%"
                     )
                 else:
-                    fee = exchange.fee_rate
-                    limit_price = open_price * (Decimal("1") + drop_trigger / Decimal("100"))
-                    vol = (buy_eur / (ticker * (Decimal("1") + fee))).quantize(Decimal("0.00000001"))
-
                     log_event(
-                        f"BUY calc → spend={buy_eur}, price={ticker}, fee={fee}, volume={vol}"
+                        f"💤 No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
+                        f"rise +{pct_change:.2f}% smaller than {rise_trigger}%"
                     )
 
-                    trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
-
-                    eur_spent = limit_price * vol
-                    new_alloc = float(allocated - eur_spent)
-                    with _open_db() as c:
-                        c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
-                        c.commit()
-
-                    exchange.place_limit_order(symbol, "buy", limit_price, vol, trade_id)
-
-                # Skip SELL evaluation
+            except Exception as e:
+                sid_safe = s["id"] if "id" in s.keys() else "unknown"
+                log_event(f"🔥 Strategy id={sid_safe} crashed: {e}")
                 continue
-
-            # =======================
-            # 2️⃣ SELL LOGIC
-            # =======================
-            if pct_change >= rise_trigger:
-                if acb is None:
-                    log_event(
-                        f"❌ No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
-                        f"rise +{pct_change:.2f}% ≥ {rise_trigger}%, but no ACB."
-                    )
-                    continue
-                if close_price <= acb:
-                    log_event(
-                        f"❌ No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
-                        f"rise +{pct_change:.2f}% ≥ {rise_trigger}%, but below ACB €{acb:.2f}"
-                    )
-                    continue
-                notional_eur = balance * close_price
-                if notional_eur < to_decimal("6.00"):
-                    log_event(f"❌ No SELL: balance {balance:.6f} and therefore notional value of €{notional_eur:.2f} for {symbol} too low.")
-                    continue
-
-                fee = exchange.fee_rate
-                limit_price = open_price * (Decimal("1") + rise_trigger / Decimal("100"))
-                vol = (sell_eur / (ticker * (Decimal("1") - fee))).quantize(Decimal("0.00000001"))
-
-                # cap at available coin balance
-                vol = min(vol, balance)
-
-                log_event(
-                    f"SELL calc → target={sell_eur}, price={ticker}, fee={fee}, volume={vol}, balance={balance}"
-                )
-
-                trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
-
-                eur_gained = limit_price * vol
-                new_alloc = float(allocated + eur_gained)
-                with _open_db() as c:
-                    c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
-                    c.commit()
-
-                exchange.place_limit_order(symbol, "sell", limit_price, vol, trade_id)
-                continue
-
-            # =======================
-            # 3️⃣ IDLE CASE
-            # =======================
-            if pct_change < 0:
-                log_event(
-                    f"💤 No BUY for {symbol} ({s_timeframe}) on {exchange.name}: "
-                    f"drop {pct_change:.2f}% smaller than {drop_trigger}%"
-                )
-            else:
-                log_event(
-                    f"💤 No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
-                    f"rise +{pct_change:.2f}% smaller than {rise_trigger}%"
-                )
 
         log_event("Cycle completed.\n")
 
-    # -------------------- Loop Modes --------------------
-
+    # ------------------------------------------------------------
+    # Loop modes
+    # ------------------------------------------------------------
     def run_live(self):
         """
         Schedules:
           - 1h @ xx:01 UTC
           - 4h @ 00:03, 04:03, 08:03, 12:03, 16:03, 20:03 UTC
           - 1d @ 00:05 UTC
-          - 1w @ 00:008 UTC on every Monday
+          - 1w @ 00:08 UTC on Mondays
         """
         log_event(
-            f"Aurono Trader started in LIVE mode on {self.exchange.name} "
-            "(UTC scheduler: 1h@xx:01, 4h@xx:03 (0/4/8/12/16/20), 1d@00:05), 1w@00:08 on Mondays."
+            "Aurono Trader started in LIVE mode "
+            "(UTC scheduler: 1h@xx:01, 4h@xx:03 (0/4/8/12/16/20), 1d@00:05, 1w@00:08 Mondays)."
         )
 
         def utcnow_floor_sec():
@@ -326,21 +413,16 @@ class TraderEngine:
 
         def next_daily(now):
             today = now.date()
-            candidate = datetime(
-                today.year, today.month, today.day, 0, 5, 0, tzinfo=timezone.utc
-            )
+            candidate = datetime(today.year, today.month, today.day, 0, 5, 0, tzinfo=timezone.utc)
             if now >= candidate:
                 candidate += timedelta(days=1)
             return candidate
-            
+
         def next_weekly(now):
             # Weekly run at Monday 00:08 UTC
-            # (week starts Monday according to ISO)
-            next_monday = now + timedelta(days=(7 - now.weekday()) % 7)
-            candidate = datetime(
-                next_monday.year, next_monday.month, next_monday.day,
-                0, 8, 0, tzinfo=timezone.utc
-            )
+            days_until_monday = (7 - now.weekday()) % 7
+            next_monday = now + timedelta(days=days_until_monday)
+            candidate = datetime(next_monday.year, next_monday.month, next_monday.day, 0, 8, 0, tzinfo=timezone.utc)
             if candidate <= now:
                 candidate += timedelta(days=7)
             return candidate
@@ -357,40 +439,34 @@ class TraderEngine:
 
             sleep_s = max(1, int((next_evt - now).total_seconds()))
             log_event(
-                f"🕒 Next event at {next_evt.strftime('%Y-%m-%d %H:%M:%S')} UTC "
-                f"(sleep {sleep_s}s)"
+                f"🕒 Next event at {next_evt.strftime('%Y-%m-%d %H:%M:%S')} UTC (sleep {sleep_s}s)"
             )
             time.sleep(sleep_s)
 
             fired_now = utcnow_floor_sec()
 
-            # ----- 1H @ xx:01 -----
-            if fired_now.minute == 1 and (
-                last_fired["1h"] != fired_now.replace(minute=1, second=0)
-            ):
+            # 1H @ xx:01
+            if fired_now.minute == 1 and (last_fired["1h"] != fired_now.replace(minute=1, second=0)):
                 last_fired["1h"] = fired_now.replace(minute=1, second=0)
                 log_event("⏱ Trigger 1H batch")
                 self.run_strategy_once("1h")
 
-            # ----- 4H at 0/4/8/12/16/20 :03 -----
-            if (
-                fired_now.minute == 3
-                and fired_now.hour % 4 == 0
-                and last_fired["4h"] != fired_now.replace(minute=3, second=0)
-            ):
+            # 4H at 0/4/8/12/16/20 :03
+            if (fired_now.minute == 3 and fired_now.hour % 4 == 0 and
+                    last_fired["4h"] != fired_now.replace(minute=3, second=0)):
                 last_fired["4h"] = fired_now.replace(minute=3, second=0)
                 log_event("⏱ Trigger 4H batch")
                 self.run_strategy_once("4h")
 
-            # ----- 1D @ 00:05 -----
+            # 1D @ 00:05
             if fired_now.minute == 5 and fired_now.hour == 0:
                 key_time = fired_now.replace(minute=5, second=0)
                 if last_fired["1d"] != key_time:
                     last_fired["1d"] = key_time
                     log_event("⏱ Trigger 1D batch")
                     self.run_strategy_once("1d")
-                    
-            # ----- 1W @ Monday 00:08 UTC -----
+
+            # 1W @ Monday 00:08
             if fired_now.minute == 8 and fired_now.hour == 0 and fired_now.weekday() == 0:
                 key_time = fired_now.replace(minute=8, second=0)
                 if last_fired["1w"] != key_time:
@@ -401,9 +477,8 @@ class TraderEngine:
     def run_dev(self):
         cfg = self.cfg()
         dev_sleep = int(cfg.get("dev_sleep_hours", 4))
-        log_event(
-            f"Aurono Trader started in DEV mode ({dev_sleep} h) on {self.exchange.name}."
-        )
+        log_event(f"Aurono Trader started in DEV mode ({dev_sleep} h).")
+
         while True:
             self.run_strategy_once()
             log_event(f"Sleeping {dev_sleep} hours…")

@@ -119,6 +119,41 @@ class CoinbaseExchange(ExchangeBase):
         volume = sum(c[5] for c in chunk)
 
         return [ts, open_, high, low, close, volume]
+        
+    def _get_product_increments(self, symbol: str) -> Dict[str, Decimal]:
+        """
+        Returns dict with:
+          - price_increment
+          - base_increment
+        Cached per product_id.
+        """
+        pid = self._product_id(symbol)
+
+        if pid in self._product_tick_cache:
+            return self._product_tick_cache[pid]
+
+        r = self._private_request("GET", f"/products/{pid}")
+
+        try:
+            price_inc = Decimal(r["price_increment"])
+            base_inc = Decimal(r["base_increment"])
+        except Exception:
+            raise RuntimeError(f"Missing increment data for {pid}: {r}")
+
+        self._product_tick_cache[pid] = {
+            "price_increment": price_inc,
+            "base_increment": base_inc,
+        }
+
+        return self._product_tick_cache[pid]
+        
+    def _quantize_down(self, value: Decimal, step: Decimal) -> Decimal:
+        """
+        Snap value DOWN to nearest valid step.
+        """
+        return (value // step) * step
+
+
 
     # ============================================================
     # Authentication
@@ -414,7 +449,7 @@ class CoinbaseExchange(ExchangeBase):
             if a.get("currency") == "EUR":
                 return float(a["available_balance"]["value"])
         return 0.0
-
+        
     def place_limit_order(
         self,
         symbol: str,
@@ -428,13 +463,37 @@ class CoinbaseExchange(ExchangeBase):
             log_event(f"🧪 Simulated {side} {symbol}")
             return {"result": "simulated"}
 
+        # --------------------------------------------------
+        # Quantize price & size to Coinbase increments
+        # --------------------------------------------------
+        inc = self._get_product_increments(symbol)
+
+        q_price = self._quantize_down(price, inc["price_increment"])
+        q_volume = self._quantize_down(volume, inc["base_increment"])
+
+        if q_price <= 0 or q_volume <= 0:
+            log_event(
+                f"❌ Coinbase quantization failed {symbol}: "
+                f"price={price}->{q_price}, volume={volume}->{q_volume}"
+            )
+            return {"success": False, "error": "invalid_quantized_values"}
+            
+        if q_price != price or q_volume != volume:
+            log_event(
+                f"ℹ️ Coinbase snap {symbol}: "
+                f"price {price} → {q_price}, "
+                f"size {volume} → {q_volume}"
+            )
+
+
         body = {
             "product_id": self._product_id(symbol),
             "side": side.upper(),
             "order_configuration": {
                 "limit_limit_gtc": {
-                    "base_size": format(volume, "f"),
-                    "limit_price": format(price, "f"),
+                    "base_size": format(q_volume, "f"),
+                    "limit_price": format(q_price, "f"),
+
                 }
             },
         }
