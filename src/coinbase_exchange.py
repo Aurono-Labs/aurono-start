@@ -13,6 +13,7 @@ import requests
 import jwt
 import secrets
 from cryptography.hazmat.primitives import serialization
+import uuid
 
 from utils import (
     log_event,
@@ -450,6 +451,7 @@ class CoinbaseExchange(ExchangeBase):
                 return float(a["available_balance"]["value"])
         return 0.0
         
+
     def place_limit_order(
         self,
         symbol: str,
@@ -463,9 +465,6 @@ class CoinbaseExchange(ExchangeBase):
             log_event(f"🧪 Simulated {side} {symbol}")
             return {"result": "simulated"}
 
-        # --------------------------------------------------
-        # Quantize price & size to Coinbase increments
-        # --------------------------------------------------
         inc = self._get_product_increments(symbol)
 
         q_price = self._quantize_down(price, inc["price_increment"])
@@ -477,7 +476,7 @@ class CoinbaseExchange(ExchangeBase):
                 f"price={price}->{q_price}, volume={volume}->{q_volume}"
             )
             return {"success": False, "error": "invalid_quantized_values"}
-            
+
         if q_price != price or q_volume != volume:
             log_event(
                 f"ℹ️ Coinbase snap {symbol}: "
@@ -485,15 +484,18 @@ class CoinbaseExchange(ExchangeBase):
                 f"size {volume} → {q_volume}"
             )
 
+        # REQUIRED by Coinbase Advanced Trade Create Order:
+        # Keep it <= 128 chars; only use safe characters.
+        client_order_id = f"aurono-{trade_id}" if trade_id is not None else str(uuid.uuid4())
 
         body = {
+            "client_order_id": client_order_id,
             "product_id": self._product_id(symbol),
-            "side": side.upper(),
+            "side": side.upper(),  # "BUY" / "SELL"
             "order_configuration": {
                 "limit_limit_gtc": {
                     "base_size": format(q_volume, "f"),
                     "limit_price": format(q_price, "f"),
-
                 }
             },
         }
@@ -507,3 +509,4 @@ class CoinbaseExchange(ExchangeBase):
             conn.close()
 
         return res
+
