@@ -37,7 +37,7 @@ class CoinbaseExchange(ExchangeBase):
     COINBASE_REQUIRED_CANDLES = 3
 
 
-    _product_tick_cache: Dict[str, Dict[str, Decimal]] = {}
+    _product_tick_cache: Dict[str, Dict[str, Any]] = {}
     
     def __init__(
         self,
@@ -121,13 +121,7 @@ class CoinbaseExchange(ExchangeBase):
 
         return [ts, open_, high, low, close, volume]
         
-    def _get_product_increments(self, symbol: str) -> Dict[str, Decimal]:
-        """
-        Returns dict with:
-          - price_increment
-          - base_increment
-        Cached per product_id.
-        """
+    def _get_product_increments(self, symbol: str) -> Dict[str, Decimal | bool]:
         pid = self._product_id(symbol)
 
         if pid in self._product_tick_cache:
@@ -138,12 +132,16 @@ class CoinbaseExchange(ExchangeBase):
         try:
             price_inc = Decimal(r["price_increment"])
             base_inc = Decimal(r["base_increment"])
+            min_funds = Decimal(r.get("min_market_funds", "0"))
+            trading_disabled = bool(r.get("trading_disabled", False))
         except Exception:
             raise RuntimeError(f"Missing increment data for {pid}: {r}")
 
         self._product_tick_cache[pid] = {
             "price_increment": price_inc,
             "base_increment": base_inc,
+            "min_market_funds": min_funds,
+            "trading_disabled": trading_disabled,
         }
 
         return self._product_tick_cache[pid]
@@ -451,7 +449,6 @@ class CoinbaseExchange(ExchangeBase):
                 return float(a["available_balance"]["value"])
         return 0.0
         
-
     def place_limit_order(
         self,
         symbol: str,
@@ -465,10 +462,24 @@ class CoinbaseExchange(ExchangeBase):
             log_event(f"🧪 Simulated {side} {symbol}")
             return {"result": "simulated"}
 
+        side_u = side.upper()
+        if side_u not in ("BUY", "SELL"):
+            return {"success": False, "error": f"invalid_side:{side}"}
+
         inc = self._get_product_increments(symbol)
 
-        q_price = self._quantize_down(price, inc["price_increment"])
-        q_volume = self._quantize_down(volume, inc["base_increment"])
+        if inc.get("trading_disabled", False):
+            log_event(f"⛔ Coinbase trading disabled for {symbol} → skip order")
+            return {"success": False, "error": "trading_disabled"}
+
+
+        # Quantize + normalize to Coinbase increments
+        q_price = self._quantize_down(price, inc["price_increment"]).quantize(
+            inc["price_increment"], rounding=ROUND_DOWN
+        )
+        q_volume = self._quantize_down(volume, inc["base_increment"]).quantize(
+            inc["base_increment"], rounding=ROUND_DOWN
+        )
 
         if q_price <= 0 or q_volume <= 0:
             log_event(
@@ -484,20 +495,42 @@ class CoinbaseExchange(ExchangeBase):
                 f"size {volume} → {q_volume}"
             )
 
-        # REQUIRED by Coinbase Advanced Trade Create Order:
-        # Keep it <= 128 chars; only use safe characters.
+        # EUR notional computed from quantized values
+        notional_eur = (q_price * q_volume).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+
+        # Enforce Coinbase minimum notional (if provided by product metadata)
+        if side_u == "BUY" and inc.get("min_market_funds", Decimal("0")) > 0:
+            if notional_eur < inc["min_market_funds"]:
+                log_event(
+                    f"🛑 Coinbase min notional not met for {symbol}: "
+                    f"{notional_eur} < {inc['min_market_funds']} EUR"
+                )
+                return {"success": False, "error": "min_notional"}
+
+        # Required by Coinbase; keep <=128 chars
         client_order_id = f"aurono-{trade_id}" if trade_id is not None else str(uuid.uuid4())
 
-        body = {
-            "client_order_id": client_order_id,
-            "product_id": self._product_id(symbol),
-            "side": side.upper(),  # "BUY" / "SELL"
-            "order_configuration": {
+        # BUY -> quote_size, SELL -> base_size
+        if side_u == "BUY":
+            order_cfg: Dict[str, Any] = {
+                "limit_limit_gtc": {
+                    "quote_size": format(notional_eur, "f"),
+                    "limit_price": format(q_price, "f"),
+                }
+            }
+        else:
+            order_cfg = {
                 "limit_limit_gtc": {
                     "base_size": format(q_volume, "f"),
                     "limit_price": format(q_price, "f"),
                 }
-            },
+            }
+
+        body = {
+            "client_order_id": client_order_id,
+            "product_id": self._product_id(symbol),
+            "side": side_u,
+            "order_configuration": order_cfg,
         }
 
         res = self._private_request("POST", "/orders", body=body)
@@ -509,4 +542,3 @@ class CoinbaseExchange(ExchangeBase):
             conn.close()
 
         return res
-
