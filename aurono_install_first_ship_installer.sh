@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================
 #  Aurono Start – Universal Installer (macOS + Linux/RPi)
-#  Version: v4.16 — dynamic systemd + OTA + cron + venv refresh
+#  Version: v4.17 — dynamic systemd + OTA + cron + venv refresh
 #  Author: Aurono Labs
 # ============================================================
 
 set -euo pipefail
 
-INSTALL_VERSION="4.16"
-REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v4.16.zip"
+INSTALL_VERSION="4.17"
+REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v4.17.zip"
 APP_DIR="aurono-poc"
 
 echo ""
@@ -147,6 +147,8 @@ log_path: ../data/aurono_log.txt
 mode: live
 pair: BTCEUR
 sell_rise_pct: 2.1
+log_level: INFO
+
 EOF
 else
   echo "📌 Keeping existing config.yaml"
@@ -238,6 +240,7 @@ if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev
   sudo bash -c "cat > /usr/local/bin/aurono-update" << EOF
 #!/usr/bin/env python3
 import os, re, shutil, subprocess, urllib.request, json, zipfile, pwd, grp
+import yaml
 
 OWNER = "Aurono-Labs"
 REPO = "aurono-start"
@@ -360,6 +363,38 @@ def start_services():
     for s in SERVICES:
         subprocess.run(["sudo", "systemctl", "start", f"{s}.service"], check=False)
 
+def migrate_config():
+    cfg_path = os.path.join(INSTALL_DIR, "config", "config.yaml")
+
+    if not os.path.exists(cfg_path):
+        return
+
+    try:
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception as e:
+        log(f"Config read failed, skipping migration: {e}")
+        return
+
+    defaults = {
+        "log_level": "INFO",
+    }
+
+    changed = False
+    for k, v in defaults.items():
+        if k not in cfg:
+            cfg[k] = v
+            changed = True
+
+    if changed:
+        try:
+            with open(cfg_path, "w") as f:
+                yaml.safe_dump(cfg, f, sort_keys=False)
+            log("Config migrated: added missing keys")
+        except Exception as e:
+            log(f"Config write failed: {e}")
+
+
 def main():
     local = read_local_version()
     log(f"Installed: {local}")
@@ -403,6 +438,7 @@ def main():
 
     copy_persistent(INSTALL_DIR, new_root)
 
+
     try:
         stop_services()
 
@@ -414,6 +450,9 @@ def main():
         shutil.move(new_root, INSTALL_DIR)
         fix_ownership(INSTALL_DIR)
         refresh_venv()
+        
+        # 🔧 Config migration (additive, idempotent)
+        migrate_config()
 
         with open(os.path.join(INSTALL_DIR, "VERSION"), "w") as f:
             f.write(latest)
@@ -436,7 +475,7 @@ EOF
 Description=Aurono OTA Update Check
 
 [Timer]
-OnCalendar=*-*-* 00:15:00
+OnCalendar=daily
 RandomizedDelaySec=1800
 Persistent=true
 

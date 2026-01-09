@@ -15,6 +15,25 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 
+# ============================================================
+# 🧾 Logging levels
+# ============================================================
+
+LOG_LEVELS = {
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARN": 30,
+    "ERROR": 40,
+}
+
+# ============================================================
+# ⚙️ Config cache
+# ============================================================
+
+_CONFIG_CACHE = None
+_CONFIG_MTIME = None
+
+
 
 def root_path(*parts):
     return ROOT.joinpath(*parts)
@@ -29,16 +48,48 @@ def save_config(cfg: dict):
         yaml.safe_dump(cfg, f, sort_keys=False)
 
 def current_config():
-    return load_config()
+    global _CONFIG_CACHE, _CONFIG_MTIME
+    cfg_path = root_path("config", "config.yaml")
 
-def log_event(msg:str):
+    try:
+        mtime = cfg_path.stat().st_mtime
+    except Exception:
+        return _CONFIG_CACHE or {}
+
+    if _CONFIG_CACHE is None or _CONFIG_MTIME != mtime:
+        with open(cfg_path, "r") as f:
+            _CONFIG_CACHE = yaml.safe_load(f)
+        _CONFIG_MTIME = mtime
+
+    return _CONFIG_CACHE
+
+
+      
+def log_event(msg: str, level: str = "INFO"):
+    level = (level or "INFO").upper()
+    if level not in LOG_LEVELS:
+        level = "INFO"
+
     cfg = current_config()
+    min_level = (cfg.get("log_level", "INFO") or "INFO").upper()
+    if min_level not in LOG_LEVELS:
+        min_level = "INFO"
+
+    # Filter out low-priority logs
+    if LOG_LEVELS[level] < LOG_LEVELS[min_level]:
+        return
+
     logp = root_path("data", Path(cfg["log_path"]).name)
-    line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
+
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] [{level}] {msg}"
+
     print(line)
+
     os.makedirs(logp.parent, exist_ok=True)
     with open(logp, "a") as f:
         f.write(line + "\n")
+
 
 def to_decimal(v):
     try: return Decimal(str(v))
@@ -450,7 +501,11 @@ def get_supported_pairs(exchange: str) -> list[str]:
     # Coinbase (no direct support here — must be called via CoinbaseExchange)
     # --------------------------------------------------------
     if exchange == "coinbase":
-        log_event("⚠️ utils.get_supported_pairs(): Coinbase pairs require authentication. Returning empty list.")
+        log_event(
+            "⚠️ utils.get_supported_pairs(): Coinbase pairs require authentication. Returning empty list.",
+            level="WARN"
+        )
+
         return []
 
     return []

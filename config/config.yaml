@@ -16,3 +16,4 @@ log_path: ../data/aurono_log.txt
 mode: live
 pair: BTCEUR
 sell_rise_pct: 2.1
+log_level: INFO

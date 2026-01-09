@@ -113,7 +113,11 @@ class TraderEngine:
 
         try:
             ct = datetime.fromtimestamp(ts_seconds(chosen), timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            log_event(f"ℹ️ Using OHLC candle index {idx} (start={ct} UTC)")
+            log_event(
+                f"Using OHLC candle index {idx} (start={ct} UTC)",
+                level="DEBUG"
+            )
+
         except Exception:
             pass
 
@@ -169,9 +173,11 @@ class TraderEngine:
 
                 if exchange is None:
                     log_event(
-                        f"⚠️ Skipping strategy id={sid} {symbol} {s_timeframe}: "
-                        f"exchange '{exchange_name}' unavailable (no creds or failed init)."
+                        f"Skipping strategy id={sid} {symbol} {s_timeframe}: "
+                        f"exchange '{exchange_name}' unavailable (no creds or failed init).",
+                        level="WARN"
                     )
+
                     continue
 
                 log_event(f"▶ Strategy id={sid} {symbol} {s_timeframe} (exchange={exchange.name})")
@@ -187,7 +193,11 @@ class TraderEngine:
                     log_event(f"❌ No ticker for {symbol} on {exchange.name} — skipping.")
                     continue
 
-                log_event(f"📈 Current ticker {symbol} @ {exchange.name}: €{ticker}")
+                log_event(
+                    f"Ticker {symbol} @ {exchange.name}: €{ticker}",
+                    level="DEBUG"
+                )
+
 
                 # --- OHLC for timeframe ---
                 try:
@@ -198,7 +208,8 @@ class TraderEngine:
 
                 if not ohlc or len(ohlc) < 3:
                     log_event(
-                        f"⚠️ Not enough OHLC for {symbol} ({s_timeframe}) on {exchange.name} → skip."
+                        f"⚠️ Not enough OHLC for {symbol} ({s_timeframe}) on {exchange.name} → skip.",
+                        level="WARN"
                     )
                     continue
 
@@ -213,10 +224,6 @@ class TraderEngine:
 
                 pct_change = (close_price - open_price) / open_price * to_decimal("100")
 
-                log_event(
-                    f"{symbol} change {pct_change:+.3f}% (open={open_price}, close={close_price}) on {exchange.name}"
-                )
-
                 acb = self.tm.get_average_cost_for_strategy(sid)
                 balance = self.tm.get_balance_for_strategy(sid)
 
@@ -224,6 +231,11 @@ class TraderEngine:
                 # BUY LOGIC
                 # =======================
                 if pct_change <= drop_trigger:
+                    log_event(
+                        f"{symbol} {s_timeframe} change {pct_change:+.2f}% → BUY trigger hit",
+                        level="INFO"
+                    )
+
                     if allocated < buy_eur:
                         log_event(
                             f"❌ No BUY for {symbol} ({s_timeframe}) on {exchange.name}: "
@@ -242,7 +254,11 @@ class TraderEngine:
                         log_event(f"❌ No BUY: computed volume is 0 for {symbol} on {exchange.name}.")
                         continue
 
-                    log_event(f"BUY calc → spend={buy_eur}, price={ticker}, fee={fee}, limit={limit_price}, volume={vol}")
+                    log_event(
+                        f"BUY calc → spend={buy_eur}, price={ticker}, fee={fee}, limit={limit_price}, volume={vol}",
+                        level="DEBUG"
+                    )
+
 
                     # Record-then-place can create phantom trades if placement fails.
                     # Mitigation: place order and if placement fails, do NOT keep DB changes (no alloc update, delete trade row).
@@ -258,10 +274,19 @@ class TraderEngine:
                             c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
                             c.commit()
 
-                        log_event(f"✅ BUY order submitted on {exchange.name} (trade_id={trade_id}, result={res})")
+                        log_event(
+                            f"📤 BUY submitted: {symbol} {s_timeframe} "
+                            f"{vol} @ {limit_price} on {exchange.name} (trade_id={trade_id})",
+                            level="INFO"
+                        )
+
 
                     except Exception as e:
-                        log_event(f"❌ BUY order failed on {exchange.name} for {symbol}: {e}")
+                        log_event(
+                            f"BUY failed: {symbol} on {exchange.name}: {e}",
+                            level="ERROR"
+                        )
+
 
                         # Cleanup: remove trade row to avoid phantom "executed" trades
                         if trade_id is not None:
@@ -269,7 +294,7 @@ class TraderEngine:
                                 with _open_db() as c:
                                     c.execute("DELETE FROM trades WHERE id=?", (trade_id,))
                                     c.commit()
-                                log_event(f"🧹 Removed phantom BUY trade_id={trade_id} after failed order.")
+                                log_event(f"Removed phantom BUY trade_id={trade_id}", level="DEBUG")
                             except Exception as e2:
                                 log_event(f"⚠️ Failed to delete phantom trade_id={trade_id}: {e2}")
 
@@ -279,6 +304,11 @@ class TraderEngine:
                 # SELL LOGIC
                 # =======================
                 if pct_change >= rise_trigger:
+                    log_event(
+                        f"{symbol} {s_timeframe} change {pct_change:+.2f}% → SELL trigger hit",
+                        level="INFO"
+                    )
+
                     if acb is None:
                         log_event(
                             f"❌ No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
@@ -312,8 +342,9 @@ class TraderEngine:
                         continue
 
                     log_event(
-                        f"SELL calc → target={sell_eur}, price={ticker}, fee={fee}, limit={limit_price}, volume={vol}, balance={balance}"
+                        f"SELL calc → target={sell_eur}, price={ticker}, fee={fee}, limit={limit_price}, volume={vol}, balance={balance}",level="DEBUG"
                     )
+
 
                     trade_id = None
                     try:
@@ -327,10 +358,19 @@ class TraderEngine:
                             c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
                             c.commit()
 
-                        log_event(f"✅ SELL order submitted on {exchange.name} (trade_id={trade_id}, result={res})")
+                        log_event(
+                            f"📤 SELL submitted: {symbol} {s_timeframe} "
+                            f"{vol} @ {limit_price} on {exchange.name} (trade_id={trade_id})",
+                            level="INFO"
+                        )
+
 
                     except Exception as e:
-                        log_event(f"❌ SELL order failed on {exchange.name} for {symbol}: {e}")
+                        log_event(
+                            f"SELL failed: {symbol} on {exchange.name}: {e}",
+                            level="ERROR"
+                        )
+
 
                         # Cleanup: remove trade row to avoid phantom "executed" trades
                         if trade_id is not None:
@@ -338,7 +378,8 @@ class TraderEngine:
                                 with _open_db() as c:
                                     c.execute("DELETE FROM trades WHERE id=?", (trade_id,))
                                     c.commit()
-                                log_event(f"🧹 Removed phantom SELL trade_id={trade_id} after failed order.")
+                                log_event(f"Removed phantom SELL trade_id={trade_id}", level="DEBUG")
+
                             except Exception as e2:
                                 log_event(f"⚠️ Failed to delete phantom trade_id={trade_id}: {e2}")
 
@@ -347,23 +388,19 @@ class TraderEngine:
                 # =======================
                 # IDLE CASE
                 # =======================
-                if pct_change < 0:
-                    log_event(
-                        f"💤 No BUY for {symbol} ({s_timeframe}) on {exchange.name}: "
-                        f"drop {pct_change:.2f}% smaller than {drop_trigger}%"
-                    )
                 else:
                     log_event(
-                        f"💤 No SELL for {symbol} ({s_timeframe}) on {exchange.name}: "
-                        f"rise +{pct_change:.2f}% smaller than {rise_trigger}%"
+                        f"{symbol} {s_timeframe} change {pct_change:+.3f}% (no trigger)",
+                        level="DEBUG"
                     )
+
 
             except Exception as e:
                 sid_safe = s["id"] if "id" in s.keys() else "unknown"
                 log_event(f"🔥 Strategy id={sid_safe} crashed: {e}")
                 continue
 
-        log_event("Cycle completed.\n")
+        log_event("Cycle completed.")
 
     # ------------------------------------------------------------
     # Loop modes
@@ -438,9 +475,12 @@ class TraderEngine:
             next_evt = min(n1h, n4h, n1d, n1w)
 
             sleep_s = max(1, int((next_evt - now).total_seconds()))
+
             log_event(
-                f"🕒 Next event at {next_evt.strftime('%Y-%m-%d %H:%M:%S')} UTC (sleep {sleep_s}s)"
+                f"Next scheduler event at {next_evt} UTC (sleep {sleep_s}s)",
+                level="DEBUG"
             )
+
             time.sleep(sleep_s)
 
             fired_now = utcnow_floor_sec()

@@ -82,7 +82,7 @@ class KrakenExchange(ExchangeBase):
             r = requests.get(f"{KRAKEN_API_PUBLIC}/AssetPairs").json()
             pairs = r.get("result", {})
         except Exception as e:
-            log_event(f"⚠️ Kraken tick-size fetch failed: {e}")
+            log_event(f"⚠️ Kraken tick-size fetch failed: {e}",level="WARN")
             self._tick_cache[symbol] = fallback
             return fallback
 
@@ -102,7 +102,7 @@ class KrakenExchange(ExchangeBase):
                 self._tick_cache[symbol] = result
                 return result
 
-        log_event(f"⚠️ Kraken: no tick size found for {symbol}, using defaults")
+        log_event(f"⚠️ Kraken: no tick size found for {symbol}, using defaults", level="WARN")
         self._tick_cache[symbol] = fallback
         return fallback
 
@@ -113,7 +113,7 @@ class KrakenExchange(ExchangeBase):
         try:
             return amount.quantize(tick, rounding=ROUND_HALF_UP)
         except Exception:
-            log_event(f"⚠️ Kraken amount rounding failed for {symbol}, tick={tick}, amount={amount}")
+            log_event(f"⚠️ Kraken amount rounding failed for {symbol}, tick={tick}, amount={amount}", level="WARN")
             return amount
 
     # -------------------- Public API --------------------
@@ -128,7 +128,7 @@ class KrakenExchange(ExchangeBase):
             k = list(r["result"].keys())[0]
             return to_decimal(r["result"][k]["c"][0])
         except Exception as e:
-            log_event(f"⚠️ Kraken ticker error for {pair}: {e}")
+            log_event(f"⚠️ Kraken ticker error for {pair}: {e}", level="WARN")
             return Decimal("0")
 
     def get_ohlc(self, symbol: str, timeframe: str) -> List[list]:
@@ -145,7 +145,7 @@ class KrakenExchange(ExchangeBase):
 
             return result[-730:]
         except Exception as e:
-            log_event(f"⚠️ Kraken OHLC error for {pair} ({timeframe}): {e}")
+            log_event(f"⚠️ Kraken OHLC error for {pair} ({timeframe}): {e}", level="WARN")
             return []
 
     # -------------------- Private API helper --------------------
@@ -177,10 +177,10 @@ class KrakenExchange(ExchangeBase):
             )
             res = r.json()
             if res.get("error"):
-                log_event(f"⚠️ Kraken API error: {res['error']}")
+                log_event(f"⚠️ Kraken API error: {res['error']}", level="WARN")
             return res
         except Exception as e:
-            log_event(f"❌ Kraken private API request failed: {e}")
+            log_event(f"❌ Kraken private API request failed: {e}", level="ERROR")
             return {"error": [str(e)]}
 
     def _get_order_details(self, txid: str) -> Optional[Dict[str, Any]]:
@@ -200,10 +200,10 @@ class KrakenExchange(ExchangeBase):
                     fee_rate = (fee / cost).quantize(Decimal("0.00001"))
                     self.fee_rate = fee_rate
                     log_event(
-                        f"ℹ️ Kraken effective fee updated → cost={cost}, fee={fee}, rate={fee_rate}"
+                        f"ℹ️ Kraken effective fee updated → cost={cost}, fee={fee}, rate={fee_rate}", level="DEBUG"
                     )
             except Exception as e:
-                log_event(f"⚠️ Kraken fee calculation failed: {e}")
+                log_event(f"⚠️ Kraken fee calculation failed: {e}", level="WARN")
 
             return {
                 "price": price,
@@ -227,7 +227,7 @@ class KrakenExchange(ExchangeBase):
             data = self._private_request("/Balance", {})
 
             if not isinstance(data, dict) or "result" not in data:
-                log_event(f"⚠️ Kraken get_available_eur: unexpected response {data}")
+                log_event(f"⚠️ Kraken get_available_eur: unexpected response {data}", level="WARN")
                 return 0.0
 
             result = data["result"]
@@ -242,7 +242,7 @@ class KrakenExchange(ExchangeBase):
             return 0.0
 
         except Exception as e:
-            log_event(f"⚠️ Kraken EUR balance error: {e}")
+            log_event(f"⚠️ Kraken EUR balance error: {e}", level="WARN")
             return 0.0
 
     # ----------------------------------------
@@ -257,6 +257,11 @@ class KrakenExchange(ExchangeBase):
         volume: Decimal,
         trade_id: Optional[int] = None
     ) -> Dict[str, Any]:
+        log_event(
+            f"Kraken place_limit_order called: {side} {symbol} vol={volume} price={price}",
+            level="DEBUG"
+        )
+
         cfg = current_config()
         live = cfg.get("live_trading", False)
         pair = self._to_kraken_pair(symbol)
@@ -286,7 +291,7 @@ class KrakenExchange(ExchangeBase):
         res = self._private_request("/AddOrder", data)
 
         if "txid" not in res.get("result", {}):
-            log_event(f"⚠️ Kraken order failed → {res}")
+            log_event(f"⚠️ Kraken order failed → {res}", level="WARN")
             return res
 
         txid = res["result"]["txid"][0]
@@ -302,12 +307,12 @@ class KrakenExchange(ExchangeBase):
                 conn.commit()
                 conn.close()
             except Exception as e:
-                log_event(f"⚠️ Could not store Kraken TXID in DB: {e}")
+                log_event(f"⚠️ Could not store Kraken TXID in DB: {e}", level="ERROR")
 
         time.sleep(12)
         detail = self._get_order_details(txid)
         if not detail:
-            log_event(f"⚠️ Kraken returned no order details for TXID={txid}")
+            log_event(f"⚠️ Kraken returned no order details for TXID={txid}", level="WARN")
             return res
 
         log_event(f"📊 Order status: {detail['status']} ({detail['descr']})")
@@ -394,12 +399,12 @@ class KrakenExchange(ExchangeBase):
                 conn.close()
 
             except Exception as e:
-                log_event(f"⚠️ Could not update executed Kraken trade / allocation in DB: {e}")
+                log_event(f"⚠️ Could not update executed Kraken trade / allocation in DB: {e}", level="ERROR")
 
             log_event(
                 f"💾 Updated executed Kraken trade → "
                 f"€{actual_price} × {actual_amount} "
-                f"(was {price} × {volume}, trade_id={trade_id})"
+                f"(was {price} × {volume}, trade_id={trade_id})", level="DEBUG"
             )
 
             final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
