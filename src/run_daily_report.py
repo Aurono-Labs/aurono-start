@@ -8,6 +8,7 @@ from report_storage import (
     cleanup_old_reports,
 )
 from report_dispatcher import dispatch_report
+from report_renderer_email import render_daily_email
 
 
 # --------------------------------------------------
@@ -18,21 +19,23 @@ today = report["date"].split("T")[0]
 
 
 # --------------------------------------------------
-# Persist report
+# Persist report (browser version)
 # --------------------------------------------------
 save_daily_report_json(report)
 
-html = render_daily_report_html(report)
-save_html_report(html, f"daily_{today}")
+browser_html = render_daily_report_html(report)
+save_html_report(browser_html, f"daily_{today}")
 
 
 # --------------------------------------------------
-# Dispatch report (email, future channels)
+# Dispatch report (EMAIL VERSION)
 # --------------------------------------------------
+email_html = render_daily_email(report)
+
 dispatch_report(
     report_type="daily",
     subject=f"Aurono Daily Report — {today}",
-    html_body=html,
+    html_body=email_html,
 )
 
 

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Aurono Daily Report</title>
+</head>
+
+<body style="margin:0; padding:0; background:#ffffff; font-family:-apple-system, BlinkMacSystemFont, Arial, sans-serif; color:#111827;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
+  <tr>
+    <td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="padding:24px;">
+
+        <!-- HEADER -->
+        <tr>
+          <td style="font-size:24px; font-weight:700; color:#facc15;">
+            Daily Report
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:6px; font-size:14px; color:#6b7280;">
+            Date: {{ report.date[:16] }}
+          </td>
+        </tr>
+
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- PORTFOLIO SUMMARY -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Portfolio Summary
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:10px; font-size:14px; line-height:1.6;">
+            {% if report.portfolio.total_value_eur == 0 %}
+              <i style="color:#6b7280;">No portfolio activity found for today.</i>
+            {% else %}
+              <b>Total value:</b> €{{ "%.2f"|format(report.portfolio.total_value_eur) }}<br>
+              <b>Crypto value:</b> €{{ "%.2f"|format(report.portfolio.crypto_value_eur) }}<br>
+              <b>Allocated cash:</b> €{{ "%.2f"|format(report.portfolio.cash_value_eur) }}<br>
+              <b>Unrealized P/L:</b> €{{ "%.2f"|format(report.portfolio.unrealized_pnl_eur) }}<br>
+              <b>Change since yesterday:</b> {{ "%.2f"|format(report.portfolio.change_since_yesterday_pct) }}%
+            {% endif %}
+          </td>
+        </tr>
+
+        <tr><td style="height:24px; border-bottom:1px solid #e5e7eb;"></td></tr>
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- LIQUIDITY SUMMARY -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Liquidity Summary
+          </td>
+        </tr>
+
+        {% if report.liquidity|length == 0 %}
+          <tr>
+            <td style="padding-top:10px; font-size:14px; color:#6b7280;">
+              <i>No exchanges or no active strategies.</i>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td style="padding-top:10px;">
+              <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-size:14px;">
+                <tr style="border-bottom:1px solid #e5e7eb; color:#6b7280;">
+                  <th align="left">Exchange</th>
+                  <th align="right">Allocated (€)</th>
+                  <th align="right">Available (€)</th>
+                  <th align="right">Free (€)</th>
+                </tr>
+                {% for row in report.liquidity %}
+                <tr style="border-bottom:1px solid #f3f4f6;">
+                  <td>{{ row.exchange|capitalize }}</td>
+                  <td align="right">{{ "%.2f"|format(row.allocated) }}</td>
+
+                  {% if row.has_creds %}
+                    <td align="right">
+                      {% if row.available is not none %}
+                        {{ "%.2f"|format(row.available) }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                  {% else %}
+                    <td align="right" style="color:#b91c1c;">No API creds</td>
+                  {% endif %}
+
+                  <td align="right">
+                    {% if row.has_creds %}
+                      {{ "%.2f"|format(row.free) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+        {% endif %}
+
+        <tr><td style="height:24px; border-bottom:1px solid #e5e7eb;"></td></tr>
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- FILLED ORDERS -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Filled Orders (last 24h)
+          </td>
+        </tr>
+
+        {% if report.filled_orders|length == 0 %}
+          <tr>
+            <td style="padding-top:10px; font-size:14px; color:#6b7280;">
+              <i>No trades executed in the last 24 hours.</i>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td style="padding-top:10px;">
+              <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-size:14px;">
+                <tr style="border-bottom:1px solid #e5e7eb; color:#6b7280;">
+                  <th align="left">Strategy</th>
+                  <th align="left">Side</th>
+                  <th align="right">Amount</th>
+                  <th align="right">Price</th>
+                  <th align="left">Time</th>
+                  <th align="right">P/L</th>
+                </tr>
+                {% for o in report.filled_orders %}
+                <tr style="border-bottom:1px solid #f3f4f6;">
+                  <td>{{ o.strategy_label }}</td>
+                  <td>{{ o.side }}</td>
+                  <td align="right">{{ o.amount_str }}</td>
+                  <td align="right">€{{ o.price_str }}</td>
+                  <td>{{ o.timestamp[:16] }}</td>
+                  <td align="right">
+                    {% if o.side == "buy" %}
+                      -
+                    {% else %}
+                      €{{ "%.2f"|format(o.pnl) }}
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+        {% endif %}
+
+        <tr><td style="height:24px; border-bottom:1px solid #e5e7eb;"></td></tr>
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- ALERTS -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Alerts (last 24h)
+          </td>
+        </tr>
+
+        {% if report.alerts|length == 0 %}
+          <tr>
+            <td style="padding-top:10px; font-size:14px; color
+

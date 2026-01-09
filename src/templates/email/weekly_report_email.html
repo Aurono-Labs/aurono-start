@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Aurono Weekly Report</title>
+</head>
+
+<body style="margin:0; padding:0; background:#ffffff; font-family:-apple-system, BlinkMacSystemFont, Arial, sans-serif; color:#111827;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
+  <tr>
+    <td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="padding:24px;">
+
+        <!-- HEADER -->
+        <tr>
+          <td style="font-size:24px; font-weight:700; color:#facc15;">
+            Weekly Report
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:6px; font-size:14px; color:#6b7280;">
+            Week: {{ report.week_start }} → {{ report.week_end }}
+          </td>
+        </tr>
+
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- PERFORMANCE SUMMARY -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Performance Summary
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:10px; font-size:14px; line-height:1.6;">
+            <b>Weekly P/L:</b> €{{ "%.2f"|format(report.performance.weekly_pnl_eur) }}<br>
+            <b>Buys:</b> {{ report.performance.buys }}<br>
+            <b>Sells:</b> {{ report.performance.sells }}<br>
+            <b>Average Sell Return:</b> {{ "%.2f"|format(report.performance.average_sell_return_pct) }}%<br>
+            <b>Best Sell Return:</b> {{ "%.2f"|format(report.performance.best_sell_return_pct) }}%<br>
+            <b>Worst Sell Return:</b> {{ "%.2f"|format(report.performance.worst_sell_return_pct) }}%
+          </td>
+        </tr>
+
+        <tr><td style="height:24px; border-bottom:1px solid #e5e7eb;"></td></tr>
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- LIQUIDITY SUMMARY -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Liquidity Summary
+          </td>
+        </tr>
+
+        {% if report.liquidity|length == 0 %}
+          <tr>
+            <td style="padding-top:10px; font-size:14px; color:#6b7280;">
+              <i>No exchanges or no active strategies.</i>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td style="padding-top:10px;">
+              <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-size:14px;">
+                <tr style="border-bottom:1px solid #e5e7eb; color:#6b7280;">
+                  <th align="left">Exchange</th>
+                  <th align="right">Allocated (€)</th>
+                  <th align="right">Available (€)</th>
+                  <th align="right">Free (€)</th>
+                </tr>
+                {% for row in report.liquidity %}
+                <tr style="border-bottom:1px solid #f3f4f6;">
+                  <td>{{ row.exchange|capitalize }}</td>
+                  <td align="right">{{ "%.2f"|format(row.allocated) }}</td>
+
+                  {% if row.has_creds %}
+                    <td align="right">
+                      {% if row.available is not none %}
+                        {{ "%.2f"|format(row.available) }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                  {% else %}
+                    <td align="right" style="color:#b91c1c;">No API creds</td>
+                  {% endif %}
+
+                  <td align="right">
+                    {% if row.has_creds %}
+                      {{ "%.2f"|format(row.free) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+        {% endif %}
+
+        <tr><td style="height:24px; border-bottom:1px solid #e5e7eb;"></td></tr>
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- STRATEGY BREAKDOWN -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Strategy Breakdown
+          </td>
+        </tr>
+
+        {% if report.strategies|length == 0 %}
+          <tr>
+            <td style="padding-top:10px; font-size:14px; color:#6b7280;">
+              <i>No active strategies.</i>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td style="padding-top:10px;">
+              <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-size:14px;">
+                <tr style="border-bottom:1px solid #e5e7eb; color:#6b7280;">
+                  <th align="left">Strategy</th>
+                  <th align="right">Buys</th>
+                  <th align="right">Sells</th>
+                  <th align="right">Weekly P/L (€)</th>
+                  <th align="right">Avg Buy</th>
+                  <th align="right">Avg Sell</th>
+                  <th align="right">Avg Return %</th>
+                </tr>
+                {% for s in report.strategies %}
+                <tr style="border-bottom:1px solid #f3f4f6;">
+                  <td>{{ s.label }}</td>
+                  <td align="right">{{ s.buys }}</td>
+                  <td align="right">{{ s.sells }}</td>
+                  <td align="right">
+                    {% if s.sells == 0 %}
+                      -
+                    {% else %}
+                      €{{ "%.2f"|format(s.weekly_pnl_eur) }}
+                    {% endif %}
+                  </td>
+                  <td align="right">{{ s.avg_buy_price_str }}</td>
+                  <td align="right">{{ s.avg_sell_price_str }}</td>
+                  <td align="right">{{ "%.2f"|format(s.avg_sell_return_pct) }}%</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+        {% endif %}
+
+        <tr><td style="height:24px; border-bottom:1px solid #e5e7eb;"></td></tr>
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- HIGHLIGHTS -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Highlights
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:10px; font-size:14px; line-height:1.6;">
+            <b>Best Trade</b><br>
+            {% if report.highlights.best_trade.symbol %}
+              {{ report.highlights.best_trade.symbol }}
+              ({{ report.highlights.best_trade.exchange }})
+              {{ report.highlights.best_trade.timeframe }}<br>
+              P/L: €{{ "%.2f"|format(report.highlights.best_trade.pnl) }}
+              | Return: {{ "%.2f"|format(report.highlights.best_trade.return_pct) }}%
+            {% else %}
+              <i style="color:#6b7280;">No sell trades this week.</i>
+            {% endif %}
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:12px; font-size:14px; line-height:1.6;">
+            <b>Worst Trade</b><br>
+            {% if report.highlights.worst_trade.symbol %}
+              {{ report.highlights.worst_trade.symbol }}
+              ({{ report.highlights.worst_trade.exchange }})
+              {{ report.highlights.worst_trade.timeframe }}<br>
+              P/L: €{{ "%.2f"|format(report.highlights.worst_trade.pnl) }}
+              | Return: {{ "%.2f"|format(report.highlights.worst_trade.return_pct) }}%
+            {% else %}
+              <i style="color:#6b7280;">No sell trades this week.</i>
+            {% endif %}
+          </td>
+        </tr>
+
+        <tr><td style="height:24px; border-bottom:1px solid #e5e7eb;"></td></tr>
+        <tr><td style="height:24px;"></td></tr>
+
+        <!-- EXPOSURE -->
+        <tr>
+          <td style="font-size:16px; font-weight:600;">
+            Exposure
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:10px; font-size:14px; line-height:1.6;">
+            <b>Cash %:</b> {{ "%.2f"|format(report.exposure.cash_pct) }}%<br>
+            <b>Crypto %:</b> {{ "%.2f"|format(report.exposure.crypto_pct) }}%
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:12px; font-size:14px;">
+            <b>By Exchange</b>
+            <ul style="padding-left:18px; margin:6px 0;">
+              {% for ex, pct in report.exposure.by_exchange.items() %}
+                <li>{{ ex|capitalize }}: {{ "%.2f"|format(pct) }}%</li>
+              {% endfor %}
+            </ul>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding-top:12px; font-size:14px;">
+            <b>By Coin</b>
+            <ul style="padding-left:18px; margin:6px 0;">
+              {% for coin, pct in report.exposure.by_coin.items() %}
+                <li>{{ coin }}: {{ "%.2f"|format(pct) }}%</li>
+              {% endfor %}
+            </ul>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
+
