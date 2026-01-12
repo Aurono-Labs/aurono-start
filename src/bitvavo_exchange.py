@@ -516,29 +516,46 @@ class BitvavoExchange(ExchangeBase):
                 )
                 row = cur.fetchone()
                 strategy_id = row[0] if row and row[0] is not None else None
+                
+                alloc_submit = None
+                alloc_exec = None
 
-                new_alloc = None
-                if strategy_id is not None and delta != 0:
-                    cur.execute(
-                        """
-                        UPDATE strategies
-                        SET allocated_eur = allocated_eur + ?
-                        WHERE id = ?
-                        """,
-                        (float(delta), strategy_id),
-                    )
-
+                if strategy_id is not None:
+                    # allocation AFTER submit, BEFORE exec correction
                     cur.execute(
                         "SELECT allocated_eur FROM strategies WHERE id = ?",
                         (strategy_id,),
                     )
-                    row2 = cur.fetchone()
-                    if row2:
-                        new_alloc = float(row2[0])
+                    row_before = cur.fetchone()
+                    if row_before:
+                        alloc_submit = Decimal(str(row_before[0]))
+
+                    # apply execution delta (only if needed)
+                    if delta != Decimal("0.00"):
+                        cur.execute(
+                            """
+                            UPDATE strategies
+                            SET allocated_eur = allocated_eur + ?
+                            WHERE id = ?
+                            """,
+                            (float(delta), strategy_id),
+                        )
+
+                        cur.execute(
+                            "SELECT allocated_eur FROM strategies WHERE id = ?",
+                            (strategy_id,),
+                        )
+                        row_after = cur.fetchone()
+                        if row_after:
+                            alloc_exec = Decimal(str(row_after[0]))
+                    else:
+                        # no correction; exec alloc equals submit alloc
+                        alloc_exec = alloc_submit
 
                     log_event(
-                        f"🔁 Adjusted allocated_eur for strategy {strategy_id} on Bitvavo "
-                        f"by €{delta:.2f} (reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f})"
+                        f"🔁 Allocation reconcile (strategy {strategy_id}, {side.upper()}): "
+                        f"reserved €{reserved_eur:.2f}, actual €{actual_eur:.2f}, delta €{delta:.2f} | "
+                        f"alloc submit €{alloc_submit:.2f} → exec €{alloc_exec:.2f}"
                     )
 
                 conn.commit()
@@ -552,13 +569,15 @@ class BitvavoExchange(ExchangeBase):
                 f"€{actual_price} × {actual_amount} "
                 f"(was {price} × {volume}, trade_id={trade_id})"
             )
-
-            final_alloc_str = f", new alloc €{new_alloc:.2f}" if new_alloc is not None else ""
+            
+            alloc_flow = ""
+            if alloc_submit is not None and alloc_exec is not None:
+                alloc_flow = f" | alloc submit €{alloc_submit:.2f} → exec €{alloc_exec:.2f}"
 
             log_event(
                 f"✅ {side.upper()} executed: {actual_amount} {symbol} @ €{actual_price} "
-                f"on bitvavo (actual €{actual_eur:.2f}, reserved €{reserved_eur:.2f}"
-                f"{final_alloc_str})"
+                f"on bitvavo (actual €{actual_eur:.2f}, reserved €{reserved_eur:.2f})"
+                f"{alloc_flow}"
             )
 
         return res
