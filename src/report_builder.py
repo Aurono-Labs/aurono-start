@@ -9,7 +9,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 
 from utils import (
     _open_db,

@@ -166,5 +166,27 @@
 
         {% if report.alerts|length == 0 %}
           <tr>
-            <td style="padding-top:10px; font-size:14px; color
+            <td style="padding-top:10px; font-size:14px; color:#6b7280;">
+              <i>No alerts logged in the past 24 hours.</i>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td style="padding-top:10px; font-size:14px;">
+              <ul style="padding-left:18px; margin:0;">
+                {% for a in report.alerts %}
+                  <li>{{ a }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endif %}
+
+      </table>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
 

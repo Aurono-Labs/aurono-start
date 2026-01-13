@@ -10,6 +10,14 @@ from report_storage import (
 from report_dispatcher import dispatch_report
 from report_renderer_email import render_daily_email
 
+from utils import log_event
+
+try:
+    import psutil
+except ImportError:
+    log_event("⚠️ psutil missing — system metrics disabled")
+
+
 
 # --------------------------------------------------
 # Generate report
