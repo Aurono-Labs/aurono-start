@@ -153,6 +153,10 @@
       border: 1px solid rgba(250,204,21,0.5);
       color: #facc15;
     }
+      
+    tr[data-archived="1"] {
+        opacity: 0.6;
+    }
     
   </style>
 
@@ -249,6 +253,77 @@
               });
           });
         </script>
+        <script>
+        document.addEventListener("DOMContentLoaded", () => {
+
+          const tbody = document.querySelector("tbody");
+          const rows = Array.from(tbody.querySelectorAll("tr"))
+            .filter(r => r.dataset.id); // only main rows
+
+          const filterSelect = document.getElementById("filter-symbol");
+          const sortSelect   = document.getElementById("sort-strategies");
+          const showArchivedCheckbox = document.getElementById("show-archived");
+
+          /* -----------------------------
+             Populate symbol filter
+          ----------------------------- */
+          const symbols = [...new Set(rows.map(r => r.dataset.symbol))].sort();
+          symbols.forEach(sym => {
+            const opt = document.createElement("option");
+            opt.value = sym;
+            opt.textContent = sym.slice(0, -3) + "/EUR";
+            filterSelect.appendChild(opt);
+          });
+
+          /* -----------------------------
+             Apply filter + sort
+          ----------------------------- */
+          function applyView() {
+            const symbol = filterSelect.value;
+            const sort   = sortSelect.value;
+            
+            let visible = rows.filter(r => {
+              const matchesSymbol =
+                !symbol || r.dataset.symbol === symbol;
+
+              const isArchived = r.dataset.archived === "1";
+              const allowArchived = showArchivedCheckbox.checked;
+
+              return matchesSymbol && (allowArchived || !isArchived);
+            });
+
+            visible.sort((a, b) => {
+              if (sort === "id-desc")
+                return b.dataset.id - a.dataset.id;
+
+              if (sort === "symbol-asc")
+                return a.dataset.symbol.localeCompare(b.dataset.symbol);
+
+              if (sort === "allocated-asc")
+                return parseFloat(a.dataset.allocated) - parseFloat(b.dataset.allocated);
+
+              return 0;
+            });
+
+            // Rebuild table (keep edit rows paired)
+            tbody.innerHTML = "";
+            visible.forEach(r => {
+              tbody.appendChild(r);
+              const edit = document.getElementById("edit-" + r.dataset.id);
+              if (edit) tbody.appendChild(edit);
+            });
+          }
+
+          filterSelect.addEventListener("change", applyView);
+          sortSelect.addEventListener("change", applyView);
+          showArchivedCheckbox.addEventListener("change", applyView);
+          
+          // initial render
+          applyView();
+
+        });
+        </script>
+
 
         <div class="field">
           <label>Timeframe</label>
@@ -319,6 +394,36 @@
       <div class="card-sub">
         Edit thresholds and amounts. Exchange, symbol and timeframe are fixed once a strategy is created.
       </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+
+        <!-- SYMBOL FILTER -->
+        <div class="field" style="min-width:180px;">
+          <label>Filter by symbol</label>
+          <select id="filter-symbol">
+            <option value="">All symbols</option>
+          </select>
+        </div>
+
+        <!-- SORT ORDER -->
+        <div class="field" style="min-width:220px;">
+          <label>Order strategies by</label>
+          <select id="sort-strategies">
+            <option value="id-desc">Newest first (Strategy ID)</option>
+            <option value="symbol-asc">Symbol A → Z</option>
+            <option value="allocated-asc">Allocated € (low → high)</option>
+          </select>
+        </div>
+        
+        <!-- SHOW ARCHIVED STRATEGIES -->
+        <div class="field" style="align-self:flex-end;">
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="checkbox" id="show-archived">
+            Show archived strategies
+          </label>
+        </div>
+
+
+      </div>
 
       <div class="table-wrap">
         <table>
@@ -337,7 +442,12 @@
 
           <tbody>
             {% for s in strategies %}
-            <tr>
+            <tr
+              data-id="{{ s.id }}"
+              data-symbol="{{ s.symbol }}"
+              data-allocated="{{ s.allocated_eur }}"
+              data-archived="{{ '1' if s.archived else '0' }}"
+            >
               <td>{{ s.symbol[:-3] }}/EUR – {{ s.timeframe }} ({{ s.exchange }})</td>
               <td>{{ "%.2f"|format(abs(s.drop_trigger)) }}</td>
               <td>{{ "%.2f"|format(s.rise_trigger) }}</td>
