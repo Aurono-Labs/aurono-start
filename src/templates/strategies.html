@@ -162,9 +162,15 @@
 
   <script>
     function toggleEdit(id) {
+      document.querySelectorAll(".edit-row").forEach(r => {
+        if (r.id !== "edit-" + id) r.style.display = "none";
+      });
+
       const row = document.getElementById("edit-" + id);
-      row.style.display = (row.style.display === "table-row") ? "none" : "table-row";
+      row.style.display =
+        row.style.display === "table-row" ? "none" : "table-row";
     }
+
 
     function toggleExistingFields() {
       const chk = document.getElementById('import_existing');
@@ -281,18 +287,10 @@
           function applyView() {
             const symbol = filterSelect.value;
             const sort   = sortSelect.value;
-            
-            let visible = rows.filter(r => {
-              const matchesSymbol =
-                !symbol || r.dataset.symbol === symbol;
+            const allowArchived = showArchivedCheckbox.checked;
 
-              const isArchived = r.dataset.archived === "1";
-              const allowArchived = showArchivedCheckbox.checked;
-
-              return matchesSymbol && (allowArchived || !isArchived);
-            });
-
-            visible.sort((a, b) => {
+            // sort rows array only (no DOM rebuild)
+            rows.sort((a, b) => {
               if (sort === "id-desc")
                 return b.dataset.id - a.dataset.id;
 
@@ -305,11 +303,19 @@
               return 0;
             });
 
-            // Rebuild table (keep edit rows paired)
-            tbody.innerHTML = "";
-            visible.forEach(r => {
-              tbody.appendChild(r);
+            // re-append rows in new order
+            rows.forEach(r => {
+              const isArchived = r.dataset.archived === "1";
+              const matchesSymbol = !symbol || r.dataset.symbol === symbol;
+
+              const visible = matchesSymbol && (allowArchived || !isArchived);
+              r.style.display = visible ? "table-row" : "none";
+
+              // always hide edit rows initially
               const edit = document.getElementById("edit-" + r.dataset.id);
+              if (edit) edit.style.display = "none";
+
+              tbody.appendChild(r);
               if (edit) tbody.appendChild(edit);
             });
           }
@@ -469,7 +475,14 @@
 
                 {% if not s.archived %}
                   <!-- EDIT -->
-                  <button class="btn btn-small" onclick="toggleEdit({{ s.id }})">Edit</button>
+                  <button
+                    type="button"
+                    class="btn btn-small"
+                    onclick="toggleEdit({{ s.id }})"
+                  >
+                    Edit
+                  </button>
+
 
                   <!-- ENABLE / DISABLE -->
                   <form method="post" action="/strategies/toggle_enabled/{{ s.id }}"
