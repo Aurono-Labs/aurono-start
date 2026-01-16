@@ -439,6 +439,16 @@ _pair_cache = {
 
 CACHE_TTL = 3600  # 1 hour
 
+# Exchange-specific policy filters
+_EXCHANGE_DENYLIST = {
+    "kraken": {
+        # Kraken blocks XMR trading for NL accounts
+        "XMREUR",
+    },
+    # future:
+    # "coinbase": {...}
+}
+
 
 def get_supported_pairs(exchange: str) -> list[str]:
     """
@@ -454,7 +464,7 @@ def get_supported_pairs(exchange: str) -> list[str]:
     # Serve from cache
     if now - _pair_cache[exchange]["timestamp"] < CACHE_TTL:
         return _pair_cache[exchange]["pairs"]
-
+        
     # --------------------------------------------------------
     # Kraken
     # --------------------------------------------------------
@@ -463,16 +473,26 @@ def get_supported_pairs(exchange: str) -> list[str]:
         resp = requests.get(url, timeout=10)
         data = resp.json().get("result", {})
 
+        deny = _EXCHANGE_DENYLIST.get("kraken", set())
+
         pairs = []
         for _, v in data.items():
             pair = v.get("wsname")
-            if pair and pair.endswith("/EUR"):
-                clean = pair.replace("/", "")
-                if clean.startswith("XBT"):
-                    clean = clean.replace("XBT", "BTC")
-                if clean.startswith("XDG") or clean.startswith("XXDG"):
-                    clean = clean.replace("XDG", "DOGE").replace("XXDG", "DOGE")
-                pairs.append(clean)
+            if not pair or not pair.endswith("/EUR"):
+                continue
+
+            clean = pair.replace("/", "")
+
+            if clean.startswith("XBT"):
+                clean = clean.replace("XBT", "BTC")
+            if clean.startswith("XDG") or clean.startswith("XXDG"):
+                clean = clean.replace("XDG", "DOGE").replace("XXDG", "DOGE")
+
+            # 🔒 policy filter
+            if clean in deny:
+                continue
+
+            pairs.append(clean)
 
         pairs = sorted(pairs)
         _pair_cache["kraken"] = {"pairs": pairs, "timestamp": now}

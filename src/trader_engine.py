@@ -122,6 +122,26 @@ class TraderEngine:
             pass
 
         return chosen
+        
+    # ------------------------------------------------------------
+    # Check if order is accepted by exchange
+    # ------------------------------------------------------------
+    def _order_accepted(self, res: dict) -> bool:
+        if not isinstance(res, dict):
+            return False
+        if res.get("error"):
+            return False
+
+        r = res.get("result")
+
+        # Kraken simulated mode
+        if r == "simulated":
+            return True
+
+        if isinstance(r, dict) and "txid" in r:
+            return True
+
+        return False
 
     # ------------------------------------------------------------
     # One-shot execution
@@ -267,7 +287,10 @@ class TraderEngine:
                         trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
                         res = exchange.place_limit_order(symbol, "buy", limit_price, vol, trade_id)
 
-                        # Only update allocated after successful order submission (no exception)
+                        if not self._order_accepted(res):
+                            raise RuntimeError(f"Order rejected: {res}")
+
+                        # Only update allocated after exchange accepted order
                         eur_spent = limit_price * vol
                         new_alloc = float(allocated - eur_spent)
                         with _open_db() as c:
@@ -275,20 +298,14 @@ class TraderEngine:
                             c.commit()
 
                         log_event(
-                            f"📤 BUY submitted: {symbol} {s_timeframe} "
+                            f"📤 BUY accepted by exchange: {symbol} {s_timeframe} "
                             f"{vol} @ {limit_price} on {exchange.name} (trade_id={trade_id})",
                             level="INFO"
                         )
 
-
                     except Exception as e:
-                        log_event(
-                            f"BUY failed: {symbol} on {exchange.name}: {e}",
-                            level="ERROR"
-                        )
+                        log_event(f"BUY failed: {symbol} on {exchange.name}: {e}", level="ERROR")
 
-
-                        # Cleanup: remove trade row to avoid phantom "executed" trades
                         if trade_id is not None:
                             try:
                                 with _open_db() as c:
@@ -344,42 +361,40 @@ class TraderEngine:
                     log_event(
                         f"SELL calc → target={sell_eur}, price={ticker}, fee={fee}, limit={limit_price}, volume={vol}, balance={balance}",level="DEBUG"
                     )
-
-
+                    
                     trade_id = None
                     try:
                         trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
                         res = exchange.place_limit_order(symbol, "sell", limit_price, vol, trade_id)
 
-                        # Only update allocated after successful order submission (no exception)
+                        if not self._order_accepted(res):
+                            raise RuntimeError(f"Order rejected: {res}")
+
+                        # Only update allocated after exchange accepted order
                         eur_gained = limit_price * vol
                         new_alloc = float(allocated + eur_gained)
                         with _open_db() as c:
-                            c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
+                            c.execute(
+                                "UPDATE strategies SET allocated_eur=? WHERE id=?",
+                                (new_alloc, sid),
+                            )
                             c.commit()
 
                         log_event(
-                            f"📤 SELL submitted: {symbol} {s_timeframe} "
+                            f"📤 SELL accepted by exchange: {symbol} {s_timeframe} "
                             f"{vol} @ {limit_price} on {exchange.name} (trade_id={trade_id})",
                             level="INFO"
                         )
 
-
                     except Exception as e:
-                        log_event(
-                            f"SELL failed: {symbol} on {exchange.name}: {e}",
-                            level="ERROR"
-                        )
+                        log_event(f"SELL failed: {symbol} on {exchange.name}: {e}", level="ERROR")
 
-
-                        # Cleanup: remove trade row to avoid phantom "executed" trades
                         if trade_id is not None:
                             try:
                                 with _open_db() as c:
                                     c.execute("DELETE FROM trades WHERE id=?", (trade_id,))
                                     c.commit()
                                 log_event(f"Removed phantom SELL trade_id={trade_id}", level="DEBUG")
-
                             except Exception as e2:
                                 log_event(f"⚠️ Failed to delete phantom trade_id={trade_id}: {e2}")
 

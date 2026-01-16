@@ -1,9 +1,16 @@
 # src/report_renderer_email.py
 
+from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+TEMPLATES_DIR = (
+    Path(__file__).resolve()
+    .parent            # src/
+    / "templates"      # src/templates/
+)
+
 _env = Environment(
-    loader=FileSystemLoader("templates"),
+    loader=FileSystemLoader(str(TEMPLATES_DIR)),
     autoescape=select_autoescape(["html", "xml"]),
 )
 
