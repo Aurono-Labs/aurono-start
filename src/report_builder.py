@@ -798,8 +798,18 @@ def generate_weekly_report() -> Dict[str, Any]:
         totals_by_coin.setdefault(s["symbol"], 0.0)
         totals_by_coin[s["symbol"]] += s["value"]
 
-    for coin, val in totals_by_coin.items():
-        exposure_block["by_coin"][coin] = round(val / total_value * 100, 2) if total_value else 0.0
+    by_coin_unsorted = {
+        coin: round(val / total_value * 100, 2) if total_value else 0.0
+        for coin, val in totals_by_coin.items()
+    }
+
+    exposure_block["by_coin"] = dict(
+        sorted(
+            by_coin_unsorted.items(),
+            key=lambda item: item[1],  # percentage
+            reverse=True
+        )
+    )
 
     totals_by_ex_crypto = {}
     totals_by_ex_cash = {}
@@ -811,10 +821,22 @@ def generate_weekly_report() -> Dict[str, Any]:
         totals_by_ex_crypto[ex] += s["value"]
         totals_by_ex_cash[ex] += s["allocated_eur"]
 
+    by_exchange_unsorted = {}
+
     for ex, crypto_val_ex in totals_by_ex_crypto.items():
         cash_val_ex = totals_by_ex_cash.get(ex, 0.0)
         ex_total = crypto_val_ex + cash_val_ex
-        exposure_block["by_exchange"][ex] = round(ex_total / total_value * 100, 2) if total_value else 0.0
+        by_exchange_unsorted[ex] = (
+            round(ex_total / total_value * 100, 2) if total_value else 0.0
+        )
+
+    exposure_block["by_exchange"] = dict(
+        sorted(
+            by_exchange_unsorted.items(),
+            key=lambda item: item[1],  # percentage
+            reverse=True
+        )
+    )
 
     # --------------------------------------------------------
     # CAPITAL EFFICIENCY
