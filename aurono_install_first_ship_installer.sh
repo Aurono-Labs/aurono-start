@@ -155,17 +155,6 @@ else
 fi
 
 # ------------------------------------------------------------
-# System dependencies (Raspberry Pi only)
-# ------------------------------------------------------------
-if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-  echo "🔧 Installing system dependencies (safe, no upgrade)..."
-  sudo apt update
-  sudo apt install -y python3-psutil
-  echo "✅ System dependencies ready"
-  echo ""
-fi
-
-# ------------------------------------------------------------
 # Python environment
 # ------------------------------------------------------------
 echo ""
