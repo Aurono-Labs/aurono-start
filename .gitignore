@@ -19,3 +19,7 @@ data/trades_backup_*.db
 *checkpoint.py
 
 .ipynb_checkpoints/
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
