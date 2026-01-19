@@ -52,3 +52,15 @@ class ExchangeBase(ABC):
         Must return the EUR amount that can actually be used for new trades.
         """
         raise NotImplementedError
+
+    # ─────────────────────────────────────────────────────────
+    # NEW: exchange-specific order acceptance contract
+    # ─────────────────────────────────────────────────────────
+    def order_accepted(self, res: Dict[str, Any]) -> bool:
+        """
+        Return True if the exchange has accepted the order.
+
+        Default: conservative False.
+        Each exchange MUST override this.
+        """
+        return False

@@ -436,3 +436,17 @@ class KrakenExchange(ExchangeBase):
 
         return res
 
+    def order_accepted(self, res: Dict[str, Any]) -> bool:
+        if not isinstance(res, dict):
+            return False
+        if res.get("error"):
+            return False
+
+        result = res.get("result")
+
+        # simulated mode
+        if result == "simulated":
+            return True
+
+        return isinstance(result, dict) and "txid" in result
+

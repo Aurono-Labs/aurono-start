@@ -122,26 +122,6 @@ class TraderEngine:
             pass
 
         return chosen
-        
-    # ------------------------------------------------------------
-    # Check if order is accepted by exchange
-    # ------------------------------------------------------------
-    def _order_accepted(self, res: dict) -> bool:
-        if not isinstance(res, dict):
-            return False
-        if res.get("error"):
-            return False
-
-        r = res.get("result")
-
-        # Kraken simulated mode
-        if r == "simulated":
-            return True
-
-        if isinstance(r, dict) and "txid" in r:
-            return True
-
-        return False
 
     # ------------------------------------------------------------
     # One-shot execution
@@ -287,14 +267,17 @@ class TraderEngine:
                         trade_id = self.tm.record_trade(symbol, "buy", limit_price, vol, sid)
                         res = exchange.place_limit_order(symbol, "buy", limit_price, vol, trade_id)
 
-                        if not self._order_accepted(res):
+                        if not exchange.order_accepted(res):
                             raise RuntimeError(f"Order rejected: {res}")
 
                         # Only update allocated after exchange accepted order
                         eur_spent = limit_price * vol
-                        new_alloc = float(allocated - eur_spent)
                         with _open_db() as c:
-                            c.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
+                            cur = c.cursor()
+                            cur.execute("SELECT allocated_eur FROM strategies WHERE id=?", (sid,))
+                            current_alloc = Decimal(str(cur.fetchone()[0]))
+                            new_alloc = float(current_alloc - eur_spent)
+                            cur.execute("UPDATE strategies SET allocated_eur=? WHERE id=?", (new_alloc, sid))
                             c.commit()
 
                         log_event(
@@ -367,14 +350,17 @@ class TraderEngine:
                         trade_id = self.tm.record_trade(symbol, "sell", limit_price, vol, sid)
                         res = exchange.place_limit_order(symbol, "sell", limit_price, vol, trade_id)
 
-                        if not self._order_accepted(res):
+                        if not exchange.order_accepted(res):
                             raise RuntimeError(f"Order rejected: {res}")
 
                         # Only update allocated after exchange accepted order
                         eur_gained = limit_price * vol
-                        new_alloc = float(allocated + eur_gained)
                         with _open_db() as c:
-                            c.execute(
+                            cur = c.cursor()
+                            cur.execute("SELECT allocated_eur FROM strategies WHERE id=?", (sid,))
+                            current_alloc = Decimal(str(cur.fetchone()[0]))
+                            new_alloc = float(current_alloc + eur_gained)
+                            cur.execute(
                                 "UPDATE strategies SET allocated_eur=? WHERE id=?",
                                 (new_alloc, sid),
                             )
