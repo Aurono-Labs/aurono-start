@@ -542,3 +542,17 @@ class CoinbaseExchange(ExchangeBase):
             conn.close()
 
         return res
+
+    def order_accepted(self, res: Dict[str, Any]) -> bool:
+        if not isinstance(res, dict):
+            return False
+
+        # Coinbase success contract
+        if res.get("success") is True:
+            return True
+
+        # Fallback: presence of order_id
+        if res.get("order_id"):
+            return True
+
+        return False
