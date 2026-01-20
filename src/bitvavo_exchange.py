@@ -585,6 +585,14 @@ class BitvavoExchange(ExchangeBase):
     def order_accepted(self, res: Dict[str, Any]) -> bool:
         if not isinstance(res, dict):
             return False
-        if "orderId" not in res:
-            return False
-        return res.get("status") in (None, "new", "open", "filled", "partiallyFilled")
+
+        status = res.get("status")
+
+        if status in ("new", "open", "filled", "partiallyFilled"):
+            return True
+
+        if "orderId" in res:
+            return True
+
+        return False
+
