@@ -492,10 +492,10 @@ class TraderEngine:
                 log_event("⏱ Trigger 1H batch")
                 self.run_strategy_once("1h")
 
-            # 4H at 0/4/8/12/16/20 :03
-            if (fired_now.minute == 3 and fired_now.hour % 4 == 0 and
-                    last_fired["4h"] != fired_now.replace(minute=3, second=0)):
-                last_fired["4h"] = fired_now.replace(minute=3, second=0)
+            # 4H at 0/4/8/12/16/20 :02
+            if (fired_now.minute == 2 and fired_now.hour % 4 == 0 and
+                    last_fired["4h"] != fired_now.replace(minute=2, second=0)):
+                last_fired["4h"] = fired_now.replace(minute=2, second=0)
                 log_event("⏱ Trigger 4H batch")
                 self.run_strategy_once("4h")
 
