@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================
 #  Aurono Start – Universal Installer (macOS + Linux/RPi)
-#  Version: v4.35 — dynamic systemd + OTA (check/apply) + cron + venv refresh
+#  Version: v5.00 — dynamic systemd + OTA (check/apply) + cron + venv refresh
 #  Author: Aurono Labs
 # ============================================================
 
 set -euo pipefail
 
-INSTALL_VERSION="4.35"
-REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v4.35.zip"
+INSTALL_VERSION="5.00"
+REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v5.00.zip"
 APP_DIR="aurono-poc"
 
 echo ""
