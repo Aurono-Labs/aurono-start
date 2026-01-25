@@ -70,6 +70,10 @@ app.include_router(settings.router)
 from routes.reports import router as reports_router
 app.include_router(reports_router)
 
+# --- System update API ---
+from system.update_api import router as update_router
+app.include_router(update_router)
+
 templates = app.state.templates
 templates.env.globals["abs"] = abs
 
