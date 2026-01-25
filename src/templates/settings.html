@@ -1,572 +1,870 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Aurono Settings</title>
+<meta charset="UTF-8">
+<title>Aurono Settings</title>
 
-  <style>
-    :root {
-      --aurono-bg: #020617;
-      --aurono-bg-card: #0a0f1f;
-      --aurono-border: rgba(148,163,184,0.35);
-      --aurono-gold: #facc15;
-      --aurono-gold-soft: #fbbf24;
-      --aurono-text: #e5e7eb;
-      --aurono-muted: #94a3b8;
-      --success: #22c55e;
-      --danger: #ef4444;
-    }
+<style>
+:root {
+  --aurono-bg: #020617;
+  --aurono-bg-card: #0a0f1f;
+  --aurono-border: rgba(148,163,184,0.35);
+  --aurono-gold: #facc15;
+  --aurono-gold-soft: #fbbf24;
+  --aurono-text: #e5e7eb;
+  --aurono-muted: #94a3b8;
+  --success: #22c55e;
+  --danger: #ef4444;
+}
 
-    * { box-sizing: border-box; }
+* { box-sizing: border-box; }
 
-    body {
-      margin: 0;
-      padding: 20px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
-      background: radial-gradient(circle at top, #0a1227 0, #020617 60%);
-      color: var(--aurono-text);
-      min-height: 100vh;
-    }
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Helvetica, Arial, sans-serif;
+  background: radial-gradient(circle at top, #0a1227 0, #020617 60%);
+  color: var(--aurono-text);
+  min-height: 100vh;
+}
 
-    /* TOPBAR */
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 26px;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
+/* TOPBAR */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 26px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 
-    .brand {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      color: var(--aurono-gold);
-      text-transform: uppercase;
-    }
+.brand {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--aurono-gold);
+  text-transform: uppercase;
+}
 
-    nav {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
+nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
-    nav a {
-      padding: 6px 12px;
-      font-size: 14px;
-      text-decoration: none;
-      border-radius: 12px;
-      color: var(--aurono-muted);
-      border: 1px solid transparent;
-      transition: .15s ease;
-    }
+nav a {
+  padding: 6px 12px;
+  font-size: 14px;
+  text-decoration: none;
+  border-radius: 12px;
+  color: var(--aurono-muted);
+  border: 1px solid transparent;
+  transition: .15s ease;
+}
 
-    nav a:hover {
-      color: var(--aurono-text);
-      border-color: rgba(148,163,184,0.4);
-      background: rgba(255,255,255,0.03);
-    }
+nav a:hover {
+  color: var(--aurono-text);
+  border-color: rgba(148,163,184,0.4);
+  background: rgba(255,255,255,0.03);
+}
 
-    nav a.active {
-      border-color: rgba(250,204,21,0.8);
-      color: var(--aurono-gold);
-      background: rgba(250,204,21,0.12);
-    }
+nav a.active {
+  border-color: rgba(250,204,21,0.8);
+  color: var(--aurono-gold);
+  background: rgba(250,204,21,0.12);
+}
 
-    /* HEADINGS */
-    h1 {
-      margin: 0 0 6px 0;
-      font-size: 26px;
-      font-weight: 600;
-    }
+/* HEADINGS */
+h1 {
+  margin: 0 0 6px 0;
+  font-size: 26px;
+  font-weight: 600;
+}
 
-    .subtitle {
-      margin: 0 0 18px 0;
-      font-size: 14px;
-      color: var(--aurono-muted);
-    }
+.subtitle {
+  margin: 0 0 18px 0;
+  font-size: 14px;
+  color: var(--aurono-muted);
+}
 
-    /* LAYOUT */
-    .grid {
-      display: grid;
-      grid-template-columns: 2fr 1.2fr;
-      gap: 20px;
-    }
+/* LAYOUT */
+.grid {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr;
+  gap: 20px;
+}
 
-    @media (max-width: 900px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
 
-    /* CARD */
-    .card {
-      background: var(--aurono-bg-card);
-      border: 1px solid var(--aurono-border);
-      border-radius: 16px;
-      padding: 18px;
-      box-shadow: 0 15px 40px rgba(0,0,0,0.35);
-    }
+/* CARD */
+.card {
+  background: var(--aurono-bg-card);
+  border: 1px solid var(--aurono-border);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+}
 
-    .card-title {
-      font-size: 17px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
+.card-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
 
-    .card-sub {
-      font-size: 13px;
-      color: var(--aurono-muted);
-      margin-bottom: 14px;
-    }
+.card-sub {
+  font-size: 13px;
+  color: var(--aurono-muted);
+  margin-bottom: 14px;
+}
 
-    /* MESSAGES */
-    .msg {
-      padding: 10px;
-      border-radius: 10px;
-      font-size: 13px;
-      margin-bottom: 18px;
-      border-left: 4px solid transparent;
-    }
+/* MESSAGES */
+.msg {
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 18px;
+  border-left: 4px solid transparent;
+}
 
-    .msg-success {
-      border-color: var(--success);
-      background: rgba(34,197,94,0.10);
-      color: #bbf7d0;
-    }
+.msg-success {
+  border-color: var(--success);
+  background: rgba(34,197,94,0.10);
+  color: #bbf7d0;
+}
 
-    .msg-error {
-      border-color: var(--danger);
-      background: rgba(239,68,68,0.10);
-      color: #fecaca;
-    }
+.msg-error {
+  border-color: var(--danger);
+  background: rgba(239,68,68,0.10);
+  color: #fecaca;
+}
 
-    /* TABLE */
-    .table-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
+/* TABLE */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
 
-    th {
-      text-align: left;
-      padding: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      font-size: 11px;
-      color: var(--aurono-muted);
-      border-bottom: 1px solid var(--aurono-border);
-    }
+th {
+  text-align: left;
+  padding: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  color: var(--aurono-muted);
+  border-bottom: 1px solid var(--aurono-border);
+}
 
-    td {
-      padding: 8px;
-      border-bottom: 1px solid var(--aurono-border);
-    }
+td {
+  padding: 8px;
+  border-bottom: 1px solid var(--aurono-border);
+}
 
-    tr:last-child td {
-      border-bottom: none;
-    }
+tr:last-child td {
+  border-bottom: none;
+}
 
-    .tag {
-      padding: 3px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      border: 1px solid var(--aurono-border);
-      color: var(--aurono-muted);
-    }
+.tag {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid var(--aurono-border);
+  color: var(--aurono-muted);
+}
 
-    .mono {
-      font-family: Menlo, monospace;
-      font-size: 12px;
-    }
+.mono {
+  font-family: Menlo, monospace;
+  font-size: 12px;
+}
 
-    .actions {
-      display: flex;
-      gap: 6px;
-    }
+.actions {
+  display: flex;
+  gap: 6px;
+}
 
-    @media (max-width: 500px) {
-      .actions {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-    }
+@media (max-width: 500px) {
+  .actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 
-    /* BUTTONS */
-    .btn {
-      padding: 6px 12px;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(148,163,184,0.4);
-      color: var(--aurono-text);
-      font-size: 12px;
-      cursor: pointer;
-      transition: .15s ease;
-    }
+/* BUTTONS */
+.btn {
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(148,163,184,0.4);
+  color: var(--aurono-text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: .15s ease;
+}
 
-    .btn:hover {
-      background: rgba(255,255,255,0.08);
-    }
+.btn:hover {
+  background: rgba(255,255,255,0.08);
+}
 
-    .btn-primary {
-      border-color: rgba(250,204,21,0.9);
-      color: var(--aurono-gold-soft);
-      background: rgba(250,204,21,0.15);
-    }
+.btn-primary {
+  border-color: rgba(250,204,21,0.9);
+  color: var(--aurono-gold-soft);
+  background: rgba(250,204,21,0.15);
+}
 
-    .btn-danger {
-      border-color: rgba(239,68,68,0.8);
-      color: #fecaca;
-      background: rgba(127,29,29,0.4);
-    }
+.btn-danger {
+  border-color: rgba(239,68,68,0.8);
+  color: #fecaca;
+  background: rgba(127,29,29,0.4);
+}
 
-    .btn-small {
-      padding: 4px 8px;
-      font-size: 11px;
-    }
+.btn-small {
+  padding: 4px 8px;
+  font-size: 11px;
+}
 
-    /* FORMS */
-    .field {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 12px;
-    }
+/* FORMS */
+.field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
 
-    .field label {
-      font-size: 12px;
-      color: var(--aurono-muted);
-      margin-bottom: 4px;
-    }
+.field label {
+  font-size: 12px;
+  color: var(--aurono-muted);
+  margin-bottom: 4px;
+}
 
-    .field input,
-    .field select {
-      padding: 8px;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--aurono-border);
-      color: var(--aurono-text);
-      font-size: 14px;
-      outline: none;
-    }
+.field input,
+.field select {
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--aurono-border);
+  color: var(--aurono-text);
+  font-size: 14px;
+  outline: none;
+}
 
-    .edit-row {
-      display: none;
-      background: rgba(255,255,255,0.04);
-    }
+.edit-row {
+  display: none;
+  background: rgba(255,255,255,0.04);
+}
 
-  </style>
+/* SETTINGS UPDATE BANNER ───────────────────────────────── */
+
+.update-settings {
+  border: 1px solid rgba(250,204,21,0.35);
+  background: linear-gradient(180deg, #0a1227, #020617);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin: 0 0 20px 0;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+}
+
+.update-settings.hidden {
+  display: none;
+}
+
+.update-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.update-title {
+  font-size: 15px;
+  color: var(--aurono-text);
+}
+
+.update-title strong {
+  color: var(--aurono-gold);
+  margin-right: 6px;
+}
+
+.update-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.update-actions button {
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--aurono-border);
+  background: rgba(255,255,255,0.04);
+  color: var(--aurono-text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.update-actions button.primary {
+  background: var(--aurono-gold);
+  color: #020617;
+  border-color: rgba(250,204,21,0.8);
+  font-weight: 600;
+}
+
+.update-actions button.primary:hover {
+  background: var(--aurono-gold-soft);
+}
+
+/* Release notes */
+
+.update-notes-toggle {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--aurono-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.update-notes-toggle:hover {
+  color: var(--aurono-text);
+}
+
+.update-notes {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--aurono-border);
+}
+
+.update-notes.hidden {
+  display: none;
+}
+
+.update-notes pre {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: var(--aurono-text);
+}
+
+/* SYSTEM OVERLAY ───────────────────────────────────────── */
+
+.system-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(2,6,23,0.88);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.system-overlay.hidden {
+  display: none;
+}
+
+.system-overlay-card {
+  background: linear-gradient(180deg, #0a1227, #020617);
+  border: 1px solid rgba(250,204,21,0.35);
+  border-radius: 18px;
+  padding: 28px 30px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+}
+
+.system-overlay-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--aurono-gold);
+  margin-bottom: 10px;
+}
+
+.system-overlay-text {
+  font-size: 14px;
+  color: var(--aurono-text);
+  margin-bottom: 18px;
+}
+
+.system-overlay-sub {
+  font-size: 12px;
+  color: var(--aurono-muted);
+  margin-top: 14px;
+}
+
+/* Spinner */
+.system-overlay-spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid rgba(250,204,21,0.25);
+  border-top-color: var(--aurono-gold);
+  margin: 0 auto;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+</style>
 </head>
 
 <body>
+<!-- SYSTEM UPDATE / RESTART OVERLAY -->
+<div id="system-overlay" class="system-overlay hidden" aria-live="polite">
+  <div class="system-overlay-card">
+    <div class="system-overlay-title" id="system-overlay-title">
+      System update in progress
+    </div>
 
-  <!-- TOPBAR -->
-  <div class="topbar">
-    <div class="brand">Aurono</div>
+    <div class="system-overlay-text" id="system-overlay-text">
+      Aurono is updating. Please do not close this page.
+    </div>
 
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/strategies">Strategies</a>
-      <a href="/activity">Activity</a>
-      <a href="/reports">Reports</a>
-      <a class="active" href="/settings">Settings</a>
-    </nav>
+    <div class="system-overlay-spinner"></div>
+
+    <div class="system-overlay-sub" id="system-overlay-sub">
+      This may take a few minutes.
+    </div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+<div class="brand">Aurono</div>
+
+<nav>
+  <a href="/">Dashboard</a>
+  <a href="/strategies">Strategies</a>
+  <a href="/activity">Activity</a>
+  <a href="/reports">Reports</a>
+  <a class="active" href="/settings">Settings</a>
+</nav>
+</div>
+
+<!-- PAGE TITLE -->
+<h1>Settings</h1>
+<div class="subtitle">Manage encrypted API credentials for your exchanges.</div>
+
+  <!-- SETTINGS UPDATE BANNER -->
+<div id="aurono-update-settings" class="update-settings hidden">
+  <div class="update-header">
+    <div class="update-title">
+      <strong>Update available</strong>
+      <span id="update-version-text"></span>
+    </div>
+
+    <div class="update-actions">
+      <button id="update-apply-btn" class="primary">
+        Update now
+      </button>
+      <button data-days="1">Snooze 24h</button>
+      <button data-days="7">Snooze 7d</button>
+    </div>
   </div>
 
-  <!-- PAGE TITLE -->
-  <h1>Settings</h1>
-  <div class="subtitle">Manage encrypted API credentials for your exchanges.</div>
+  <div class="update-notes-toggle"
+     id="update-notes-toggle"
+     role="button"
+     aria-expanded="false">
 
-  <!-- MESSAGES -->
-  {% if message %}
-    <div class="msg {% if message_type=='success' %}msg-success{% else %}msg-error{% endif %}">
-      {{ message }}
-    </div>
-  {% endif %}
+    View release notes ▾
+  </div>
 
-  <!-- MAIN GRID -->
-  <div class="grid">
+  <div class="update-notes hidden" id="update-notes">
+    <pre id="update-notes-content"></pre>
+  </div>
+</div>
 
-    <!-- LEFT CARD -->
-    <div class="card">
-      <div class="card-title">Stored Credentials</div>
-      <div class="card-sub">Encrypted locally on this device.</div>
+<!-- MESSAGES -->
+{% if message %}
+<div class="msg {% if message_type=='success' %}msg-success{% else %}msg-error{% endif %}">
+  {{ message }}
+</div>
+{% endif %}
 
-      <div class="table-wrap">
-        <table>
-          <thead>
+<!-- MAIN GRID -->
+<div class="grid">
+
+<!-- LEFT CARD -->
+<div class="card">
+  <div class="card-title">Stored Credentials</div>
+  <div class="card-sub">Encrypted locally on this device.</div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Exchange</th>
+          <th>Key</th>
+          <th>Secret</th>
+          <th>Created</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% if credentials %}
+          {% for c in credentials %}
             <tr>
-              <th>Exchange</th>
-              <th>Key</th>
-              <th>Secret</th>
-              <th>Created</th>
-              <th>Updated</th>
-              <th></th>
+              <td><span class="tag">{{ c.exchange|capitalize }}</span></td>
+              <td class="mono">{{ c.api_key_masked }}</td>
+              <td class="mono">{{ c.api_secret_masked }}</td>
+              <td>{{ c.created_at }}</td>
+              <td>{{ c.updated_at }}</td>
+
+              <td>
+                <div class="actions">
+                  {% if c.exchange != "coinbase" %}
+                  <form action="/settings/test/{{ c.id }}" method="post">
+                    <button class="btn btn-small" type="submit">Test</button>
+                  </form>
+                  {% endif %}
+
+                  {% if c.exchange != "coinbase" %}
+                  <button class="btn btn-small" onclick="toggleEdit({{ c.id }})">Edit</button>
+                  {% endif %}
+
+                  <form action="/settings/delete/{{ c.id }}" method="post"
+                        onsubmit="return confirm('Delete credentials for {{ c.exchange }}?');">
+                    <button class="btn btn-danger btn-small" type="submit">Delete</button>
+                  </form>
+                </div>
+              </td>
             </tr>
-          </thead>
 
-          <tbody>
-            {% if credentials %}
-              {% for c in credentials %}
-                <tr>
-                  <td><span class="tag">{{ c.exchange|capitalize }}</span></td>
-                  <td class="mono">{{ c.api_key_masked }}</td>
-                  <td class="mono">{{ c.api_secret_masked }}</td>
-                  <td>{{ c.created_at }}</td>
-                  <td>{{ c.updated_at }}</td>
+            <!-- EDIT ROW -->
+            <tr id="edit-{{ c.id }}" class="edit-row">
+              <td colspan="6">
+                <form action="/settings/update/{{ c.id }}" method="post" style="padding: 12px;">
+                  <div class="field">
+                    <label>New API key</label>
+                    <input type="text" name="api_key" placeholder="Leave empty to keep">
+                  </div>
 
-                  <td>
-                    <div class="actions">
-                      {% if c.exchange != "coinbase" %}
-                      <form action="/settings/test/{{ c.id }}" method="post">
-                        <button class="btn btn-small" type="submit">Test</button>
-                      </form>
-                      {% endif %}
-                      
-                      {% if c.exchange != "coinbase" %}
-                      <button class="btn btn-small" onclick="toggleEdit({{ c.id }})">Edit</button>
-                      {% endif %}
+                  <div class="field">
+                    <label>New API secret</label>
+                    <input type="password" name="api_secret" placeholder="Leave empty to keep">
+                  </div>
 
-                      <form action="/settings/delete/{{ c.id }}" method="post"
-                            onsubmit="return confirm('Delete credentials for {{ c.exchange }}?');">
-                        <button class="btn btn-danger btn-small" type="submit">Delete</button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
+                  <button class="btn btn-primary btn-small" type="submit">Save</button>
+                  <button class="btn btn-small" type="button" onclick="toggleEdit({{ c.id }})">Cancel</button>
+                </form>
+              </td>
+            </tr>
 
-                <!-- EDIT ROW -->
-                <tr id="edit-{{ c.id }}" class="edit-row">
-                  <td colspan="6">
-                    <form action="/settings/update/{{ c.id }}" method="post" style="padding: 12px;">
-                      <div class="field">
-                        <label>New API key</label>
-                        <input type="text" name="api_key" placeholder="Leave empty to keep">
-                      </div>
+          {% endfor %}
 
-                      <div class="field">
-                        <label>New API secret</label>
-                        <input type="password" name="api_secret" placeholder="Leave empty to keep">
-                      </div>
+        {% else %}
+          <tr><td colspan="6" style="padding:14px; color:var(--aurono-muted);">No credentials stored.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
-                      <button class="btn btn-primary btn-small" type="submit">Save</button>
-                      <button class="btn btn-small" type="button" onclick="toggleEdit({{ c.id }})">Cancel</button>
-                    </form>
-                  </td>
-                </tr>
+<!-- RIGHT CARD (ADD) -->
+<div class="card">
+  <div class="card-title">Add Credentials</div>
 
-              {% endfor %}
+  <form action="/settings/add" method="post">
 
-            {% else %}
-              <tr><td colspan="6" style="padding:14px; color:var(--aurono-muted);">No credentials stored.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
+    <div class="field">
+      <label>Exchange</label>
+      <select name="exchange" required>
+        <option value="">Choose…</option>
+        <option value="kraken">Kraken</option>
+        <option value="bitvavo">Bitvavo</option>
+      </select>
     </div>
 
-    <!-- RIGHT CARD (ADD) -->
-    <div class="card">
-      <div class="card-title">Add Credentials</div>
-
-      <form action="/settings/add" method="post">
-
-        <div class="field">
-          <label>Exchange</label>
-          <select name="exchange" required>
-            <option value="">Choose…</option>
-            <option value="kraken">Kraken</option>
-            <option value="bitvavo">Bitvavo</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>API key</label>
-          <input type="text" name="api_key" required>
-        </div>
-
-        <div class="field">
-          <label>API secret</label>
-          <input type="password" name="api_secret" required>
-        </div>
-
-        <button class="btn btn-primary" type="submit">Save</button>
-
-      </form>
+    <div class="field">
+      <label>API key</label>
+      <input type="text" name="api_key" required>
     </div>
+
+    <div class="field">
+      <label>API secret</label>
+      <input type="password" name="api_secret" required>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Save</button>
+
+  </form>
+</div>
     
-    <!-- EXCHANGE REFERRALS CARD -->
-    <div class="card" style="margin-top: 20px;">
-      <div class="card-title">Exchange Referrals</div>
-      <div class="card-sub">
-        If you don’t have an exchange account yet, you can use the links below. Aurono never has access to your funds. Accounts are created directly on the exchange.
-      </div>
+<!-- EXCHANGE REFERRALS CARD -->
+<div class="card" style="margin-top: 20px;">
+  <div class="card-title">Exchange Referrals</div>
+  <div class="card-sub">
+    If you don’t have an exchange account yet, you can use the links below. Aurono never has access to your funds. Accounts are created directly on the exchange.
+  </div>
 
-      <div style="margin-bottom: 12px;">
-        <strong>Bitvavo</strong><br>
-        <a
-          href="https://bitvavo.com/invite?a=CB71D7D7C5"
-          target="_blank"
-          rel="noopener noreferrer"
-          style="color: var(--aurono-gold-soft); text-decoration: none;"
-        >
-          Use this link to create a Bitvavo account with referral code CB71D7D7C5
-        </a>
-        <div class="card-sub">
-          By using this referral code, you can trade the first 10.000 Euro without trading fees.
-        </div>
-        
-      </div>
-
-      <div>
-        <strong>Kraken</strong><br>
-        <a
-          href="https://invite.kraken.com/JDNW/xd77fm03"
-          target="_blank"
-          rel="noopener noreferrer"
-          style="color: var(--aurono-gold-soft); text-decoration: none;"
-        >
-          Use this link to create a Kraken account with referral code 27fbgj2f
-        </a>
-        <div class="card-sub">
-          You'll get 75 Euro deposited on your Kraken account when you create an account using this referral code, deposit at least 250 EUR and trade at least 250 EUR in trading volume.
-        </div>
-      </div>
-      <div>
-        <strong>Coinbase new user</strong><br>
-        <a
-          href="https://coinbase.com/join/XCD3NPV?src=referral-link"
-          target="_blank"
-          rel="noopener noreferrer"
-          style="color: var(--aurono-gold-soft); text-decoration: none;"
-        >
-          Use this link to create a Coinbase account with referral code XCD3NPV
-        </a>
-        <div class="card-sub">
-          You'll get 30 Euro in BTC deposited on your Coinbase account when you create an account using this referral code, trade at least 30 EUR in trading volume.
-        </div>
-      </div>
-      <div>
-        <strong>Coinbase Advanced</strong><br>
-        <a
-          href="https://advanced.coinbase.com/join/PNM8SUE"
-          target="_blank"
-          rel="noopener noreferrer"
-          style="color: var(--aurono-gold-soft); text-decoration: none;"
-        >
-          Use this link to activate Coinbase Advanced with referral code PNM8SUE
-        </a>
-        <div class="card-sub">
-          You'll get bonusess based to your trading volume.
-        </div>
-      </div>
-      
+  <div style="margin-bottom: 12px;">
+    <strong>Bitvavo</strong><br>
+    <a
+      href="https://bitvavo.com/invite?a=CB71D7D7C5"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="color: var(--aurono-gold-soft); text-decoration: none;"
+    >
+      Use this link to create a Bitvavo account with referral code CB71D7D7C5
+    </a>
+    <div class="card-sub">
+      By using this referral code, you can trade the first 10.000 Euro without trading fees.
     </div>
-
-    
-    <!-- COINBASE BETA CARD -->
-    <div class="card" style="margin-top: 20px;">
-      <div class="card-title">Coinbase (Beta)</div>
-      <div class="card-sub">
-        Coinbase Advanced Trade authentication (JWT only, CDP Secret API Key).
-        These credentials are stored separately from production exchanges.
-      </div>
-
-      <form action="/settings/coinbase/save" method="post">
-
-        <!-- JWT CREDENTIALS -->
-        <div class="field">
-          <label>JWT Key Name (organizations/...)</label>
-          <input type="text" name="jwt_key_name" required
-                 placeholder="organizations/{org_id}/apiKeys/{key_id}">
-        </div>
-
-        <div class="field">
-          <label>JWT Private Key (PEM)</label>
-          <textarea name="jwt_private_key" rows="8" required></textarea>
-        </div>
-
-        <button class="btn btn-primary" type="submit">Save Coinbase Credentials</button>
-      </form>
-
-      <!-- TEST BUTTON -->
-      <form action="/settings/coinbase/test" method="post" style="margin-top:12px;">
-        <button class="btn" type="submit">Test Coinbase Connection</button>
-      </form>
-
-    </div>
-
 
   </div>
+
+  <div>
+    <strong>Kraken</strong><br>
+    <a
+      href="https://invite.kraken.com/JDNW/xd77fm03"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="color: var(--aurono-gold-soft); text-decoration: none;"
+    >
+      Use this link to create a Kraken account with referral code 27fbgj2f
+    </a>
+    <div class="card-sub">
+      You'll get 75 Euro deposited on your Kraken account when you create an account using this referral code, deposit at least 250 EUR and trade at least 250 EUR in trading volume.
+    </div>
+  </div>
+  <div>
+    <strong>Coinbase new user</strong><br>
+    <a
+      href="https://coinbase.com/join/XCD3NPV?src=referral-link"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="color: var(--aurono-gold-soft); text-decoration: none;"
+    >
+      Use this link to create a Coinbase account with referral code XCD3NPV
+    </a>
+    <div class="card-sub">
+      You'll get 30 Euro in BTC deposited on your Coinbase account when you create an account using this referral code, trade at least 30 EUR in trading volume.
+    </div>
+  </div>
+  <div>
+    <strong>Coinbase Advanced</strong><br>
+    <a
+      href="https://advanced.coinbase.com/join/PNM8SUE"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="color: var(--aurono-gold-soft); text-decoration: none;"
+    >
+      Use this link to activate Coinbase Advanced with referral code PNM8SUE
+    </a>
+    <div class="card-sub">
+      You'll get bonusess based to your trading volume.
+    </div>
+  </div>
+
+</div>
+
+    
+<!-- COINBASE BETA CARD -->
+<div class="card" style="margin-top: 20px;">
+  <div class="card-title">Coinbase (Beta)</div>
+  <div class="card-sub">
+    Coinbase Advanced Trade authentication (JWT only, CDP Secret API Key).
+    These credentials are stored separately from production exchanges.
+  </div>
+
+  <form action="/settings/coinbase/save" method="post">
+
+    <!-- JWT CREDENTIALS -->
+    <div class="field">
+      <label>JWT Key Name (organizations/...)</label>
+      <input type="text" name="jwt_key_name" required
+             placeholder="organizations/{org_id}/apiKeys/{key_id}">
+    </div>
+
+    <div class="field">
+      <label>JWT Private Key (PEM)</label>
+      <textarea name="jwt_private_key" rows="8" required></textarea>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Save Coinbase Credentials</button>
+  </form>
+
+  <!-- TEST BUTTON -->
+  <form action="/settings/coinbase/test" method="post" style="margin-top:12px;">
+    <button class="btn" type="submit">Test Coinbase Connection</button>
+  </form>
+
+</div>
+
+</div>
   
-  <div class="grid">
-    <div class="card" style="margin-top: 20px; padding: 20px;">
-      <h2>Email Reporting</h2>
+<div class="grid">
+<div class="card" style="margin-top: 20px; padding: 20px;">
+  <h2>Email Reporting</h2>
 
-      <!-- Email settings POST form -->
-      <form action="/settings/email" method="post">
+  <!-- Email settings POST form -->
+  <form action="/settings/email" method="post">
 
-        <label style="display:block; margin-bottom:8px;">
-          <input type="checkbox" name="email_enabled" {% if email_enabled %}checked{% endif %}>
-          Enable Email Reports
-        </label>
+    <label style="display:block; margin-bottom:8px;">
+      <input type="checkbox" name="email_enabled" {% if email_enabled %}checked{% endif %}>
+      Enable Email Reports
+    </label>
 
-        <div class="field" style="margin-top:12px;">
-          <label>Email Address (Gmail recommended)</label>
-          <input type="email" name="email_username" value="{{ email_username }}" required>
-        </div>
-
-        <div class="field" style="margin-top:12px;">
-          <label>Receiver Email</label>
-          <input type="email" name="email_to" value="{{ email_to }}" required>
-        </div>
-
-        <div class="field" style="margin-top:12px;">
-          <label>App Password</label>
-          <input type="password" name="email_password" value="{{ email_password }}" placeholder="********">
-        </div>
-
-        <p style="color:#94a3b8; font-size:14px; margin-top:8px;">
-          To generate a Gmail App Password:
-          <br>1. Enable 2-Step Verification
-          <br>2. Visit <a href="https://myaccount.google.com/apppasswords" target="_blank">https://myaccount.google.com/apppasswords</a>
-          <br>3. Choose “Mail → Other (Aurono)”
-          <br>4. Paste the 16-digit password here WITHOUT SPACES
-        </p>
-
-        <button class="btn btn-primary" type="submit">Save Email Settings</button>
-        </form>
-
-        <!-- ACTION BUTTONS -->
-        <form action="/settings/test-report" method="post" style="margin-top:12px;">
-          <button class="btn" type="submit">Generate Test Daily Report</button>
-        </form>
-
-        <form action="/settings/test-weekly-report" method="post" style="margin-top:8px;">
-          <button class="btn" type="submit">Generate Test Weekly Report</button>
-        </form>
-
-        <form action="/settings/test-email" method="post" style="margin-top:8px;">
-          <button class="btn" type="submit">Send Test Email</button>
-        </form>
-
+    <div class="field" style="margin-top:12px;">
+      <label>Email Address (Gmail recommended)</label>
+      <input type="email" name="email_username" value="{{ email_username }}" required>
     </div>
-  </div>
 
+    <div class="field" style="margin-top:12px;">
+      <label>Receiver Email</label>
+      <input type="email" name="email_to" value="{{ email_to }}" required>
+    </div>
 
-      
+    <div class="field" style="margin-top:12px;">
+      <label>App Password</label>
+      <input type="password" name="email_password" value="{{ email_password }}" placeholder="********">
+    </div>
 
-  <script>
-    function toggleEdit(id) {
-      const row = document.getElementById("edit-" + id);
-      row.style.display = (row.style.display === "table-row") ? "none" : "table-row";
+    <p style="color:#94a3b8; font-size:14px; margin-top:8px;">
+      To generate a Gmail App Password:
+      <br>1. Enable 2-Step Verification
+      <br>2. Visit <a href="https://myaccount.google.com/apppasswords" target="_blank">https://myaccount.google.com/apppasswords</a>
+      <br>3. Choose “Mail → Other (Aurono)”
+      <br>4. Paste the 16-digit password here WITHOUT SPACES
+    </p>
+
+    <button class="btn btn-primary" type="submit">Save Email Settings</button>
+    </form>
+
+    <!-- ACTION BUTTONS -->
+    <form action="/settings/test-report" method="post" style="margin-top:12px;">
+      <button class="btn" type="submit">Generate Test Daily Report</button>
+    </form>
+
+    <form action="/settings/test-weekly-report" method="post" style="margin-top:8px;">
+      <button class="btn" type="submit">Generate Test Weekly Report</button>
+    </form>
+
+    <form action="/settings/test-email" method="post" style="margin-top:8px;">
+      <button class="btn" type="submit">Send Test Email</button>
+    </form>
+
+</div>
+</div>
+<script>
+function toggleEdit(id) {
+  const row = document.getElementById("edit-" + id);
+  row.style.display = (row.style.display === "table-row") ? "none" : "table-row";
+}
+</script>
+<script>
+(async function () {
+  const box = document.getElementById("aurono-update-settings");
+  if (!box) return;
+
+  const versionText = document.getElementById("update-version-text");
+  const notesBox = document.getElementById("update-notes");
+  const notesContent = document.getElementById("update-notes-content");
+  const notesToggle = document.getElementById("update-notes-toggle");
+  const applyBtn = document.getElementById("update-apply-btn");
+
+  async function getStatus() {
+    try {
+      const r = await fetch("/api/system/update");
+      if (!r.ok) return null;
+      return await r.json();
+    } catch {
+      return null;
     }
-  </script>
+  }
+
+  async function post(url, body) {
+    try {
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : null,
+      });
+    } catch {}
+  }
+
+  const status = await getStatus();
+  if (!status || !status.update_available) return;
+
+  versionText.textContent =
+    `Aurono Start v${status.available_version} is ready to install.`;
+
+  notesContent.textContent =
+    status.release_notes
+      ? status.release_notes.trim()
+      : "No release notes provided for this version.";
+
+  box.classList.remove("hidden");
+
+  // Toggle release notes
+  let open = false;
+  notesToggle.onclick = () => {
+  open = !open;
+  notesBox.classList.toggle("hidden", !open);
+  notesToggle.textContent = open
+    ? "Hide release notes ▴"
+    : "View release notes ▾";
+  notesToggle.setAttribute("aria-expanded", open ? "true" : "false");
+};
+
+  // Apply update
+  applyBtn.onclick = async () => {
+  showSystemOverlay({
+    titleText: "Updating Aurono",
+    bodyText: "Downloading and installing the update.",
+    subText: "Aurono will restart automatically."
+  });
+
+  await post("/api/system/update/apply");
+};
+
+  // Snooze
+  box.querySelectorAll("button[data-days]").forEach(btn => {
+    btn.onclick = async () => {
+      const days = parseInt(btn.dataset.days, 10);
+      await post("/api/system/update/snooze", { days });
+      box.classList.add("hidden");
+    };
+  });
+})();
+</script>
+<script>
+(function () {
+  const overlay = document.getElementById("system-overlay");
+  if (!overlay) return;
+
+  const title = document.getElementById("system-overlay-title");
+  const text  = document.getElementById("system-overlay-text");
+  const sub   = document.getElementById("system-overlay-sub");
+
+  window.showSystemOverlay = function ({
+    titleText = "System operation in progress",
+    bodyText  = "Please do not close this page.",
+    subText   = "This may take a few minutes."
+  } = {}) {
+    title.textContent = titleText;
+    text.textContent  = bodyText;
+    sub.textContent   = subText;
+    overlay.classList.remove("hidden");
+  };
+
+})();
+</script>
+
 
 </body>
 </html>

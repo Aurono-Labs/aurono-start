@@ -194,11 +194,175 @@ th.numeric { text-align: right; }
   margin-bottom: 4px;
 }
 
+/* UPDATE BANNER ───────────────────────────────────────────── */
+
+.aurono-update-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+
+  background: linear-gradient(90deg, #020617, #0a1227);
+  border-bottom: 1px solid rgba(250,204,21,0.35);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+
+  padding: 10px 16px;
+  margin: -20px -20px 18px -20px; /* counter body padding */
+}
+
+.aurono-update-banner.hidden {
+  display: none;
+}
+
+.aurono-update-banner .content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.aurono-update-banner .text {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.aurono-update-banner .text strong {
+  color: var(--gold);
+  margin-right: 6px;
+}
+
+.aurono-update-banner .actions {
+  display: flex;
+  gap: 8px;
+}
+
+.aurono-update-banner button {
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.aurono-update-banner button.primary {
+  background: var(--gold);
+  color: #020617;
+  border-color: rgba(250,204,21,0.8);
+  font-weight: 600;
+}
+
+.aurono-update-banner button.primary:hover {
+  background: var(--gold-soft);
+}
+
+.aurono-update-banner button:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* SYSTEM OVERLAY */
+
+.system-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(2,6,23,0.88);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.system-overlay.hidden {
+  display: none;
+}
+
+.system-overlay-card {
+  background: linear-gradient(180deg, #0a1227, #020617);
+  border: 1px solid rgba(250,204,21,0.35);
+  border-radius: 18px;
+  padding: 28px 30px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+}
+
+.system-overlay-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+
+.system-overlay-text {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 18px;
+}
+
+.system-overlay-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 14px;
+}
+
+.system-overlay-spinner {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid rgba(250,204,21,0.25);
+  border-top-color: var(--gold);
+  margin: 0 auto;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 </style>
 </head>
 
 
 <body>
+<!-- SYSTEM UPDATE / RESTART OVERLAY -->
+<div id="system-overlay" class="system-overlay hidden" aria-live="polite">
+  <div class="system-overlay-card">
+    <div class="system-overlay-title" id="system-overlay-title">
+      System update in progress
+    </div>
+
+    <div class="system-overlay-text" id="system-overlay-text">
+      Aurono is updating. Please do not close this page.
+    </div>
+
+    <div class="system-overlay-spinner"></div>
+
+    <div class="system-overlay-sub" id="system-overlay-sub">
+      This may take a few minutes.
+    </div>
+  </div>
+</div>
+
+<!-- UPDATE BANNER -->
+<div id="aurono-update-banner" class="aurono-update-banner hidden">
+  <div class="content">
+    <div class="text">
+      <strong>Update available</strong>
+      <span id="aurono-update-text"></span>
+    </div>
+
+    <div class="actions">
+      <button id="aurono-update-apply" class="primary">
+        Update now
+      </button>
+      <button data-days="1">Snooze 24h</button>
+      <button data-days="7">Snooze 7d</button>
+    </div>
+  </div>
+</div>
 
 <!-- TOP BAR (exact same structure as settings/strategies/activity) -->
 <div class="topbar">
@@ -689,6 +853,84 @@ function closeStrategyDetails() {
 }
 </script>
 
+<script>
+(async function () {
+  const banner = document.getElementById("aurono-update-banner");
+  const textEl = document.getElementById("aurono-update-text");
+  const applyBtn = document.getElementById("aurono-update-apply");
+
+  if (!banner) return;
+
+  async function getStatus() {
+    try {
+      const r = await fetch("/api/system/update");
+      if (!r.ok) return null;
+      return await r.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async function post(url, body) {
+    try {
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : null,
+      });
+    } catch {}
+  }
+
+  const status = await getStatus();
+  if (!status || !status.update_available) return;
+
+  textEl.textContent =
+    `Aurono Start v${status.available_version} is ready to install.`;
+
+  banner.classList.remove("hidden");
+
+  applyBtn.onclick = async () => {
+  showSystemOverlay({
+    titleText: "Updating Aurono",
+    bodyText: "Downloading and installing the update.",
+    subText: "Aurono will restart automatically."
+  });
+
+  await post("/api/system/update/apply");
+};
+
+  banner.querySelectorAll("button[data-days]").forEach(btn => {
+    btn.onclick = async () => {
+      const days = parseInt(btn.dataset.days, 10);
+      await post("/api/system/update/snooze", { days });
+      banner.classList.add("hidden");
+    };
+  });
+})();
+</script>
+<script>
+(function () {
+  const overlay = document.getElementById("system-overlay");
+  if (!overlay) return;
+
+  const title = document.getElementById("system-overlay-title");
+  const text  = document.getElementById("system-overlay-text");
+  const sub   = document.getElementById("system-overlay-sub");
+
+  window.showSystemOverlay = function ({
+    titleText = "System operation in progress",
+    bodyText  = "Please do not close this page.",
+    subText   = "This may take a few minutes."
+  } = {}) {
+    if (!overlay.classList.contains("hidden")) return;
+
+    title.textContent = titleText;
+    text.textContent  = bodyText;
+    sub.textContent   = subText;
+    overlay.classList.remove("hidden");
+  };
+})();
+</script>
 
 </body>
 </html>
