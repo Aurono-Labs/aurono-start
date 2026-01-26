@@ -2,6 +2,8 @@
 Aurono Start / PoC (macOS · Linux · Raspberry Pi)
 Author: Aurono Labs
 
+<!-- OTA test v5.05 -->
+
 Aurono is a local, plug-and-play trading automation system that runs entirely on your own machine (Mac or Raspberry Pi).
 It connects to trusted exchanges (Bitvavo, Kraken, Coinbase), executes rule-based strategies, and reports transparently — while funds always remain on your exchange.
 
