@@ -629,16 +629,17 @@ EOF
 # ------------------------------------------------------------
 if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
   echo "🔐 Configuring sudo for user-triggered updates..."
-  
-if [[ ! -f /etc/sudoers.d/aurono-update ]]; then
-  sudo bash -c "cat > /etc/sudoers.d/aurono-update" << 'EOF'
+
+  if [[ ! -f /etc/sudoers.d/aurono-update ]]; then
+    sudo bash -c "cat > /etc/sudoers.d/aurono-update" << 'EOF'
 # Allow Aurono dashboard users to trigger OTA update
 User_Alias AURONO_USERS = aurono, pi
 AURONO_USERS ALL=(root) NOPASSWD: /usr/local/bin/aurono-update apply
 EOF
-
-  sudo chmod 440 /etc/sudoers.d/aurono-update
+    sudo chmod 440 /etc/sudoers.d/aurono-update
+  fi
 fi
+
 
   sudo bash -c "cat > /etc/systemd/system/aurono-update.timer" << 'EOF'
 [Unit]
