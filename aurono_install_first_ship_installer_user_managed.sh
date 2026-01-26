@@ -560,9 +560,11 @@ def run_apply():
 
         # additive & idempotent
         migrate_config()
-
+        
         with open(os.path.join(INSTALL_DIR, "VERSION"), "w") as f:
             f.write(latest)
+
+        start_services()   # 🔑 THIS WAS MISSING
 
         # ----------------------------------------------------
         # ✅ Success

@@ -130,7 +130,7 @@ def get_update_status() -> Dict[str, Any]:
 
             if age > _UPDATE_STALE_AFTER and not _updater_running():
                 raw["status"] = "pending"
-                save_update_state(raw)
+                _write_state(raw)
 
     current_version = raw.get("current_version")
     available_version = raw.get("available_version")
