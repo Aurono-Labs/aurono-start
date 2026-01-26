@@ -466,6 +466,10 @@ def run_check():
 
 def run_apply():
     state = load_state()
+
+    # --------------------------------------------------------
+    # Validate state BEFORE mutating anything
+    # --------------------------------------------------------
     if state.get("status") != "pending":
         log("No pending update to apply")
         return
@@ -475,50 +479,79 @@ def run_apply():
         log("State invalid: missing available_version")
         return
 
-    # Fetch full release meta (needed for assets)
-    try:
-        latest_remote, meta = get_latest_release()
-    except Exception as e:
-        log(f"GitHub error: {e}")
-        return
-
-    # Guard: state vs remote mismatch (should be rare)
-    if latest_remote != latest:
-        log(f"Note: state version {latest} != remote latest {latest_remote}; using remote latest")
-        latest = latest_remote
-        state["available_version"] = latest
-        save_state(state)
-
-    log(f"Applying update → v{latest}")
+    # --------------------------------------------------------
+    # 🔒 Mark updating immediately (survives dashboard stop)
+    # --------------------------------------------------------
+    state["status"] = "updating"
+    state["update_started_at"] = now_iso()
+    save_state(state)
 
     try:
-        url, name = find_asset(meta)
-    except Exception as e:
-        log(f"Asset error: {e}")
-        return
+        # ----------------------------------------------------
+        # Validate state
+        # ----------------------------------------------------
+        latest = state.get("available_version")
+        if not latest:
+            log("State invalid: missing available_version")
+            raise RuntimeError("No available_version in update state")
 
-    log(f"Found asset: {name}")
+        # ----------------------------------------------------
+        # Fetch release metadata
+        # ----------------------------------------------------
+        try:
+            latest_remote, meta = get_latest_release()
+        except Exception as e:
+            log(f"GitHub error: {e}")
+            raise
 
-    os.makedirs(WORK_DIR, exist_ok=True)
-    zip_path = os.path.join(WORK_DIR, "aurono-update.zip")
+        # Guard: remote changed since check
+        if latest_remote != latest:
+            log(
+                f"Note: state version {latest} != remote latest "
+                f"{latest_remote}; using remote latest"
+            )
+            latest = latest_remote
+            state["available_version"] = latest
+            save_state(state)
 
-    try:
-        log("Downloading asset...")
-        download_asset(url, zip_path)
-    except Exception as e:
-        log(f"Download failed: {e}")
-        return
+        log(f"Applying update → v{latest}")
 
-    try:
-        new_root = extract_zip(zip_path, os.path.join(WORK_DIR, "new"))
-        log(f"Extracted: {new_root}")
-    except Exception as e:
-        log(f"Extraction error: {e}")
-        return
+        # ----------------------------------------------------
+        # Find and download asset
+        # ----------------------------------------------------
+        try:
+            url, name = find_asset(meta)
+        except Exception as e:
+            log(f"Asset error: {e}")
+            raise
 
-    copy_persistent(INSTALL_DIR, new_root)
+        log(f"Found asset: {name}")
 
-    try:
+        os.makedirs(WORK_DIR, exist_ok=True)
+        zip_path = os.path.join(WORK_DIR, "aurono-update.zip")
+
+        try:
+            log("Downloading asset…")
+            download_asset(url, zip_path)
+        except Exception as e:
+            log(f"Download failed: {e}")
+            raise
+
+        # ----------------------------------------------------
+        # Extract & prepare new tree
+        # ----------------------------------------------------
+        try:
+            new_root = extract_zip(zip_path, os.path.join(WORK_DIR, "new"))
+            log(f"Extracted: {new_root}")
+        except Exception as e:
+            log(f"Extraction error: {e}")
+            raise
+
+        copy_persistent(INSTALL_DIR, new_root)
+
+        # ----------------------------------------------------
+        # Swap installation
+        # ----------------------------------------------------
         stop_services()
 
         if os.path.exists(BACKUP_DIR):
@@ -530,7 +563,7 @@ def run_apply():
         fix_ownership(INSTALL_DIR)
         refresh_venv()
 
-        # additive, idempotent
+        # additive & idempotent
         migrate_config()
 
         with open(os.path.join(INSTALL_DIR, "VERSION"), "w") as f:
@@ -538,24 +571,41 @@ def run_apply():
 
         start_services()
 
+        # ----------------------------------------------------
+        # ✅ Final success state
+        # ----------------------------------------------------
         state.update({
             "current_version": latest,
             "available_version": None,
-            "status": "applied",
+            "status": "up_to_date",
             "snoozed_until": None,
-            "last_checked": state.get("last_checked") or now_iso(),
+            "last_checked": now_iso(),
         })
         save_state(state)
 
         log(f"Update successful → v{latest}")
 
     except Exception as e:
-        log(f"Swap failed: {e}")
+        # ----------------------------------------------------
+        # ❌ Failure → rollback-visible, retryable
+        # ----------------------------------------------------
+        log(f"Update failed: {e}")
         log(f"Backup preserved at {BACKUP_DIR}")
-        # keep status pending so UI can show failure/retry
+
         state["status"] = "pending"
         save_state(state)
 
+        return
+
+    finally:
+        # ----------------------------------------------------
+        # 🧹 Absolute safety net: never leave 'updating'
+        # ----------------------------------------------------
+        final = load_state()
+        if final.get("status") == "updating":
+            final["status"] = "pending"
+            save_state(final)
+            
 def main():
     import sys
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
@@ -573,6 +623,22 @@ if __name__ == "__main__":
 EOF
 
   sudo chmod +x /usr/local/bin/aurono-update
+
+# ------------------------------------------------------------
+# Allow dashboard user(s) to trigger OTA apply (passwordless)
+# ------------------------------------------------------------
+if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
+  echo "🔐 Configuring sudo for user-triggered updates..."
+  
+if [[ ! -f /etc/sudoers.d/aurono-update ]]; then
+  sudo bash -c "cat > /etc/sudoers.d/aurono-update" << 'EOF'
+# Allow Aurono dashboard users to trigger OTA update
+User_Alias AURONO_USERS = aurono, pi
+AURONO_USERS ALL=(root) NOPASSWD: /usr/local/bin/aurono-update apply
+EOF
+
+  sudo chmod 440 /etc/sudoers.d/aurono-update
+fi
 
   sudo bash -c "cat > /etc/systemd/system/aurono-update.timer" << 'EOF'
 [Unit]

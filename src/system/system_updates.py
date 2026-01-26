@@ -17,6 +17,7 @@ class SnoozeRequest(BaseModel):
 
 @router.get("")
 def read_update_status():
+    # Always safe, read-only
     return get_update_status()
 
 
@@ -24,9 +25,11 @@ def read_update_status():
 def snooze(req: SnoozeRequest):
     if req.days <= 0:
         raise HTTPException(status_code=400, detail="Invalid snooze duration")
+
     ok = snooze_update(req.days)
     if not ok:
         raise HTTPException(status_code=409, detail="No update to snooze")
+
     return {"status": "ok"}
 
 
@@ -38,7 +41,25 @@ def clear():
 
 @router.post("/apply")
 def apply():
+    """
+    Trigger OTA update.
+
+    IMPORTANT:
+    - This endpoint MUST return immediately
+    - The dashboard WILL be terminated by the updater
+    - Client must handle reconnect logic
+    """
     ok = apply_update()
+
     if not ok:
-        raise HTTPException(status_code=500, detail="Failed to start updater")
-    return {"status": "updating"}
+        # Only fail if updater could not be spawned at all
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to start updater process",
+        )
+
+    # Do NOT wait, do NOT check status, do NOT block
+    return {
+        "status": "updating",
+        "message": "Updater started, dashboard will restart",
+    }

@@ -798,7 +798,21 @@ function toggleEdit(id) {
   }
 
   const status = await getStatus();
-  if (!status || !status.update_available) return;
+  if (!status) return;
+
+  /* 🔒 Restore overlay if update already running */
+  if (status.status === "updating") {
+    showSystemOverlay({
+      titleText: "Updating Aurono",
+      bodyText: "Aurono is currently updating.",
+      subText: "The dashboard will reconnect automatically."
+    });
+    return;
+  }
+
+  /* Normal banner flow */
+  if (!status.update_available) return;
+
 
   versionText.textContent =
     `Aurono Start v${status.available_version} is ready to install.`;
@@ -822,15 +836,17 @@ function toggleEdit(id) {
 };
 
   // Apply update
-  applyBtn.onclick = async () => {
-  showSystemOverlay({
-    titleText: "Updating Aurono",
-    bodyText: "Downloading and installing the update.",
-    subText: "Aurono will restart automatically."
-  });
+  applyBtn.onclick = () => {
+    showSystemOverlay({
+      titleText: "Updating Aurono",
+      bodyText: "Downloading and installing the update.",
+      subText: "Aurono will restart automatically."
+    });
 
-  await post("/api/system/update/apply");
-};
+    box.classList.add("hidden"); // optional but recommended
+    post("/api/system/update/apply"); // fire-and-forget
+  };
+
 
   // Snooze
   box.querySelectorAll("button[data-days]").forEach(btn => {

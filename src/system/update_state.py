@@ -28,11 +28,23 @@ def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
 def apply_update() -> bool:
     """
     Triggers aurono-update apply.
+    Marks state as 'updating' BEFORE systemd stops services.
     Returns immediately; update continues in background.
     """
+    raw = load_update_state()
+    if not raw:
+        return False
+
+    # 🔒 Persist intent BEFORE dashboard dies
+    raw["status"] = "updating"
+    raw["update_started_at"] = _now_utc().isoformat()
+
+    if not _write_state(raw):
+        return False
+
     try:
         subprocess.Popen(
-            ["/usr/local/bin/aurono-update", "apply"],
+            ["/usr/bin/sudo", "/usr/local/bin/aurono-update", "apply"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
