@@ -5,8 +5,6 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import subprocess
-import time
-from pathlib import Path
 
 STATE_FILE = "/var/lib/aurono/update_state.json"
 
@@ -27,66 +25,14 @@ def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
         return None
 
 _UPDATE_STALE_AFTER = timedelta(minutes=30)
-
 def _updater_running() -> bool:
     try:
         result = subprocess.run(
-            ["pgrep", "-f", "/usr/local/bin/aurono-update apply"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            ["systemctl", "is-active", "--quiet", "aurono-update-apply.service"],
         )
         return result.returncode == 0
     except Exception:
         return False
-
-
-APPLY_LOG = "/var/lib/aurono/update_apply.log"
-
-def apply_update() -> bool:
-    raw = load_update_state()
-    if not raw:
-        return False
-
-    # 🔒 HARD GUARD — single entry point
-    if raw.get("status") == "updating":
-        return False
-
-    if raw.get("status") != "pending":
-        return False
-
-    # Spawn updater first (prove it started), then mark "updating"
-    try:
-        Path("/var/lib/aurono").mkdir(parents=True, exist_ok=True)
-        logf = open(APPLY_LOG, "ab", buffering=0)
-
-        p = subprocess.Popen(
-            [
-                "/usr/bin/sudo",
-                "-n",
-                "/usr/bin/python3",
-                "-u",
-                "/usr/local/bin/aurono-update",
-                "apply",
-            ],
-            stdout=logf,
-            stderr=logf,
-            start_new_session=True,
-            close_fds=True,
-        )
-
-        # If sudo fails, it usually exits immediately. Detect that.
-        time.sleep(0.2)
-        rc = p.poll()
-        if rc is not None and rc != 0:
-            return False
-
-    except Exception:
-        return False
-
-    # 🔒 Persist intent AFTER spawn succeeded
-    raw["status"] = "updating"
-    raw["update_started_at"] = _now_utc().isoformat()
-    return _write_state(raw)
 
 
 # ------------------------------------------------------------
@@ -198,8 +144,9 @@ def clear_snooze() -> bool:
 def _write_state(state: Dict[str, Any]) -> bool:
     """
     Atomic best-effort write.
-    Backend is allowed to write only snooze-related fields.
+    State is mutated by updater and UI helper logic.
     """
+
     try:
         os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
         tmp = STATE_FILE + ".tmp"

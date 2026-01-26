@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================
 #  Aurono Start – Universal Installer (macOS + Linux/RPi)
-#  Version: v5.04 — dynamic systemd + OTA (check/apply) + cron + venv refresh
+#  Version: v5.06 — dynamic systemd + OTA (check/apply) + cron + venv refresh
 #  Author: Aurono Labs
 # ============================================================
 
 set -euo pipefail
 
-INSTALL_VERSION="5.04"
-REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v5.04.zip"
+INSTALL_VERSION="5.06"
+REPO_URL="https://github.com/Aurono-Labs/aurono-start/archive/refs/tags/v5.06.zip"
 APP_DIR="aurono-poc"
 
 echo ""
@@ -406,11 +406,11 @@ def refresh_venv():
 
 def stop_services():
     for s in SERVICES:
-        subprocess.run(["sudo", "systemctl", "stop", f"{s}.service"], check=False)
+        subprocess.run(["systemctl", "stop", f"{s}.service"], check=False)
 
 def start_services():
     for s in SERVICES:
-        subprocess.run(["sudo", "systemctl", "start", f"{s}.service"], check=False)
+        subprocess.run(["systemctl", "start", f"{s}.service"], check=False)
 
 def migrate_config():
     if yaml is None:
@@ -478,17 +478,11 @@ def run_check():
     })
     save_state(state)
     log(f"Update available → v{latest}")
-
+    
 def run_apply():
     global lock_fd
 
-    state = load_state()
-
-    # 🔒 Absolute first guard
-    if state.get("status") == "updating":
-        log("Update already running, exiting")
-        return
-
+    # Acquire lock first (single source of truth)
     lock_fd = open(LOCK_FILE, "w")
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -497,59 +491,40 @@ def run_apply():
         return
 
     try:
-        # ----------------------------------------------------
-        # Validate state BEFORE mutating anything
-        # ----------------------------------------------------
+        state = load_state()
+
+        # Stale recovery: allow re-apply if "updating" but no process running
+        # (No pgrep required; just allow apply to proceed only if pending.
+        # If stuck, force it back to pending.)
+        if state.get("status") == "updating":
+            log("State is 'updating' → treating as stale, resetting to 'pending'")
+            state["status"] = "pending"
+            state.pop("update_started_at", None)
+            save_state(state)
+
         if state.get("status") != "pending":
-            log("Update already in progress or not applicable")
+            log("Update not pending, aborting")
             return
 
         latest = state.get("available_version")
         if not latest:
-            log("State invalid: missing available_version")
             raise RuntimeError("No available_version in update state")
 
-        # ----------------------------------------------------
-        # 🔒 Mark updating immediately (survives dashboard stop)
-        # ----------------------------------------------------
-        if state.get("status") == "pending":
-            state["status"] = "updating"
-            state["update_started_at"] = now_iso()
-            save_state(state)
-        else:
-            log("Updater already running, aborting second apply")
-            return
+        # Mark updating immediately
+        state["status"] = "updating"
+        state["update_started_at"] = now_iso()
+        save_state(state)
 
-        # ----------------------------------------------------
-        # Fetch release metadata
-        # ----------------------------------------------------
-        try:
-            latest_remote, meta = get_latest_release()
-        except Exception as e:
-            log(f"GitHub error: {e}")
-            raise
-
-        # Guard: remote changed since check
+        latest_remote, meta = get_latest_release()
         if latest_remote != latest:
-            log(
-                f"Note: state version {latest} != remote latest "
-                f"{latest_remote}; using remote latest"
-            )
+            log(f"Note: state version {latest} != remote latest {latest_remote}; using remote latest")
             latest = latest_remote
             state["available_version"] = latest
             save_state(state)
 
         log(f"Applying update → v{latest}")
 
-        # ----------------------------------------------------
-        # Find and download asset
-        # ----------------------------------------------------
-        try:
-            url, name = find_asset(meta)
-        except Exception as e:
-            log(f"Asset error: {e}")
-            raise
-
+        url, name = find_asset(meta)
         log(f"Found asset: {name}")
 
         os.makedirs(WORK_DIR, exist_ok=True)
@@ -558,40 +533,40 @@ def run_apply():
         log("Downloading asset…")
         download_asset(url, zip_path)
 
-        # ----------------------------------------------------
-        # Extract & prepare new tree
-        # ----------------------------------------------------
         new_root = extract_zip(zip_path, os.path.join(WORK_DIR, "new"))
         log(f"Extracted: {new_root}")
 
         copy_persistent(INSTALL_DIR, new_root)
 
-        # ----------------------------------------------------
-        # Swap installation (critical section)
-        # ----------------------------------------------------
+        # Swap section with explicit logs
+        log("Stopping services…")
         stop_services()
 
+        log(f"Removing previous backup dir if exists: {BACKUP_DIR}")
         if os.path.exists(BACKUP_DIR):
             shutil.rmtree(BACKUP_DIR)
 
+        log(f"Moving current install to backup: {INSTALL_DIR} → {BACKUP_DIR}")
         if os.path.exists(INSTALL_DIR):
             shutil.move(INSTALL_DIR, BACKUP_DIR)
 
+        log(f"Moving new install into place: {new_root} → {INSTALL_DIR}")
         shutil.move(new_root, INSTALL_DIR)
+
+        log("Fixing ownership…")
         fix_ownership(INSTALL_DIR)
+
+        log("Refreshing venv…")
         refresh_venv()
 
-        # additive & idempotent
         migrate_config()
-        
+
         with open(os.path.join(INSTALL_DIR, "VERSION"), "w") as f:
             f.write(latest)
 
-        start_services()   # 🔑 THIS WAS MISSING
+        log("Starting services…")
+        start_services()
 
-        # ----------------------------------------------------
-        # ✅ Success
-        # ----------------------------------------------------
         state.update({
             "current_version": latest,
             "available_version": None,
@@ -604,37 +579,26 @@ def run_apply():
         log(f"Update successful → v{latest}")
 
     except Exception as e:
-        # ----------------------------------------------------
-        # ❌ Failure → rollback-visible, retryable
-        # ----------------------------------------------------
         log(f"Update failed: {e}")
         log(f"Backup preserved at {BACKUP_DIR}")
 
-        # restore old install if swap already happened
+        # rollback if needed
         if os.path.exists(BACKUP_DIR) and not os.path.exists(INSTALL_DIR):
             log("Restoring previous installation from backup")
             shutil.move(BACKUP_DIR, INSTALL_DIR)
 
-        state = load_state()
-        state["status"] = "pending"
-        save_state(state)
+        st = load_state()
+        st["status"] = "pending"
+        st.pop("update_started_at", None)
+        save_state(st)
 
     finally:
-        # ----------------------------------------------------
-        # 🧹 Absolute safety net
-        # ----------------------------------------------------
         try:
             start_services()
         except Exception as e:
             log(f"Service restart error: {e}")
 
-        # Ensure state is not left in "updating"
-        final = load_state()
-        if final.get("status") == "updating":
-            final["status"] = "pending"
-            save_state(final)
-
-        # 🔓 RELEASE UPDATE LOCK (CRITICAL)
+        # Release lock
         try:
             if lock_fd is not None:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
@@ -659,6 +623,29 @@ if __name__ == "__main__":
 EOF
 
   sudo chmod +x /usr/local/bin/aurono-update
+  
+# ------------------------------------------------------------
+# Install OTA APPLY systemd service (CRITICAL)
+# ------------------------------------------------------------
+sudo bash -c "cat > /etc/systemd/system/aurono-update-apply.service" << 'EOF'
+[Unit]
+Description=Aurono OTA Update Apply
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aurono-update apply
+User=root
+Group=root
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 
   sudo bash -c "cat > /etc/systemd/system/aurono-update.timer" << 'EOF'
 [Unit]
@@ -684,6 +671,7 @@ ExecStart=/usr/local/bin/aurono-update check
 EOF
 
   sudo systemctl daemon-reload
+  sudo systemctl enable aurono-update-apply.service
   sudo systemctl enable --now aurono-update.timer
 
   echo "✅ OTA updater installed (nightly check only; apply requires user action)"
