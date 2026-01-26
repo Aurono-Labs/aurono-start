@@ -247,8 +247,18 @@ if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev
   # NOTE: unquoted EOF so ${APP_ROOT} and ${RUN_USER} are expanded
   sudo bash -c "cat > /usr/local/bin/aurono-update" << EOF
 #!/usr/bin/env python3
+import sys
 import os, shutil, subprocess, urllib.request, json, zipfile, pwd
 from datetime import datetime, timezone
+
+# ------------------------------------------------------------
+# Self-elevate if not running as root
+# ------------------------------------------------------------
+if os.geteuid() != 0:
+    os.execvp(
+        "sudo",
+        ["sudo", "-E", sys.executable] + sys.argv
+    )
 
 try:
     import yaml
@@ -623,23 +633,6 @@ if __name__ == "__main__":
 EOF
 
   sudo chmod +x /usr/local/bin/aurono-update
-
-# ------------------------------------------------------------
-# Allow dashboard user(s) to trigger OTA apply (passwordless)
-# ------------------------------------------------------------
-if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev/null; then
-  echo "🔐 Configuring sudo for user-triggered updates..."
-
-  if [[ ! -f /etc/sudoers.d/aurono-update ]]; then
-    sudo bash -c "cat > /etc/sudoers.d/aurono-update" << 'EOF'
-# Allow Aurono dashboard users to trigger OTA update
-User_Alias AURONO_USERS = aurono, pi
-AURONO_USERS ALL=(root) NOPASSWD: /usr/local/bin/aurono-update apply
-EOF
-    sudo chmod 440 /etc/sudoers.d/aurono-update
-  fi
-fi
-
 
   sudo bash -c "cat > /etc/systemd/system/aurono-update.timer" << 'EOF'
 [Unit]

@@ -5,6 +5,8 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import subprocess
+import time
+from pathlib import Path
 
 STATE_FILE = "/var/lib/aurono/update_state.json"
 
@@ -25,33 +27,44 @@ def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
     except Exception:
         return None
 
+APPLY_LOG = "/var/lib/aurono/update_apply.log"
+
 def apply_update() -> bool:
-    """
-    Triggers aurono-update apply.
-    Marks state as 'updating' BEFORE systemd stops services.
-    Returns immediately; update continues in background.
-    """
     raw = load_update_state()
     if not raw:
         return False
 
-    # 🔒 Persist intent BEFORE dashboard dies
-    raw["status"] = "updating"
-    raw["update_started_at"] = _now_utc().isoformat()
-
-    if not _write_state(raw):
+    # Only allow from a pending state (prevents false "updating")
+    if raw.get("status") != "pending":
         return False
 
+    # Spawn updater first (prove it started), then mark "updating"
     try:
-        subprocess.Popen(
-            ["/usr/bin/sudo", "/usr/local/bin/aurono-update", "apply"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        Path("/var/lib/aurono").mkdir(parents=True, exist_ok=True)
+        logf = open(APPLY_LOG, "ab", buffering=0)
+
+        p = subprocess.Popen(
+            ["/usr/local/bin/aurono-update", "apply"],
+            stdout=logf,
+            stderr=logf,
             start_new_session=True,
+            close_fds=True,
         )
-        return True
+
+        # If sudo fails, it usually exits immediately. Detect that.
+        time.sleep(0.2)
+        rc = p.poll()
+        if rc is not None and rc != 0:
+            return False
+
     except Exception:
         return False
+
+    # 🔒 Persist intent AFTER spawn succeeded
+    raw["status"] = "updating"
+    raw["update_started_at"] = _now_utc().isoformat()
+    return _write_state(raw)
+
 
 # ------------------------------------------------------------
 # Core reader
