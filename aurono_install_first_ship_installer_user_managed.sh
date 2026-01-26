@@ -284,7 +284,7 @@ SERVICES = ["aurono-dashboard", "aurono-trader"]
 STATE_FILE = "/var/lib/aurono/update_state.json"
 
 def log(msg):
-    print(f"[aurono-update] {msg}")
+    print(f"[aurono-update] {msg}", flush=True)
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -477,33 +477,25 @@ def run_check():
 def run_apply():
     state = load_state()
 
-    # --------------------------------------------------------
-    # Validate state BEFORE mutating anything
-    # --------------------------------------------------------
-    if state.get("status") != "pending":
-        log("No pending update to apply")
-        return
-
-    latest = state.get("available_version")
-    if not latest:
-        log("State invalid: missing available_version")
-        return
-
-    # --------------------------------------------------------
-    # 🔒 Mark updating immediately (survives dashboard stop)
-    # --------------------------------------------------------
-    state["status"] = "updating"
-    state["update_started_at"] = now_iso()
-    save_state(state)
-
     try:
         # ----------------------------------------------------
-        # Validate state
+        # Validate state BEFORE mutating anything
         # ----------------------------------------------------
+        if state.get("status") not in ("pending", "updating"):
+            log("No pending update to apply")
+            return
+
         latest = state.get("available_version")
         if not latest:
             log("State invalid: missing available_version")
             raise RuntimeError("No available_version in update state")
+
+        # ----------------------------------------------------
+        # 🔒 Mark updating immediately (survives dashboard stop)
+        # ----------------------------------------------------
+        state["status"] = "updating"
+        state["update_started_at"] = now_iso()
+        save_state(state)
 
         # ----------------------------------------------------
         # Fetch release metadata
@@ -540,32 +532,25 @@ def run_apply():
         os.makedirs(WORK_DIR, exist_ok=True)
         zip_path = os.path.join(WORK_DIR, "aurono-update.zip")
 
-        try:
-            log("Downloading asset…")
-            download_asset(url, zip_path)
-        except Exception as e:
-            log(f"Download failed: {e}")
-            raise
+        log("Downloading asset…")
+        download_asset(url, zip_path)
 
         # ----------------------------------------------------
         # Extract & prepare new tree
         # ----------------------------------------------------
-        try:
-            new_root = extract_zip(zip_path, os.path.join(WORK_DIR, "new"))
-            log(f"Extracted: {new_root}")
-        except Exception as e:
-            log(f"Extraction error: {e}")
-            raise
+        new_root = extract_zip(zip_path, os.path.join(WORK_DIR, "new"))
+        log(f"Extracted: {new_root}")
 
         copy_persistent(INSTALL_DIR, new_root)
 
         # ----------------------------------------------------
-        # Swap installation
+        # Swap installation (critical section)
         # ----------------------------------------------------
         stop_services()
 
         if os.path.exists(BACKUP_DIR):
             shutil.rmtree(BACKUP_DIR)
+
         if os.path.exists(INSTALL_DIR):
             shutil.move(INSTALL_DIR, BACKUP_DIR)
 
@@ -579,10 +564,8 @@ def run_apply():
         with open(os.path.join(INSTALL_DIR, "VERSION"), "w") as f:
             f.write(latest)
 
-        start_services()
-
         # ----------------------------------------------------
-        # ✅ Final success state
+        # ✅ Success
         # ----------------------------------------------------
         state.update({
             "current_version": latest,
@@ -602,19 +585,29 @@ def run_apply():
         log(f"Update failed: {e}")
         log(f"Backup preserved at {BACKUP_DIR}")
 
+        # restore old install if swap already happened
+        if os.path.exists(BACKUP_DIR) and not os.path.exists(INSTALL_DIR):
+            log("Restoring previous installation from backup")
+            shutil.move(BACKUP_DIR, INSTALL_DIR)
+
+        state = load_state()
         state["status"] = "pending"
         save_state(state)
 
-        return
-
     finally:
         # ----------------------------------------------------
-        # 🧹 Absolute safety net: never leave 'updating'
+        # 🧹 Absolute safety net
         # ----------------------------------------------------
+        try:
+            start_services()
+        except Exception as e:
+            log(f"Service restart error: {e}")
+
         final = load_state()
         if final.get("status") == "updating":
             final["status"] = "pending"
             save_state(final)
+
             
 def main():
     import sys

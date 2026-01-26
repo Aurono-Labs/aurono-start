@@ -18,14 +18,27 @@ STATE_FILE = "/var/lib/aurono/update_state.json"
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
-
 def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
     if not ts:
         return None
     try:
-        return datetime.fromisoformat(ts)
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except Exception:
         return None
+
+_UPDATE_STALE_AFTER = timedelta(minutes=30)
+
+def _updater_running() -> bool:
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "/usr/local/bin/aurono-update apply"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
 
 APPLY_LOG = "/var/lib/aurono/update_apply.log"
 
@@ -44,7 +57,14 @@ def apply_update() -> bool:
         logf = open(APPLY_LOG, "ab", buffering=0)
 
         p = subprocess.Popen(
-            ["/usr/local/bin/aurono-update", "apply"],
+            [
+                "/usr/bin/sudo",
+                "-n",
+                "/usr/bin/python3",
+                "-u",
+                "/usr/local/bin/aurono-update",
+                "apply",
+            ],
             stdout=logf,
             stderr=logf,
             start_new_session=True,
@@ -97,6 +117,20 @@ def get_update_status() -> Dict[str, Any]:
     """
 
     raw = load_update_state()
+
+    # --------------------------------------------------
+    # 🛟 Safety net: recover stale "updating" state
+    # --------------------------------------------------
+    if raw.get("status") == "updating":
+        started_at = _parse_iso(raw.get("update_started_at"))
+
+        if started_at:
+            now = _now_utc()
+            age = now - started_at
+
+            if age > _UPDATE_STALE_AFTER and not _updater_running():
+                raw["status"] = "pending"
+                save_update_state(raw)
 
     current_version = raw.get("current_version")
     available_version = raw.get("available_version")
