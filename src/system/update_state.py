@@ -47,7 +47,10 @@ def apply_update() -> bool:
     if not raw:
         return False
 
-    # Only allow from a pending state (prevents false "updating")
+    # 🔒 HARD GUARD — single entry point
+    if raw.get("status") == "updating":
+        return False
+
     if raw.get("status") != "pending":
         return False
 

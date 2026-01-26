@@ -250,6 +250,11 @@ if [[ "$OS" == "Linux" ]] && grep -qi "raspberry" /proc/device-tree/model 2>/dev
 import sys
 import os, shutil, subprocess, urllib.request, json, zipfile, pwd
 from datetime import datetime, timezone
+import fcntl
+
+LOCK_FILE = "/var/lib/aurono/update_apply.lock"
+lock_fd = None
+
 
 # ------------------------------------------------------------
 # Self-elevate if not running as root
@@ -475,14 +480,28 @@ def run_check():
     log(f"Update available → v{latest}")
 
 def run_apply():
+    global lock_fd
+
     state = load_state()
+
+    # 🔒 Absolute first guard
+    if state.get("status") == "updating":
+        log("Update already running, exiting")
+        return
+
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        log("Lock already held, exiting")
+        return
 
     try:
         # ----------------------------------------------------
         # Validate state BEFORE mutating anything
         # ----------------------------------------------------
-        if state.get("status") not in ("pending", "updating"):
-            log("No pending update to apply")
+        if state.get("status") != "pending":
+            log("Update already in progress or not applicable")
             return
 
         latest = state.get("available_version")
@@ -493,9 +512,13 @@ def run_apply():
         # ----------------------------------------------------
         # 🔒 Mark updating immediately (survives dashboard stop)
         # ----------------------------------------------------
-        state["status"] = "updating"
-        state["update_started_at"] = now_iso()
-        save_state(state)
+        if state.get("status") == "pending":
+            state["status"] = "updating"
+            state["update_started_at"] = now_iso()
+            save_state(state)
+        else:
+            log("Updater already running, aborting second apply")
+            return
 
         # ----------------------------------------------------
         # Fetch release metadata
@@ -605,11 +628,19 @@ def run_apply():
         except Exception as e:
             log(f"Service restart error: {e}")
 
+        # Ensure state is not left in "updating"
         final = load_state()
         if final.get("status") == "updating":
             final["status"] = "pending"
             save_state(final)
 
+        # 🔓 RELEASE UPDATE LOCK (CRITICAL)
+        try:
+            if lock_fd is not None:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+        except Exception as e:
+            log(f"Lock release failed: {e}")
             
 def main():
     import sys

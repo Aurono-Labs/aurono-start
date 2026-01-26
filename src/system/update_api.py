@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from system.update_state import (
+    load_update_state,
     get_update_status,
     snooze_update,
     clear_snooze,
@@ -33,8 +34,7 @@ def snooze(req: SnoozeRequest):
     if req.days <= 0:
         raise HTTPException(status_code=400, detail="Invalid snooze duration")
 
-    ok = snooze_update(req.days)
-    if not ok:
+    if not snooze_update(req.days):
         raise HTTPException(status_code=409, detail="No update to snooze")
 
     return {"status": "ok"}
@@ -48,12 +48,18 @@ def clear():
 
 @router.post("/apply")
 def apply():
-    ok = apply_update()
-    if not ok:
+    state = load_update_state()
+
+    if state.get("status") != "pending":
         raise HTTPException(
-            status_code=500,
-            detail="Failed to start updater"
+            status_code=409,
+            detail="Update already running or not applicable",
         )
 
-    # IMPORTANT: do NOT wait, dashboard may die immediately
-    return {"status": "updating"}
+    if not apply_update():
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to start updater",
+        )
+
+    return {"status": "started"}
